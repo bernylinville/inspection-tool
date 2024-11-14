@@ -259,7 +259,7 @@ func (c *Client) GetMetrics(opts QueryOptions) ([]MetricData, error) {
 }
 
 func (c *Client) queryMetric(query, start, end string) (map[string]float64, error) {
-	url, err := c.buildURL(query, start, end, nil)
+	url, err := c.buildURL(query, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("构建URL失败: %v", err)
 	}
@@ -392,7 +392,7 @@ func parseDuration(s string) (time.Duration, error) {
 }
 
 // 修改 buildURL 方法
-func (c *Client) buildURL(query string, start, end string, labels []string) (string, error) {
+func (c *Client) buildURL(query string, start, end string) (string, error) {
 	startTime, err := parseTime(start)
 	if err != nil {
 		return "", fmt.Errorf("解析开始时间失败: %v", err)

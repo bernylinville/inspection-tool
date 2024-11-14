@@ -154,6 +154,20 @@ func GenerateExcelWithProgress(data []metrics.MetricData, outputFile string, pro
 	}
 	currentStep++
 
+	// 删除默认的 Sheet1
+	if sheets := f.GetSheetList(); len(sheets) > 1 {
+		f.DeleteSheet("Sheet1")
+	}
+
+	// 设置第一个工作表为活动工作表
+	if sheets := f.GetSheetList(); len(sheets) > 0 {
+		index, err := f.GetSheetIndex(sheets[0])
+		if err != nil {
+			return fmt.Errorf("获取工作表索引失败: %v", err)
+		}
+		f.SetActiveSheet(index)
+	}
+
 	// 保存文件
 	if progressCallback != nil {
 		progressCallback("保存文件", currentStep, totalSteps)
