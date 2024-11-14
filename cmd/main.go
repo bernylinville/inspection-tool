@@ -12,15 +12,9 @@ import (
 	"github.com/bernylinville/inspection-tool/pkg/logger"
 	"github.com/bernylinville/inspection-tool/pkg/metrics"
 	"github.com/bernylinville/inspection-tool/pkg/report"
+	"github.com/bernylinville/inspection-tool/pkg/types"
 	"github.com/schollz/progressbar/v3"
 	"github.com/urfave/cli/v2"
-)
-
-// 在文件开头添加自定义类型
-type contextKey string
-
-const (
-	configKey contextKey = "config"
 )
 
 func main() {
@@ -118,14 +112,14 @@ func loadConfig(c *cli.Context) error {
 	}
 
 	// 将配置保存到上下文
-	c.Context = context.WithValue(c.Context, configKey, cfg)
+	c.Context = context.WithValue(c.Context, types.ConfigKey, cfg)
 
 	return nil
 }
 
 func runInspection(c *cli.Context) error {
 	// 获取配置
-	cfg := c.Context.Value(configKey).(*config.Config)
+	cfg := c.Context.Value(types.ConfigKey).(*config.Config)
 
 	// 创建输出目录
 	if err := os.MkdirAll(cfg.Report.OutputDir, 0755); err != nil {

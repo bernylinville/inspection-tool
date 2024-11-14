@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -113,6 +114,15 @@ func GenerateExcelWithProgress(data []metrics.MetricData, outputFile string, pro
 	f := excelize.NewFile()
 	defer f.Close()
 
+	// 删除默认的 Sheet1
+	if sheets := f.GetSheetList(); len(sheets) > 0 {
+		for _, sheet := range sheets {
+			if sheet != "Sheet1" { // 不要删除默认的 Sheet1，因为它是必需的
+				f.DeleteSheet(sheet)
+			}
+		}
+	}
+
 	if progress != nil {
 		progress("创建汇总表", 1, len(projects)+2)
 	}
@@ -125,6 +135,7 @@ func GenerateExcelWithProgress(data []metrics.MetricData, outputFile string, pro
 
 	// 为每个项目创建工作表
 	for i, project := range projects {
+		log.Printf("正在创建项目工作表: %s", project.Name)
 		if progress != nil {
 			progress(fmt.Sprintf("创建项目表: %s", project.Name), i+2, len(projects)+2)
 		}
@@ -133,6 +144,21 @@ func GenerateExcelWithProgress(data []metrics.MetricData, outputFile string, pro
 		if err != nil {
 			return fmt.Errorf("创建项目表失败 [%s]: %v", project.Name, err)
 		}
+	}
+
+	// 删除默认的 Sheet1（如果还存在）
+	if sheets := f.GetSheetList(); len(sheets) > 1 {
+		// 只有在有其他工作表时才删除 Sheet1
+		f.DeleteSheet("Sheet1")
+	}
+
+	// 设置第一个工作表为活动工作表
+	if sheets := f.GetSheetList(); len(sheets) > 0 {
+		index, err := f.GetSheetIndex(sheets[0])
+		if err != nil {
+			return fmt.Errorf("获取工作表索引失败: %v", err)
+		}
+		f.SetActiveSheet(index)
 	}
 
 	// 保存文件
@@ -149,9 +175,16 @@ func groupDataByProject(data []metrics.MetricData) []ProjectData {
 
 	// 按项目分组
 	for _, metric := range data {
-		// 从主机名或标签中提取项目名称
-		// 这里假设项目名称在主机名的第一段
-		projectName := strings.Split(metric.Hostname, "-")[0]
+		projectName := metric.Project
+		if projectName == "" {
+			// 如果没有设置项目字段，则从主机名中提取
+			parts := strings.Split(metric.Hostname, "-")
+			if len(parts) > 0 {
+				projectName = parts[0]
+				// 更新 metric 的项目字段
+				metric.Project = projectName
+			}
+		}
 
 		if _, exists := projectMap[projectName]; !exists {
 			projectMap[projectName] = &ProjectData{

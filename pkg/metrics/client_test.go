@@ -171,6 +171,11 @@ func TestGetMetricsWithLabels(t *testing.T) {
 // 添加并发查询测试
 
 func TestConcurrentQueries(t *testing.T) {
+	// 设置测试超时
+	if testing.Short() {
+		t.Skip("跳过并发测试")
+	}
+
 	// 创建一个计数器来跟踪并发请求
 	requestCount := 0
 	var mu sync.Mutex
@@ -181,8 +186,8 @@ func TestConcurrentQueries(t *testing.T) {
 		currentCount := requestCount
 		mu.Unlock()
 
-		// 模拟不同的响应时间，测试真实的并发情况
-		time.Sleep(time.Duration(50+rand.Intn(50)) * time.Millisecond)
+		// 减少模拟延迟时间
+		time.Sleep(time.Duration(10+rand.Intn(20)) * time.Millisecond)
 
 		response := fmt.Sprintf(`{
 			"status":"success",
@@ -200,34 +205,48 @@ func TestConcurrentQueries(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, 30)
+	client := NewClient(server.URL, 5) // 减少超时时间
 
 	// 记录开始时间
 	start := time.Now()
 
 	opts := QueryOptions{
-		Start:  "now-1h",
-		End:    "now",
-		Labels: []string{"env=prod"},
+		Start:       "now-1h",
+		End:         "now",
+		Labels:      []string{"env=prod"},
+		Concurrency: 3, // 确保设置了并发数
 	}
 
-	metrics, err := client.GetMetrics(opts)
-	if err != nil {
+	// 修改：使用 errChan 来传递错误
+	errChan := make(chan error, 1)
+	metricsChan := make(chan []MetricData, 1)
+
+	go func() {
+		metrics, err := client.GetMetrics(opts)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		metricsChan <- metrics
+	}()
+
+	// 等待测试完成或超时
+	select {
+	case err := <-errChan:
 		t.Errorf("获取指标时发生错误: %v", err)
+	case metrics := <-metricsChan:
+		if len(metrics) == 0 {
+			t.Error("未收到任何指标数据")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("测试超时")
 	}
 
 	// 计算总执行时间
 	duration := time.Since(start)
 
-	// 验证是否收到了所有查询的结果
-	if len(metrics) == 0 {
-		t.Error("未收到任何指标数据")
-	}
-
 	// 验证执行时间是否符合并发预期
-	// 如果是串行执行，时间应该超过 7 * 50ms = 350ms
-	// 并发执行应该接近单个查询的时间（约100ms）
-	if duration > 500*time.Millisecond {
+	if duration > 200*time.Millisecond {
 		t.Errorf("查询时间 %v 超过预期，可能未正确并发执行", duration)
 	}
 

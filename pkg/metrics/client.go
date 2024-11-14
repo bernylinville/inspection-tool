@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,7 @@ type Client struct {
 type MetricData struct {
 	Hostname     string
 	IP           string
+	Project      string
 	CPU          float64 // cpu_usage_active
 	Memory       float64 // mem_used_percent
 	DiskUsage    float64 // disk_used_percent
@@ -130,179 +132,28 @@ func (c *Client) GetMetrics(opts QueryOptions) ([]MetricData, error) {
 		},
 	}
 
-	// 创建结果通道
-	resultChan := make(chan MetricQueryResult, len(queries))
-
-	// 并发执行查询
-	for _, q := range queries {
-		go func(query MetricQuery) {
-			data, err := c.queryMetric(query.Query, opts.Start, opts.End)
-			resultChan <- MetricQueryResult{
-				Name:  query.Name,
-				Data:  data,
-				Error: err,
-			}
-		}(q)
-	}
-
-	// 收集查询结果
-	var errors []error
-	results := make(map[string]map[string]float64)
-
-	for i := 0; i < len(queries); i++ {
-		result := <-resultChan
-		if result.Error != nil {
-			errors = append(errors, fmt.Errorf("%s查询错误: %v", result.Name, result.Error))
-			continue
-		}
-
-		results[result.Name] = result.Data
-	}
-
-	// 如果有错误，返回所有错误
-	if len(errors) > 0 {
-		return nil, fmt.Errorf("查询错误: %v", errors)
-	}
-
-	// 整合数据
-	for name, data := range results {
-		for host, value := range data {
-			if _, exists := metrics[host]; !exists {
-				metrics[host] = &MetricData{
-					Hostname: host,
-				}
-			}
-
-			switch name {
-			case "cpu":
-				metrics[host].CPU = value
-			case "memory":
-				metrics[host].Memory = value
-			case "disk":
-				metrics[host].DiskUsage = value
-			case "uptime":
-				metrics[host].SystemUptime = value
-			case "load1":
-				metrics[host].SystemLoad1 = value
-			case "load5":
-				metrics[host].SystemLoad5 = value
-			case "load15":
-				metrics[host].SystemLoad15 = value
-			}
-		}
-	}
-
-	// 转换为切片
-	result := make([]MetricData, 0, len(metrics))
-	for _, data := range metrics {
-		result = append(result, *data)
-	}
-
-	return result, nil
-}
-
-func (c *Client) queryMetric(query, start, end string) (map[string]float64, error) {
-	params := url.Values{}
-	params.Add("query", query)
-	params.Add("start", start)
-	params.Add("end", end)
-
-	resp, err := http.Get(fmt.Sprintf("%s/api/v1/query_range?%s", c.baseURL, params.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result VMQueryResult
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-
-	// 解析结果
-	data := make(map[string]float64)
-	for _, r := range result.Data.Result {
-		// 使用 instance 或 host 作为标识
-		host := r.Metric["instance"]
-		if h, ok := r.Metric["host"]; ok {
-			host = h
-		}
-
-		if len(r.Values) > 0 {
-			// 取最后一个值作为当前值
-			lastValue := r.Values[len(r.Values)-1]
-			if len(lastValue) >= 2 {
-				if v, ok := lastValue[1].(string); ok {
-					if f, err := parseFloat(v); err == nil {
-						data[host] = f
-					}
-				}
-			}
-		}
-	}
-
-	return data, nil
-}
-
-// 辅助函数：将字符串转换为float64
-func parseFloat(s string) (float64, error) {
-	var f float64
-	_, err := fmt.Sscanf(s, "%f", &f)
-	return f, err
-}
-
-// GetMetricsWithProgress 添加带进度的查询方法
-func (c *Client) GetMetricsWithProgress(opts QueryOptions, progress ProgressCallback) ([]MetricData, error) {
-	metrics := make(map[string]*MetricData)
-	labelSelector := buildLabelSelector(opts.Labels)
-
-	// 定义所有需要查询的指标
-	queries := []MetricQuery{
-		{
-			Name:  "cpu",
-			Query: fmt.Sprintf(`100 - avg(rate(cpu_usage_active%s[5m])) by (host)`, labelSelector),
-		},
-		{
-			Name:  "memory",
-			Query: fmt.Sprintf(`mem_used_percent%s`, labelSelector),
-		},
-		{
-			Name:  "disk",
-			Query: fmt.Sprintf(`disk_used_percent%s{fstype!~"tmpfs|devtmpfs"}`, labelSelector),
-		},
-		{
-			Name:  "uptime",
-			Query: fmt.Sprintf(`system_uptime%s`, labelSelector),
-		},
-		{
-			Name:  "load1",
-			Query: fmt.Sprintf(`system_load1%s`, labelSelector),
-		},
-		{
-			Name:  "load5",
-			Query: fmt.Sprintf(`system_load5%s`, labelSelector),
-		},
-		{
-			Name:  "load15",
-			Query: fmt.Sprintf(`system_load15%s`, labelSelector),
-		},
+	// 确保并发数大于0
+	if opts.Concurrency <= 0 {
+		opts.Concurrency = 3 // 默认并发数
 	}
 
 	// 创建结果通道
 	resultChan := make(chan MetricQueryResult, len(queries))
+
+	// 使用 WaitGroup 确保所有 goroutine 完成
+	var wg sync.WaitGroup
+	wg.Add(len(queries))
 
 	// 使用并发数
 	semaphore := make(chan struct{}, opts.Concurrency)
 
 	// 并发执行查询
 	for _, q := range queries {
-		semaphore <- struct{}{} // 获取信号量
 		go func(query MetricQuery) {
+			defer wg.Done()
+			semaphore <- struct{}{}        // 获取信号量
 			defer func() { <-semaphore }() // 释放信号量
+
 			data, err := c.queryMetric(query.Query, opts.Start, opts.End)
 			resultChan <- MetricQueryResult{
 				Name:  query.Name,
@@ -311,6 +162,12 @@ func (c *Client) GetMetricsWithProgress(opts QueryOptions, progress ProgressCall
 			}
 		}(q)
 	}
+
+	// 等待所有查询完成
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
 
 	// 收集查询结果
 	var errors []error
@@ -323,11 +180,6 @@ func (c *Client) GetMetricsWithProgress(opts QueryOptions, progress ProgressCall
 			continue
 		}
 		results[result.Name] = result.Data
-
-		// 更新进度
-		if progress != nil {
-			progress("查询指标", i+1, len(queries))
-		}
 	}
 
 	// 如果有错误，返回所有错误
@@ -336,28 +188,19 @@ func (c *Client) GetMetricsWithProgress(opts QueryOptions, progress ProgressCall
 	}
 
 	// 整合数据
-	totalHosts := 0
-	currentHost := 0
-
-	// 计算总主机数
-	for _, data := range results {
-		for host := range data {
-			if _, exists := metrics[host]; !exists {
-				totalHosts++
-			}
-		}
-	}
-
-	// 整合数据并显示进度
 	for name, data := range results {
 		for host, value := range data {
 			if _, exists := metrics[host]; !exists {
+				// 从主机名提取项目名称
+				parts := strings.Split(host, "-")
+				projectName := ""
+				if len(parts) > 0 {
+					projectName = parts[0]
+				}
+
 				metrics[host] = &MetricData{
 					Hostname: host,
-				}
-				currentHost++
-				if progress != nil {
-					progress("处理数据", currentHost, totalHosts)
+					Project:  projectName,
 				}
 			}
 
@@ -404,4 +247,63 @@ func (c *Client) GetMetricsWithProgress(opts QueryOptions, progress ProgressCall
 	}
 
 	return result, nil
+}
+
+func (c *Client) queryMetric(query, start, end string) (map[string]float64, error) {
+	params := url.Values{}
+	params.Add("query", query)
+	params.Add("start", start)
+	params.Add("end", end)
+
+	resp, err := c.client.Get(fmt.Sprintf("%s/api/v1/query_range?%s", c.baseURL, params.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result VMQueryResult
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	// 解析结果
+	data := make(map[string]float64)
+	for _, r := range result.Data.Result {
+		// 使用 instance 或 host 作为标识
+		host := r.Metric["instance"]
+		if h, ok := r.Metric["host"]; ok {
+			host = h
+		}
+
+		if len(r.Values) > 0 {
+			// 取最后一个值作为当前值
+			lastValue := r.Values[len(r.Values)-1]
+			if len(lastValue) >= 2 {
+				if v, ok := lastValue[1].(string); ok {
+					if f, err := parseFloat(v); err == nil {
+						data[host] = f
+					}
+				}
+			}
+		}
+	}
+
+	return data, nil
+}
+
+// GetMetricsWithProgress 添加带进度的查询方法
+func (c *Client) GetMetricsWithProgress(opts QueryOptions, progress ProgressCallback) ([]MetricData, error) {
+	return c.GetMetrics(opts)
+}
+
+// 辅助函数：将字符串转换为float64
+func parseFloat(s string) (float64, error) {
+	var f float64
+	_, err := fmt.Sscanf(s, "%f", &f)
+	return f, err
 }
