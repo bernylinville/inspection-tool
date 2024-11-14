@@ -6,9 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bernylinville/inspection-tool/pkg/logger"
 )
 
 type Client struct {
@@ -69,12 +72,17 @@ type MetricQuery struct {
 // ProgressCallback 定义进度回调函数类型
 type ProgressCallback func(stage string, current, total int)
 
-func NewClient(baseURL string, timeout int) *Client {
+func NewClient(address string, timeout time.Duration) *Client {
+	logger.Debug().
+		Str("baseURL", address).
+		Dur("timeout", timeout).
+		Msg("初始化 VictoriaMetrics 客户端")
+
 	return &Client{
-		baseURL: baseURL,
-		timeout: time.Duration(timeout) * time.Second,
+		baseURL: address,
+		timeout: timeout,
 		client: &http.Client{
-			Timeout: time.Duration(timeout) * time.Second,
+			Timeout: timeout,
 		},
 	}
 }
@@ -85,50 +93,51 @@ func buildLabelSelector(labels []string) string {
 		return ""
 	}
 
-	selector := "{"
+	// 确保每个标签都有引号
+	quotedLabels := make([]string, len(labels))
 	for i, label := range labels {
-		if i > 0 {
-			selector += ","
+		parts := strings.SplitN(label, "=", 2)
+		if len(parts) == 2 {
+			quotedLabels[i] = fmt.Sprintf(`%s="%s"`, parts[0], parts[1])
 		}
-		selector += label
 	}
-	selector += "}"
-	return selector
+
+	return fmt.Sprintf("{%s}", strings.Join(quotedLabels, ","))
 }
 
 func (c *Client) GetMetrics(opts QueryOptions) ([]MetricData, error) {
 	metrics := make(map[string]*MetricData)
 	labelSelector := buildLabelSelector(opts.Labels)
 
-	// 定义所有需要查询的指标
+	// 修改查询定义
 	queries := []MetricQuery{
 		{
 			Name:  "cpu",
-			Query: fmt.Sprintf(`100 - avg(rate(cpu_usage_active%s[5m])) by (host)`, labelSelector),
+			Query: fmt.Sprintf(`avg(rate(cpu_usage_active%s[5m])) by (host)`, labelSelector),
 		},
 		{
 			Name:  "memory",
-			Query: fmt.Sprintf(`mem_used_percent%s`, labelSelector),
+			Query: fmt.Sprintf(`avg(mem_used_percent%s) by (host)`, labelSelector),
 		},
 		{
 			Name:  "disk",
-			Query: fmt.Sprintf(`disk_used_percent%s{fstype!~"tmpfs|devtmpfs"}`, labelSelector),
+			Query: fmt.Sprintf(`max(disk_used_percent%s) by (host)`, strings.Replace(labelSelector, "}", `,fstype!~"tmpfs|devtmpfs"}`, 1)),
 		},
 		{
 			Name:  "uptime",
-			Query: fmt.Sprintf(`system_uptime%s`, labelSelector),
+			Query: fmt.Sprintf(`max(system_uptime%s) by (host)`, labelSelector),
 		},
 		{
 			Name:  "load1",
-			Query: fmt.Sprintf(`system_load1%s`, labelSelector),
+			Query: fmt.Sprintf(`max(system_load1%s) by (host)`, labelSelector),
 		},
 		{
 			Name:  "load5",
-			Query: fmt.Sprintf(`system_load5%s`, labelSelector),
+			Query: fmt.Sprintf(`max(system_load5%s) by (host)`, labelSelector),
 		},
 		{
 			Name:  "load15",
-			Query: fmt.Sprintf(`system_load15%s`, labelSelector),
+			Query: fmt.Sprintf(`max(system_load15%s) by (host)`, labelSelector),
 		},
 	}
 
@@ -250,25 +259,42 @@ func (c *Client) GetMetrics(opts QueryOptions) ([]MetricData, error) {
 }
 
 func (c *Client) queryMetric(query, start, end string) (map[string]float64, error) {
-	params := url.Values{}
-	params.Add("query", query)
-	params.Add("start", start)
-	params.Add("end", end)
-
-	resp, err := c.client.Get(fmt.Sprintf("%s/api/v1/query_range?%s", c.baseURL, params.Encode()))
+	url, err := c.buildURL(query, start, end, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("构建URL失败: %v", err)
+	}
+
+	// 添加更多调试日志
+	logger.Debug().
+		Str("url", url).
+		Str("query", query).
+		Str("start", start).
+		Str("end", end).
+		Msg("执行查询")
+
+	resp, err := c.client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("读取响应失败: %v", err)
 	}
+
+	// 添加响应内容的调试日志
+	logger.Debug().
+		Str("response", string(body)).
+		Msg("查询响应")
 
 	var result VMQueryResult
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("解析响应失败: %v, body: %s", err, string(body))
+	}
+
+	if result.Status != "success" {
+		return nil, fmt.Errorf("查询失败: %s", string(body))
 	}
 
 	// 解析结果
@@ -306,4 +332,92 @@ func parseFloat(s string) (float64, error) {
 	var f float64
 	_, err := fmt.Sscanf(s, "%f", &f)
 	return f, err
+}
+
+// 添加一个时间解析函数
+func parseTime(timeStr string) (string, error) {
+	if timeStr == "now" {
+		// 使用 Unix 时间戳
+		return fmt.Sprintf("%d", time.Now().Unix()), nil
+	}
+
+	// 处理相对时间，如 "now-1h", "now-1d"
+	if strings.HasPrefix(timeStr, "now-") {
+		duration := strings.TrimPrefix(timeStr, "now-")
+		d, err := parseDuration(duration)
+		if err != nil {
+			return "", fmt.Errorf("解析时间失败: %v", err)
+		}
+		// 使用 Unix 时间戳
+		return fmt.Sprintf("%d", time.Now().Add(-d).Unix()), nil
+	}
+
+	// 尝试解析为 RFC3339 格式
+	t, err := time.Parse(time.RFC3339, timeStr)
+	if err == nil {
+		return fmt.Sprintf("%d", t.Unix()), nil
+	}
+
+	return "", fmt.Errorf("不支持的时间格式: %s", timeStr)
+}
+
+// 解析持续时间
+func parseDuration(s string) (time.Duration, error) {
+	// 支持 1d, 1h, 1m 等格式
+	multiplier := map[byte]time.Duration{
+		'd': 24 * time.Hour,
+		'h': time.Hour,
+		'm': time.Minute,
+		's': time.Second,
+	}
+
+	if len(s) < 2 {
+		return 0, fmt.Errorf("invalid duration: %s", s)
+	}
+
+	unit := s[len(s)-1]
+	value := s[:len(s)-1]
+
+	mult, ok := multiplier[unit]
+	if !ok {
+		return 0, fmt.Errorf("unsupported time unit: %c", unit)
+	}
+
+	n, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return time.Duration(n * float64(mult)), nil
+}
+
+// 修改 buildURL 方法
+func (c *Client) buildURL(query string, start, end string, labels []string) (string, error) {
+	startTime, err := parseTime(start)
+	if err != nil {
+		return "", fmt.Errorf("解析开始时间失败: %v", err)
+	}
+
+	endTime, err := parseTime(end)
+	if err != nil {
+		return "", fmt.Errorf("解析结束时间失败: %v", err)
+	}
+
+	u, err := url.Parse(c.baseURL + "/api/v1/query_range")
+	if err != nil {
+		return "", err
+	}
+
+	q := u.Query()
+	q.Set("query", query)
+	q.Set("start", startTime)
+	q.Set("end", endTime)
+	q.Set("step", "60") // 添加 step 参数，设置为60秒
+	u.RawQuery = q.Encode()
+
+	logger.Debug().
+		Str("final_url", u.String()).
+		Msg("构建查询URL")
+
+	return u.String(), nil
 }

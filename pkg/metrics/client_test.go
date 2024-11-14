@@ -13,7 +13,7 @@ import (
 
 func TestNewClient(t *testing.T) {
 	baseURL := "http://localhost:8428"
-	timeout := 30
+	timeout := 30 * time.Second
 	client := NewClient(baseURL, timeout)
 	if client.baseURL != baseURL {
 		t.Errorf("期望 baseURL 为 %s，实际得到 %s", baseURL, client.baseURL)
@@ -39,7 +39,7 @@ func TestGetMetrics(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, 30)
+	client := NewClient(server.URL, 30*time.Second)
 	metrics, err := client.GetMetrics(QueryOptions{
 		Start: "now-1h",
 		End:   "now",
@@ -83,7 +83,7 @@ func TestQueryMetric(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, 30)
+	client := NewClient(server.URL, 30*time.Second)
 	data, err := client.queryMetric("test_query", "now-1h", "now")
 
 	if err != nil {
@@ -151,7 +151,7 @@ func TestGetMetricsWithLabels(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, 30)
+	client := NewClient(server.URL, 30*time.Second)
 	opts := QueryOptions{
 		Start:  "now-1h",
 		End:    "now",
@@ -205,7 +205,7 @@ func TestConcurrentQueries(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, 5) // 减少超时时间
+	client := NewClient(server.URL, 5*time.Second) // 减少超时时间
 
 	// 记录开始时间
 	start := time.Now()
@@ -253,7 +253,7 @@ func TestConcurrentQueries(t *testing.T) {
 	// 验证是否执行了所有查询
 	mu.Lock()
 	if requestCount != 7 { // 7个指标查询
-		t.Errorf("预期执行7个查询，实际执行了 %d 个查询", requestCount)
+		t.Errorf("预期行7个查询，实际执行了 %d 个查询", requestCount)
 	}
 	mu.Unlock()
 }
@@ -282,7 +282,7 @@ func TestQueryErrorHandling(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, 30)
+	client := NewClient(server.URL, 30*time.Second)
 	opts := QueryOptions{
 		Start:  "now-1h",
 		End:    "now",

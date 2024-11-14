@@ -1,17 +1,18 @@
 # VictoriaMetrics 配置
 victoria_metrics:
-  address: "http://127.0.0.1:8428"
-  timeout: 30  # 秒
+  address: "http://192.168.50.2:8428"
+  timeout: 30s
 
 # 报告配置
 report:
-  output_dir: "reports"
+  output_dir: "./reports"
   format: "xlsx"
 
-# 项目列表（为空表示所有项目）
-projects:
-  - "project1"
-  - "project2"
+# 默认标签配置
+labels:
+  - "env=home"
+  - "region=home"
+  - "source=categraf"
 
 # 并发配置
-concurrency: 10 
+concurrency: 5

@@ -114,12 +114,24 @@ func loadConfig(c *cli.Context) error {
 	// 将配置保存到上下文
 	c.Context = context.WithValue(c.Context, types.ConfigKey, cfg)
 
+	logger.Debug().
+		Str("vm_addr", cfg.VictoriaMetrics.Address).
+		Str("output_dir", cfg.Report.OutputDir).
+		Int("concurrency", cfg.Concurrency).
+		Msg("加载配置")
+
 	return nil
 }
 
 func runInspection(c *cli.Context) error {
-	// 获取配置
 	cfg := c.Context.Value(types.ConfigKey).(*config.Config)
+
+	logger.Info().
+		Str("start_time", c.String("start")).
+		Str("end_time", c.String("end")).
+		Strs("labels", c.StringSlice("label")).
+		Strs("projects", cfg.Projects).
+		Msg("开始巡检任务")
 
 	// 创建输出目录
 	if err := os.MkdirAll(cfg.Report.OutputDir, 0755); err != nil {
@@ -172,7 +184,17 @@ func runInspection(c *cli.Context) error {
 		Concurrency: cfg.Concurrency,
 	}, progressCallback)
 	if err != nil {
+		logger.Error().Err(err).Msg("获取监控数据失败")
 		return err
+	}
+
+	logger.Info().
+		Int("metrics_count", len(data)).
+		Msg("成功获取监控数据")
+
+	if len(data) == 0 {
+		logger.Warn().Msg("未获取到任何监控数据")
+		return fmt.Errorf("未获取到任何监控数据，请检查查询条件和时间范围")
 	}
 
 	fmt.Println("\n开始生成报告...")
@@ -186,12 +208,23 @@ func runInspection(c *cli.Context) error {
 	// 生成报告
 	err = report.GenerateExcelWithProgress(data, outputFile, progressCallback)
 	if err != nil {
+		logger.Error().Err(err).Str("output_file", outputFile).Msg("生成报告失败")
 		return err
 	}
 
 	duration := time.Since(startTime)
+	logger.Info().
+		Str("output_file", outputFile).
+		Dur("duration", duration).
+		Msg("报告生成完成")
+
 	fmt.Printf("\n完成! 耗时: %v\n", duration.Round(time.Second))
 	fmt.Printf("报告已生成: %s\n", outputFile)
+
+	logger.Debug().
+		Str("vm_addr", cfg.VictoriaMetrics.Address).
+		Dur("timeout", cfg.VictoriaMetrics.Timeout).
+		Msg("创建 VictoriaMetrics 客户端")
 
 	return nil
 }

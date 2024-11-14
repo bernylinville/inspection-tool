@@ -2,7 +2,6 @@ package report
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -107,66 +106,63 @@ func GenerateExcel(data []metrics.MetricData, outputFile string) error {
 }
 
 // GenerateExcelWithProgress 生成带进度显示的Excel报告
-func GenerateExcelWithProgress(data []metrics.MetricData, outputFile string, progress metrics.ProgressCallback) error {
-	// 按项目分组数据
-	projects := groupDataByProject(data)
-
+func GenerateExcelWithProgress(data []metrics.MetricData, outputFile string, progressCallback func(stage string, current, total int)) error {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// 删除默认的 Sheet1
-	if sheets := f.GetSheetList(); len(sheets) > 0 {
-		for _, sheet := range sheets {
-			if sheet != "Sheet1" { // 不要删除默认的 Sheet1，因为它是必需的
-				f.DeleteSheet(sheet)
+	// 按项目分组数据
+	projectData := groupDataByProject(data)
+
+	// 计算总步骤数
+	totalSteps := 3 // 汇总表 + 项目表 + 保存文件
+	currentStep := 0
+
+	// 创建汇总表
+	if progressCallback != nil {
+		progressCallback("创建汇总表", currentStep, totalSteps)
+	}
+	if err := generateSummarySheet(f, projectData); err != nil {
+		return fmt.Errorf("创建汇总表失败: %v", err)
+	}
+	currentStep++
+
+	// 创建项目表
+	if progressCallback != nil {
+		progressCallback("创建项目表", currentStep, totalSteps)
+	}
+
+	// 如果没有项目数据，创建一个默认项目
+	if len(projectData) == 0 {
+		defaultProject := ProjectData{
+			Name:    "默认项目",
+			Metrics: data,
+		}
+		if err := generateProjectSheet(f, defaultProject.Metrics, defaultProject.Name); err != nil {
+			return fmt.Errorf("创建项目表失败 [%s]: %v", defaultProject.Name, err)
+		}
+	} else {
+		// 为每个项目创建工作表
+		for _, project := range projectData {
+			name := project.Name
+			if name == "" {
+				name = "默认项目"
+			}
+			if err := generateProjectSheet(f, project.Metrics, name); err != nil {
+				return fmt.Errorf("创建项目表失败 [%s]: %v", name, err)
 			}
 		}
 	}
-
-	if progress != nil {
-		progress("创建汇总表", 1, len(projects)+2)
-	}
-
-	// 创建汇总表
-	err := createSummarySheet(f, projects)
-	if err != nil {
-		return fmt.Errorf("创建汇总表失败: %v", err)
-	}
-
-	// 为每个项目创建工作表
-	for i, project := range projects {
-		log.Printf("正在创建项目工作表: %s", project.Name)
-		if progress != nil {
-			progress(fmt.Sprintf("创建项目表: %s", project.Name), i+2, len(projects)+2)
-		}
-
-		err := createProjectSheet(f, project)
-		if err != nil {
-			return fmt.Errorf("创建项目表失败 [%s]: %v", project.Name, err)
-		}
-	}
-
-	// 删除默认的 Sheet1（如果还存在）
-	if sheets := f.GetSheetList(); len(sheets) > 1 {
-		// 只有在有其他工作表时才删除 Sheet1
-		f.DeleteSheet("Sheet1")
-	}
-
-	// 设置第一个工作表为活动工作表
-	if sheets := f.GetSheetList(); len(sheets) > 0 {
-		index, err := f.GetSheetIndex(sheets[0])
-		if err != nil {
-			return fmt.Errorf("获取工作表索引失败: %v", err)
-		}
-		f.SetActiveSheet(index)
-	}
+	currentStep++
 
 	// 保存文件
-	if progress != nil {
-		progress("保存文件", len(projects)+2, len(projects)+2)
+	if progressCallback != nil {
+		progressCallback("保存文件", currentStep, totalSteps)
+	}
+	if err := f.SaveAs(outputFile); err != nil {
+		return fmt.Errorf("保存文件失败: %v", err)
 	}
 
-	return f.SaveAs(outputFile)
+	return nil
 }
 
 // groupDataByProject 按项目分组数据
@@ -241,8 +237,8 @@ func calculateProjectSummary(data []metrics.MetricData) ProjectSummary {
 	return summary
 }
 
-// createSummarySheet 创建汇总表
-func createSummarySheet(f *excelize.File, projects []ProjectData) error {
+// generateSummarySheet 创建汇总表
+func generateSummarySheet(f *excelize.File, projects []ProjectData) error {
 	sheetName := "汇总"
 	_, err := f.NewSheet(sheetName)
 	if err != nil {
@@ -299,9 +295,12 @@ func createSummarySheet(f *excelize.File, projects []ProjectData) error {
 	return nil
 }
 
-// createProjectSheet 创建项目工作表
-func createProjectSheet(f *excelize.File, project ProjectData) error {
-	sheetName := project.Name
+// generateProjectSheet 创建项目工作表
+func generateProjectSheet(f *excelize.File, data []metrics.MetricData, sheetName string) error {
+	if sheetName == "" {
+		sheetName = "默认项目"
+	}
+
 	_, err := f.NewSheet(sheetName)
 	if err != nil {
 		return err
@@ -341,7 +340,7 @@ func createProjectSheet(f *excelize.File, project ProjectData) error {
 	}
 
 	// 写入数据
-	for i, item := range project.Metrics {
+	for i, item := range data {
 		row := i + 2
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), item.Hostname)
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), item.IP)

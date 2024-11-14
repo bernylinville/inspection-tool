@@ -4,28 +4,30 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Config 定义全局配置结构
-type Config struct {
-	VictoriaMetrics VMConfig     `yaml:"victoria_metrics"`
-	Report          ReportConfig `yaml:"report"`
-	Projects        []string     `yaml:"projects"`
-	Concurrency     int          `yaml:"concurrency"`
-}
-
-// VMConfig 定义 VictoriaMetrics 配置
+// VMConfig represents configuration for VictoriaMetrics.
 type VMConfig struct {
-	Address string `yaml:"address"`
-	Timeout int    `yaml:"timeout"` // 单位：秒
+	Address string        `yaml:"address"`
+	Timeout time.Duration `yaml:"timeout"`
 }
 
-// ReportConfig 定义报告相关配置
+// ReportConfig represents the configuration for generating reports.
 type ReportConfig struct {
-	OutputDir string `yaml:"output_dir"`
-	Format    string `yaml:"format"` // xlsx, pdf
+	OutputDir string
+	Format    string
+}
+
+// Config holds the full configuration structure.
+type Config struct {
+	VictoriaMetrics VMConfig `yaml:"victoria_metrics"`
+	Report          ReportConfig
+	Labels          []string
+	Projects        []string
+	Concurrency     int
 }
 
 // DefaultConfig 返回默认配置
@@ -33,14 +35,15 @@ func DefaultConfig() *Config {
 	return &Config{
 		VictoriaMetrics: VMConfig{
 			Address: "http://127.0.0.1:8428",
-			Timeout: 30,
+			Timeout: 30 * time.Second,
 		},
 		Report: ReportConfig{
 			OutputDir: "reports",
 			Format:    "xlsx",
 		},
-		Projects:    []string{}, // 空表示所有项目
-		Concurrency: 10,         // 默认并发数
+		Labels:      []string{},
+		Projects:    []string{},
+		Concurrency: 10,
 	}
 }
 
