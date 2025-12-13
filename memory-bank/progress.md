@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段四 - API 客户端实现（进行中）
-**进度**: 步骤 14/41 完成
+**进度**: 步骤 15/41 完成
 
 ---
 
@@ -673,16 +673,71 @@ type PlatformInfo struct {
 
 ---
 
+### 步骤 15：实现 N9E 客户端 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/client/n9e/client.go` 中实现 N9E API 客户端
+2. 实现 `NewClient()` 构造函数，接收配置参数
+3. 实现 `GetTargets()` 获取所有主机列表方法
+4. 实现 `GetTarget()` 获取单主机详情方法
+5. 实现 `GetHostMetas()` 获取主机元信息便捷方法
+6. 实现 `GetHostMetaByIdent()` 获取单主机元信息方法
+7. 实现 Token 认证（X-User-Token 请求头）
+8. 实现超时和错误处理
+9. 集成重试机制（使用 resty 内置指数退避）
+
+**生成文件**:
+- `internal/client/n9e/client.go` - N9E API 客户端实现
+
+**客户端结构**:
+```go
+type Client struct {
+    endpoint   string             // N9E API 地址
+    token      string             // 认证 Token
+    timeout    time.Duration      // 请求超时
+    retry      config.RetryConfig // 重试配置
+    httpClient *resty.Client      // HTTP 客户端
+    logger     zerolog.Logger     // 日志记录器
+}
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewClient()` | 创建客户端，配置认证头和重试策略 |
+| `GetTargets()` | 获取所有主机基本信息列表 |
+| `GetTarget()` | 获取单主机详细信息 |
+| `GetHostMetas()` | 获取所有主机元信息（转换为内部模型） |
+| `GetHostMetaByIdent()` | 获取单主机元信息 |
+
+**重试机制**:
+- 使用 resty 内置 `SetRetryCount()` 和 `SetRetryWaitTime()`
+- 最大重试次数：从配置读取（默认 3 次）
+- 重试间隔：指数退避（baseDelay * 2^attempt）
+- 可重试错误：超时、5xx、连接失败
+- 4xx 错误不重试
+
+**验证结果**:
+- [x] 执行 `go build ./internal/client/n9e/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test ./internal/client/n9e/` 全部通过（12 个测试用例）
+- [x] Token 认证正确添加到请求头
+- [x] 重试机制配置正确（指数退避）
+- [x] 错误处理包含明确的上下文信息
+- [x] ident 清理逻辑通过 `model.CleanIdent()` 和 `ToHostMeta()` 调用
+
+---
+
 ## 下一步骤
 
-**步骤 15**: 实现 N9E 客户端（阶段四 - API 客户端实现继续）
-- 在 `internal/client/n9e/client.go` 中实现客户端
-- 实现构造函数，接收配置参数
-- 实现获取主机列表方法
-- 实现 Token 认证（X-User-Token 请求头）
-- 实现超时和错误处理
-- 集成重试机制（指数退避）
-- 实现 ident 清理逻辑
+**步骤 16**: 编写 N9E 客户端单元测试（阶段四 - API 客户端实现继续）
+- 在 `internal/client/n9e/client_test.go` 中编写测试
+- 使用 httptest 模拟 API 响应
+- 测试正常响应、认证失败、超时等场景
+- 测试 ident 清理逻辑
+- 测试重试机制
 
 ---
 
@@ -704,3 +759,4 @@ type PlatformInfo struct {
 | 2025-12-13 | 步骤 12 | 定义告警模型完成 |
 | 2025-12-13 | 步骤 13 | 定义巡检结果模型完成（阶段三完成） |
 | 2025-12-13 | 步骤 14 | 定义 N9E 客户端接口和类型完成（阶段四开始） |
+| 2025-12-13 | 步骤 15 | 实现 N9E 客户端完成 |

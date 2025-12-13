@@ -96,9 +96,27 @@ type Config struct {
 |-----------|------|------|
 | `n9e/types.go` | 夜莺 API 请求/响应类型定义 | ✅ 已实现 |
 | `n9e/types_test.go` | N9E 类型单元测试（12 个测试，82.2% 覆盖率） | ✅ 已实现 |
-| `n9e/client.go` | 夜莺 API 客户端（主机元信息） | 待实现 |
+| `n9e/client.go` | 夜莺 API 客户端（主机元信息） | ✅ 已实现 |
 | `vm/types.go` | PromQL 查询类型定义 | 待实现 |
 | `vm/client.go` | VictoriaMetrics 客户端（指标查询） | 待实现 |
+
+**N9E Client 核心方法**：
+```go
+// 创建客户端
+func NewClient(cfg *config.N9EConfig, retryCfg *config.RetryConfig, logger zerolog.Logger) *Client
+
+// 获取所有主机基本信息列表
+func (c *Client) GetTargets(ctx context.Context) ([]TargetData, error)
+
+// 获取单主机详细信息
+func (c *Client) GetTarget(ctx context.Context, ident string) (*TargetData, error)
+
+// 获取所有主机元信息（转换为内部模型）
+func (c *Client) GetHostMetas(ctx context.Context) ([]*model.HostMeta, error)
+
+// 获取单主机元信息
+func (c *Client) GetHostMetaByIdent(ctx context.Context, ident string) (*model.HostMeta, error)
+```
 
 **N9E API 类型结构**：
 ```go
@@ -331,3 +349,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 12（告警模型），添加 alert.go |
 | 2025-12-13 | 完成步骤 13（巡检结果模型），添加 inspection.go，阶段三完成 |
 | 2025-12-13 | 完成步骤 14（N9E 客户端类型），添加 types.go 和测试，阶段四开始 |
+| 2025-12-13 | 完成步骤 15（N9E 客户端），添加 client.go |
