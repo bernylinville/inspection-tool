@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段三 - 数据模型定义（进行中）
-**进度**: 步骤 10/41 完成
+**进度**: 步骤 11/41 完成
 
 ---
 
@@ -410,13 +410,84 @@ type HostMeta struct {
 
 ---
 
+### 步骤 11：定义指标模型 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/model/metric.go` 中定义指标相关结构体
+2. 定义 `MetricStatus` 指标状态枚举（normal/warning/critical/pending）
+3. 定义 `MetricCategory` 分类枚举（cpu/memory/disk/system/process）
+4. 定义 `MetricFormat` 格式化类型枚举（percent/size/duration/number）
+5. 定义 `AggregateType` 聚合方式枚举（max/min/avg）
+6. 定义 `MetricDefinition` 指标定义结构体（对应 metrics.yaml）
+7. 定义 `MetricValue` 指标值结构体（采集后的数据）
+8. 定义 `HostMetrics` 主机指标集合结构体
+9. 定义 `MetricsConfig` 用于加载 metrics.yaml
+10. 实现辅助函数：`IsPending()`、`HasExpandLabel()`、`NewNAMetricValue()`、`NewMetricValue()`
+
+**生成文件**:
+- `internal/model/metric.go` - 指标模型定义
+
+**结构体定义**:
+```go
+// 指标状态枚举
+type MetricStatus string
+const (
+    MetricStatusNormal   MetricStatus = "normal"
+    MetricStatusWarning  MetricStatus = "warning"
+    MetricStatusCritical MetricStatus = "critical"
+    MetricStatusPending  MetricStatus = "pending"
+)
+
+// 指标定义（从 metrics.yaml 加载）
+type MetricDefinition struct {
+    Name          string         `yaml:"name"`
+    DisplayName   string         `yaml:"display_name"`
+    Query         string         `yaml:"query"`
+    Unit          string         `yaml:"unit"`
+    Category      MetricCategory `yaml:"category"`
+    Format        MetricFormat   `yaml:"format,omitempty"`
+    Aggregate     AggregateType  `yaml:"aggregate,omitempty"`
+    ExpandByLabel string         `yaml:"expand_by_label,omitempty"`
+    Status        string         `yaml:"status,omitempty"`
+    Note          string         `yaml:"note,omitempty"`
+}
+
+// 指标采集值
+type MetricValue struct {
+    Name           string            `json:"name"`
+    RawValue       float64           `json:"raw_value"`
+    FormattedValue string            `json:"formatted_value"`
+    Status         MetricStatus      `json:"status"`
+    Labels         map[string]string `json:"labels,omitempty"`
+    IsNA           bool              `json:"is_na"`
+    Timestamp      int64             `json:"timestamp,omitempty"`
+}
+
+// 主机指标集合
+type HostMetrics struct {
+    Hostname string                  `json:"hostname"`
+    Metrics  map[string]*MetricValue `json:"metrics"`
+}
+```
+
+**验证结果**:
+- [x] 支持不同类型的指标值（百分比、字节、秒数等）
+- [x] 包含格式化显示所需的所有字段
+- [x] 支持待定项的 N/A 显示（`NewNAMetricValue()` 函数）
+- [x] 执行 `go build ./internal/model/` 无编译错误
+- [x] 包含 package 级和 type 级注释
+- [x] 代码风格与 `host.go` 一致
+
+---
+
 ## 下一步骤
 
-**步骤 11**: 定义指标模型（阶段三 - 数据模型定义继续）
-- 在 `internal/model/metric.go` 中定义指标相关结构体
-- 包含：指标定义（名称、查询语句、单位、分类、聚合方式）
-- 包含：指标值（原始值、格式化值、状态）
-- 支持 "N/A" 值表示待定项
+**步骤 12**: 定义告警模型（阶段三 - 数据模型定义继续）
+- 在 `internal/model/alert.go` 中定义告警相关结构体
+- 包含：告警级别枚举（正常、警告、严重）
+- 包含：告警详情（主机、指标、当前值、阈值、消息）
 
 ---
 
@@ -434,3 +505,4 @@ type HostMeta struct {
 | 2025-12-13 | 步骤 8 | 创建示例配置文件完成 |
 | 2025-12-13 | 步骤 9 | 创建指标定义文件完成（阶段二完成） |
 | 2025-12-13 | 步骤 10 | 定义主机模型完成（阶段三开始） |
+| 2025-12-13 | 步骤 11 | 定义指标模型完成 |

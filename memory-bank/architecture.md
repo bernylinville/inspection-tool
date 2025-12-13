@@ -31,7 +31,8 @@ inspection-tool/
 │   ├── config/
 │   │   └── config.go          # 配置结构体定义（已实现）
 │   ├── model/                  # 数据模型
-│   │   └── host.go             # 主机模型（已实现）
+│   │   ├── host.go             # 主机模型（已实现）
+│   │   └── metric.go           # 指标模型（已实现）
 │   ├── report/
 │   │   ├── excel/              # Excel 报告生成（待实现）
 │   │   └── html/               # HTML 报告生成（待实现）
@@ -101,7 +102,7 @@ type Config struct {
 | 文件 | 作用 | 状态 |
 |------|------|------|
 | `host.go` | 主机模型（HostMeta、DiskMountInfo、HostStatus） | ✅ 已实现 |
-| `metric.go` | 指标模型（名称、值、单位） | 待实现 |
+| `metric.go` | 指标模型（MetricDefinition、MetricValue、HostMetrics） | ✅ 已实现 |
 | `alert.go` | 告警模型（级别、阈值） | 待实现 |
 | `inspection.go` | 巡检结果模型（摘要、主机列表） | 待实现 |
 
@@ -118,6 +119,32 @@ type HostMeta struct {
     CPUModel      string          `json:"cpu_model"`      // CPU 型号
     MemoryTotal   int64           `json:"memory_total"`   // 内存总量
     DiskMounts    []DiskMountInfo `json:"disk_mounts"`    // 磁盘挂载点
+}
+```
+
+**指标模型结构**：
+```go
+// 指标定义（从 metrics.yaml 加载）
+type MetricDefinition struct {
+    Name          string         `yaml:"name"`           // 指标唯一标识
+    DisplayName   string         `yaml:"display_name"`   // 中文显示名称
+    Query         string         `yaml:"query"`          // PromQL 查询表达式
+    Unit          string         `yaml:"unit"`           // 单位
+    Category      MetricCategory `yaml:"category"`       // 分类
+    Format        MetricFormat   `yaml:"format"`         // 格式化类型
+    Aggregate     AggregateType  `yaml:"aggregate"`      // 聚合方式
+    ExpandByLabel string         `yaml:"expand_by_label"`// 按标签展开
+    Status        string         `yaml:"status"`         // pending=待实现
+}
+
+// 指标采集值
+type MetricValue struct {
+    Name           string            `json:"name"`            // 指标名称
+    RawValue       float64           `json:"raw_value"`       // 原始数值
+    FormattedValue string            `json:"formatted_value"` // 格式化后的值
+    Status         MetricStatus      `json:"status"`          // 评估状态
+    Labels         map[string]string `json:"labels"`          // 标签
+    IsNA           bool              `json:"is_na"`           // 是否为 N/A
 }
 ```
 
@@ -197,3 +224,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 8（示例配置文件），添加 config.example.yaml |
 | 2025-12-13 | 完成步骤 9（指标定义文件），添加 metrics.yaml，阶段二完成 |
 | 2025-12-13 | 完成步骤 10（主机模型），添加 host.go，阶段三开始 |
+| 2025-12-13 | 完成步骤 11（指标模型），添加 metric.go |
