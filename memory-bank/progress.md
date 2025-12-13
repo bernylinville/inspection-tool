@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段四 - API 客户端实现（进行中）
-**进度**: 步骤 18/41 完成
+**阶段**: 阶段四 - API 客户端实现（已完成）
+**进度**: 步骤 19/41 完成
 
 ---
 
@@ -922,15 +922,72 @@ cpu_usage_active{cpu="cpu-total"}
 
 ---
 
+### 步骤 19：编写 VictoriaMetrics 客户端单元测试 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/client/vm/client_test.go` 中补充更多测试用例
+2. 实现带筛选的查询方法测试（QueryResultsWithFilter、QueryByIdentWithFilter）
+3. 实现多主机、多指标场景测试（5 台主机并行结果验证）
+4. 实现 NaN/Inf 值处理测试（验证无效值被正确过滤）
+5. 实现 Matrix 类型响应错误处理测试
+6. 实现超时测试（50ms 超时场景）
+7. 实现最大重试次数耗尽测试（2 次重试 + 初始请求 = 3 次尝试）
+8. 实现无效 JSON 响应处理测试
+9. 实现空筛选和 nil 筛选测试
+10. 实现主机标识符优先级测试（ident > host > instance）
+11. 实现特殊字符转义测试（业务组名含 `.` `*` 等正则特殊字符）
+12. 实现重复 ident 处理测试（多样本同 ident 时取最后一个）
+
+**生成文件**:
+- `internal/client/vm/client_test.go` - 补充 14 个新测试用例（含子测试）
+
+**测试用例列表**:
+| 类别 | 测试函数 | 场景 |
+|------|----------|------|
+| 带筛选方法 | `TestClient_QueryResultsWithFilter_Success` | QueryResultsWithFilter 成功场景 |
+| 带筛选方法 | `TestClient_QueryByIdentWithFilter_Success` | QueryByIdentWithFilter 成功场景 |
+| 多结果场景 | `TestClient_MultipleHosts_MultipleMetrics` | 5 台主机批量查询 |
+| 异常值处理 | `TestClient_NaN_Inf_Values` | NaN/+Inf/-Inf 过滤 |
+| 类型检查 | `TestClient_MatrixTypeResponse_Error` | Matrix 类型报错 |
+| 重试机制 | `TestClient_MaxRetries_Exhausted` | 重试次数耗尽 |
+| 超时处理 | `TestClient_Timeout` | 请求超时 |
+| JSON 解析 | `TestClient_InvalidJSON_Response` | 无效 JSON 处理 |
+| 筛选处理 | `TestClient_QueryWithFilter_NilFilter` | nil 筛选保持查询不变 |
+| 筛选处理 | `TestClient_QueryWithFilter_EmptyFilter` | 空筛选保持查询不变 |
+| 标识符逻辑 | `TestClient_HostIdentPriority` | ident > host > instance 优先级（3 个子测试） |
+| 特殊字符 | `TestClient_SpecialCharactersInFilter` | 正则特殊字符转义 |
+| 重复处理 | `TestClient_DuplicateIdent` | 同 ident 多样本取最后值 |
+
+**验证结果**:
+- [x] 执行 `go test ./internal/client/vm/` 全部通过（42 个测试用例，含子测试）
+- [x] 测试覆盖率达到 **94.0%**（远超目标 70%）
+- [x] 包含正向和异常场景测试
+- [x] 主机筛选标签注入测试完整（业务组 OR + 标签 AND）
+- [x] 重试机制测试完整（5xx 重试、4xx 不重试、最大重试次数）
+- [x] 边界条件测试完整（空结果、NaN 值、超时、无效 JSON）
+- [x] 执行 `go build ./...` 整个项目编译无错误
+
+**测试覆盖率总结（阶段四完成）**:
+| 模块 | 覆盖率 | 目标 |
+|------|--------|------|
+| N9E 客户端 | 91.6% | ≥70% ✅ |
+| VM 客户端 | 94.0% | ≥70% ✅ |
+| Config | 88.4% | ≥80% ✅ |
+
+---
+
 ## 下一步骤
 
-**步骤 19**: 编写 VictoriaMetrics 客户端单元测试（阶段四 - API 客户端实现继续）
-- 在 `internal/client/vm/client_test.go` 中补充更多测试用例
-- 模拟各种 PromQL 查询响应
-- 测试空结果、多结果、错误响应等场景
-- 测试主机筛选标签注入
-- 测试重试机制
-- 测试覆盖率达到 70% 以上
+**步骤 20**: 实现数据采集服务（阶段五 - 核心业务逻辑开始）
+- 在 `internal/service/collector.go` 中实现采集服务
+- 实现 Collector 接口
+- 整合 N9E 客户端获取主机元信息（包括 CPU 核心数）
+- 整合 VM 客户端获取指标数据
+- 将原始数据转换为内部模型
+- 实现磁盘数据按挂载点展开
+- 处理待定项（返回 N/A）
 
 ---
 
@@ -956,3 +1013,4 @@ cpu_usage_active{cpu="cpu-total"}
 | 2025-12-13 | 步骤 16 | 编写 N9E 客户端单元测试完成（覆盖率 91.6%） |
 | 2025-12-13 | 步骤 17 | 定义 VictoriaMetrics 客户端类型完成（覆盖率 93.0%） |
 | 2025-12-13 | 步骤 18 | 实现 VictoriaMetrics 客户端完成（覆盖率 94.0%） |
+| 2025-12-13 | 步骤 19 | 编写 VictoriaMetrics 客户端单元测试完成（阶段四完成） |
