@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段六 - 报告生成模块（进行中）
-**进度**: 步骤 24/41 完成
+**进度**: 步骤 25/41 完成
 
 ---
 
@@ -1362,13 +1362,96 @@ type ReportWriter interface {
 
 ---
 
+### 步骤 25：实现 Excel 报告生成器 - 基础结构 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/report/excel/writer.go` 中实现 ExcelWriter
+2. 实现 ReportWriter 接口（Write 和 Format 方法）
+3. 创建包含三个工作表的 Excel 文件：巡检概览、详细数据、异常汇总
+4. 使用 `xuri/excelize/v2` 库
+5. 实现条件格式样式（警告黄色、严重红色、正常绿色）
+6. 实现表头冻结功能
+7. 实现磁盘路径动态展开（收集所有主机的磁盘挂载点）
+8. 实现告警按严重程度排序
+9. 编写完整的单元测试（15 个测试用例）
+
+**生成文件**:
+- `internal/report/excel/writer.go` - Excel 报告生成器实现（450 行）
+- `internal/report/excel/writer_test.go` - 单元测试（400+ 行）
+
+**核心结构体**:
+```go
+// Writer implements report.ReportWriter for Excel format.
+type Writer struct {
+    timezone *time.Location
+}
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewWriter()` | 创建 Excel 写入器，支持自定义时区 |
+| `Format()` | 返回 "excel" 格式标识符 |
+| `Write()` | 生成 Excel 报告到指定路径 |
+| `createSummarySheet()` | 创建巡检概览工作表 |
+| `createDetailSheet()` | 创建详细数据工作表 |
+| `createAlertsSheet()` | 创建异常汇总工作表 |
+
+**工作表结构**:
+| 工作表 | 内容 |
+|--------|------|
+| 巡检概览 | 巡检时间、耗时、主机统计、告警统计、工具版本 |
+| 详细数据 | 主机完整信息、所有指标值、磁盘按挂载点展开 |
+| 异常汇总 | 告警列表（按严重程度排序）、阈值信息 |
+
+**样式配置**:
+| 样式 | 背景色 | 文字色 |
+|------|--------|--------|
+| 表头 | #4472C4 (蓝) | #FFFFFF (白) |
+| 警告 | #FFEB9C (黄) | #9C6500 (深黄) |
+| 严重 | #FFC7CE (红) | #9C0006 (深红) |
+| 正常 | #C6EFCE (绿) | #006100 (深绿) |
+
+**测试用例列表**:
+| 测试函数 | 场景 |
+|----------|------|
+| `TestNewWriter` | 构造函数（nil 时区、自定义时区） |
+| `TestWriter_Format` | 格式标识符返回 |
+| `TestWriter_Write_NilResult` | nil 结果错误处理 |
+| `TestWriter_Write_Success` | 完整写入流程 |
+| `TestWriter_Write_AddsXlsxExtension` | 自动添加 .xlsx 扩展名 |
+| `TestWriter_SummarySheet` | 巡检概览内容验证 |
+| `TestWriter_DetailSheet` | 详细数据内容验证 |
+| `TestWriter_AlertsSheet` | 异常汇总排序验证 |
+| `TestWriter_EmptyResult` | 空结果处理 |
+| `TestColumnName` | 列名转换（A-Z, AA-ZZ, AAA） |
+| `TestFormatDuration` | 时长格式化（ms/秒/分钟/小时） |
+| `TestStatusText` | 状态中文转换 |
+| `TestAlertLevelPriority` | 告警级别优先级 |
+| `TestWriter_CollectDiskPaths` | 磁盘路径收集和去重 |
+
+**验证结果**:
+- [x] 生成的 Excel 文件可以正常打开
+- [x] 包含三个工作表且命名正确（巡检概览、详细数据、异常汇总）
+- [x] 默认 Sheet1 已被删除
+- [x] 文件保存到指定路径
+- [x] 自动添加 .xlsx 扩展名
+- [x] 执行 `go build ./internal/report/excel/` 无编译错误
+- [x] 执行 `go test ./internal/report/excel/` 全部通过（15 个测试用例）
+- [x] 测试覆盖率达到 **89.6%**（超过目标 60%）
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test -race ./...` 全部通过
+
+---
+
 ## 下一步骤
 
-**步骤 25**: 实现 Excel 报告生成器 - 基础结构
-- 在 `internal/report/excel/writer.go` 中实现 ExcelWriter
-- 实现 ReportWriter 接口
-- 创建包含三个工作表的 Excel 文件：巡检概览、详细数据、异常汇总
-- 使用 `xuri/excelize/v2` 库
+**步骤 26**: 实现 Excel 报告 - 巡检概览表
+- 填充巡检概览工作表
+- 包含：巡检时间（中国时区）、主机总数、正常/警告/严重/失败主机数
+- 设置基本样式（标题加粗、列宽自适应）
 
 ---
 
@@ -1400,3 +1483,4 @@ type ReportWriter interface {
 | 2025-12-13 | 步骤 22 | 实现巡检编排服务完成（覆盖率 93.4%，阶段五完成） |
 | 2025-12-13 | 步骤 23 | 补充并发采集功能 + 并发测试（覆盖率 80.1%） |
 | 2025-12-13 | 步骤 24 | 定义报告写入器接口（阶段六开始） |
+| 2025-12-13 | 步骤 25 | 实现 Excel 报告生成器基础结构（覆盖率 89.6%） |

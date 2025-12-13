@@ -42,7 +42,10 @@ inspection-tool/
 │   │   ├── host.go             # 主机模型（已实现）
 │   │   └── metric.go           # 指标模型（已实现）
 │   ├── report/
-│   │   ├── excel/              # Excel 报告生成（待实现）
+│   │   ├── writer.go          # ReportWriter 接口定义（已实现）
+│   │   ├── excel/              # Excel 报告生成
+│   │   │   ├── writer.go       # Excel 报告生成器（已实现）
+│   │   │   └── writer_test.go  # 单元测试（已实现）
 │   │   └── html/               # HTML 报告生成（待实现）
 │   └── service/                # 业务逻辑
 │       ├── collector.go        # 数据采集服务（已实现）
@@ -533,7 +536,8 @@ func (i *Inspector) GetVersion() string
 |-----------|------|------|
 | `writer.go` | ReportWriter 接口定义 | ✅ 已实现 |
 | `registry.go` | 报告格式注册表 | 待实现 |
-| `excel/writer.go` | Excel 报告生成 | 待实现 |
+| `excel/writer.go` | Excel 报告生成（3 工作表、条件格式） | ✅ 已实现 |
+| `excel/writer_test.go` | Excel 报告单元测试（15 个测试，覆盖率 89.6%） | ✅ 已实现 |
 | `html/writer.go` | HTML 报告生成 | 待实现 |
 
 **ReportWriter 接口定义**（已实现）:
@@ -549,6 +553,39 @@ type ReportWriter interface {
     Format() string
 }
 ```
+
+**Excel Writer 实现**（已实现）:
+```go
+// Writer implements report.ReportWriter for Excel format.
+type Writer struct {
+    timezone *time.Location
+}
+
+// 核心方法
+func NewWriter(timezone *time.Location) *Writer
+func (w *Writer) Format() string  // 返回 "excel"
+func (w *Writer) Write(result *model.InspectionResult, outputPath string) error
+
+// 工作表创建
+func (w *Writer) createSummarySheet(f *excelize.File, result *model.InspectionResult) error
+func (w *Writer) createDetailSheet(f *excelize.File, result *model.InspectionResult) error
+func (w *Writer) createAlertsSheet(f *excelize.File, result *model.InspectionResult) error
+```
+
+**Excel 工作表结构**:
+| 工作表 | 内容 |
+|--------|------|
+| 巡检概览 | 巡检时间、耗时、主机统计（总数/正常/警告/严重/失败）、告警统计、工具版本 |
+| 详细数据 | 主机名、IP、状态、系统信息、CPU/内存/磁盘/负载/进程指标、磁盘按挂载点展开 |
+| 异常汇总 | 主机名、告警级别、指标名称、当前值、警告阈值、严重阈值、告警消息 |
+
+**Excel 样式配置**:
+| 样式 | 背景色 | 文字色 | 用途 |
+|------|--------|--------|------|
+| 表头 | #4472C4 (蓝) | #FFFFFF (白) | 所有工作表表头行 |
+| 警告 | #FFEB9C (黄) | #9C6500 (深黄) | 警告级别指标/告警 |
+| 严重 | #FFC7CE (红) | #9C0006 (深红) | 严重级别指标/告警 |
+| 正常 | #C6EFCE (绿) | #006100 (深绿) | 正常状态显示 |
 
 ### 配置文件 (configs/)
 
@@ -627,3 +664,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 22（巡检编排服务），添加 inspector.go 和测试，覆盖率 93.4%，阶段五完成 |
 | 2025-12-13 | 完成步骤 23（并发采集 + 测试），添加 errgroup 并发逻辑，覆盖率 80.1% |
 | 2025-12-13 | 完成步骤 24（报告写入器接口），添加 writer.go，阶段六开始 |
+| 2025-12-13 | 完成步骤 25（Excel 报告生成器），添加 excel/writer.go 和测试，覆盖率 89.6% |

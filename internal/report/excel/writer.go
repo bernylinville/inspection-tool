@@ -1,0 +1,637 @@
+// Package excel provides Excel report generation for the inspection tool.
+// It implements the report.ReportWriter interface to generate .xlsx files
+// with inspection results, including summary, detailed data, and alerts.
+package excel
+
+import (
+	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/xuri/excelize/v2"
+
+	"inspection-tool/internal/model"
+)
+
+const (
+	// Sheet names
+	sheetSummary = "巡检概览"
+	sheetDetail  = "详细数据"
+	sheetAlerts  = "异常汇总"
+
+	// Default sheet to remove
+	defaultSheet = "Sheet1"
+
+	// Colors for conditional formatting (RGB without #)
+	colorWarningBg  = "FFEB9C" // Yellow background for warning
+	colorWarningFg  = "9C6500" // Dark yellow text for warning
+	colorCriticalBg = "FFC7CE" // Red background for critical
+	colorCriticalFg = "9C0006" // Dark red text for critical
+	colorHeaderBg   = "4472C4" // Blue background for header
+	colorHeaderFg   = "FFFFFF" // White text for header
+	colorNormalBg   = "C6EFCE" // Green background for normal
+	colorNormalFg   = "006100" // Dark green text for normal
+
+	// Column widths
+	defaultColWidth = 15.0
+	wideColWidth    = 25.0
+	narrowColWidth  = 10.0
+)
+
+// Writer implements report.ReportWriter for Excel format.
+type Writer struct {
+	timezone *time.Location
+}
+
+// NewWriter creates a new Excel report writer.
+// If timezone is nil, it defaults to Asia/Shanghai.
+func NewWriter(timezone *time.Location) *Writer {
+	if timezone == nil {
+		timezone, _ = time.LoadLocation("Asia/Shanghai")
+	}
+	return &Writer{
+		timezone: timezone,
+	}
+}
+
+// Format returns the format identifier for this writer.
+func (w *Writer) Format() string {
+	return "excel"
+}
+
+// Write generates an Excel report from the inspection result.
+func (w *Writer) Write(result *model.InspectionResult, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("inspection result is nil")
+	}
+
+	// Ensure output path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	// Create new Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create worksheets
+	if err := w.createSummarySheet(f, result); err != nil {
+		return fmt.Errorf("failed to create summary sheet: %w", err)
+	}
+
+	if err := w.createDetailSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create detail sheet: %w", err)
+	}
+
+	if err := w.createAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create alerts sheet: %w", err)
+	}
+
+	// Remove default Sheet1
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+		// Ignore error if sheet doesn't exist
+	}
+
+	// Set active sheet to summary
+	idx, _ := f.GetSheetIndex(sheetSummary)
+	f.SetActiveSheet(idx)
+
+	// Ensure output directory exists
+	dir := filepath.Dir(outputPath)
+	if dir != "" && dir != "." {
+		// Directory creation is handled by the caller
+	}
+
+	// Save the file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}
+
+// createSummarySheet creates the inspection summary worksheet.
+func (w *Writer) createSummarySheet(f *excelize.File, result *model.InspectionResult) error {
+	// Create sheet
+	idx, err := f.NewSheet(sheetSummary)
+	if err != nil {
+		return err
+	}
+	f.SetActiveSheet(idx)
+
+	// Create header style
+	headerStyle, err := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Bold:  true,
+			Size:  14,
+			Color: colorHeaderFg,
+		},
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{colorHeaderBg},
+			Pattern: 1,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create title style
+	titleStyle, err := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Bold: true,
+			Size: 18,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create value style
+	valueStyle, err := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Size: 12,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Set column widths
+	f.SetColWidth(sheetSummary, "A", "A", 20)
+	f.SetColWidth(sheetSummary, "B", "B", 30)
+
+	// Title
+	f.MergeCell(sheetSummary, "A1", "B1")
+	f.SetCellValue(sheetSummary, "A1", "系统巡检报告")
+	f.SetCellStyle(sheetSummary, "A1", "B1", titleStyle)
+	f.SetRowHeight(sheetSummary, 1, 30)
+
+	// Summary data
+	summaryData := []struct {
+		label string
+		value interface{}
+	}{
+		{"巡检时间", result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")},
+		{"巡检耗时", formatDuration(result.Duration)},
+		{"主机总数", result.Summary.TotalHosts},
+		{"正常主机", result.Summary.NormalHosts},
+		{"警告主机", result.Summary.WarningHosts},
+		{"严重主机", result.Summary.CriticalHosts},
+		{"失败主机", result.Summary.FailedHosts},
+		{"告警总数", result.AlertSummary.TotalAlerts},
+		{"警告告警", result.AlertSummary.WarningCount},
+		{"严重告警", result.AlertSummary.CriticalCount},
+	}
+
+	if result.Version != "" {
+		summaryData = append(summaryData, struct {
+			label string
+			value interface{}
+		}{"工具版本", result.Version})
+	}
+
+	// Write summary data
+	for i, item := range summaryData {
+		row := i + 3 // Start from row 3
+		f.SetCellValue(sheetSummary, fmt.Sprintf("A%d", row), item.label)
+		f.SetCellValue(sheetSummary, fmt.Sprintf("B%d", row), item.value)
+		f.SetCellStyle(sheetSummary, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), headerStyle)
+		f.SetCellStyle(sheetSummary, fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), valueStyle)
+		f.SetRowHeight(sheetSummary, row, 22)
+	}
+
+	return nil
+}
+
+// createDetailSheet creates the detailed data worksheet.
+func (w *Writer) createDetailSheet(f *excelize.File, result *model.InspectionResult) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetDetail)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{
+		"主机名", "IP地址", "状态", "操作系统", "系统版本", "内核版本",
+		"CPU核心数", "CPU利用率", "内存利用率", "磁盘最大利用率",
+		"运行时间", "1分钟负载", "每核负载", "僵尸进程", "总进程数",
+	}
+
+	// Get unique disk paths from all hosts
+	diskPaths := w.collectDiskPaths(result.Hosts)
+	for _, path := range diskPaths {
+		headers = append(headers, fmt.Sprintf("磁盘:%s", path))
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 20, "B": 15, "C": 10, "D": 12, "E": 20, "F": 30,
+		"G": 10, "H": 12, "I": 12, "J": 14,
+		"K": 15, "L": 12, "M": 10, "N": 10, "O": 10,
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetDetail, col, col, width)
+	}
+
+	// Set disk column widths
+	for i := range diskPaths {
+		col := columnName(16 + i) // Starting from column P
+		f.SetColWidth(sheetDetail, col, col, 15)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetDetail, cell, header)
+		f.SetCellStyle(sheetDetail, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetDetail, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetDetail, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Write host data
+	for i, host := range result.Hosts {
+		row := i + 2 // Start from row 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		// Basic info
+		f.SetCellValue(sheetDetail, "A"+rowStr, host.Hostname)
+		f.SetCellValue(sheetDetail, "B"+rowStr, host.IP)
+		f.SetCellValue(sheetDetail, "C"+rowStr, statusText(host.Status))
+		f.SetCellValue(sheetDetail, "D"+rowStr, host.OS)
+		f.SetCellValue(sheetDetail, "E"+rowStr, host.OSVersion)
+		f.SetCellValue(sheetDetail, "F"+rowStr, host.KernelVersion)
+		f.SetCellValue(sheetDetail, "G"+rowStr, host.CPUCores)
+
+		// Metrics
+		w.setMetricCell(f, sheetDetail, "H"+rowStr, host.Metrics["cpu_usage"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "I"+rowStr, host.Metrics["memory_usage"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "J"+rowStr, host.Metrics["disk_usage_max"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "K"+rowStr, host.Metrics["uptime"], 0, 0, 0)
+		w.setMetricCell(f, sheetDetail, "L"+rowStr, host.Metrics["load_1m"], 0, 0, 0)
+		w.setMetricCell(f, sheetDetail, "M"+rowStr, host.Metrics["load_per_core"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "N"+rowStr, host.Metrics["processes_zombies"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "O"+rowStr, host.Metrics["processes_total"], 0, 0, 0)
+
+		// Disk usage by path
+		for j, path := range diskPaths {
+			col := columnName(16 + j)
+			metricName := fmt.Sprintf("disk_usage:%s", path)
+			w.setMetricCell(f, sheetDetail, col+rowStr, host.Metrics[metricName], warningStyle, criticalStyle, normalStyle)
+		}
+
+		// Apply status style to entire row
+		statusStyle := w.getStatusStyle(host.Status, normalStyle, warningStyle, criticalStyle)
+		if statusStyle > 0 {
+			f.SetCellStyle(sheetDetail, "C"+rowStr, "C"+rowStr, statusStyle)
+		}
+	}
+
+	return nil
+}
+
+// createAlertsSheet creates the alerts summary worksheet.
+func (w *Writer) createAlertsSheet(f *excelize.File, result *model.InspectionResult) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetAlerts)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{"主机名", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
+
+	// Set column widths
+	colWidths := []float64{20, 12, 15, 15, 12, 12, 40}
+	for i, width := range colWidths {
+		col := columnName(i + 1)
+		f.SetColWidth(sheetAlerts, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetAlerts, cell, header)
+		f.SetCellStyle(sheetAlerts, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetAlerts, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetAlerts, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Sort alerts by level (critical first) then by hostname
+	alerts := make([]*model.Alert, len(result.Alerts))
+	copy(alerts, result.Alerts)
+	sort.Slice(alerts, func(i, j int) bool {
+		if alerts[i].Level != alerts[j].Level {
+			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
+		}
+		return alerts[i].Hostname < alerts[j].Hostname
+	})
+
+	// Write alert data
+	for i, alert := range alerts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		f.SetCellValue(sheetAlerts, "A"+rowStr, alert.Hostname)
+		f.SetCellValue(sheetAlerts, "B"+rowStr, alertLevelText(alert.Level))
+		f.SetCellValue(sheetAlerts, "C"+rowStr, alert.MetricDisplayName)
+		f.SetCellValue(sheetAlerts, "D"+rowStr, alert.FormattedValue)
+		f.SetCellValue(sheetAlerts, "E"+rowStr, formatThreshold(alert.WarningThreshold, alert.MetricName))
+		f.SetCellValue(sheetAlerts, "F"+rowStr, formatThreshold(alert.CriticalThreshold, alert.MetricName))
+		f.SetCellValue(sheetAlerts, "G"+rowStr, alert.Message)
+
+		// Apply style based on alert level
+		var style int
+		if alert.Level == model.AlertLevelCritical {
+			style = criticalStyle
+		} else if alert.Level == model.AlertLevelWarning {
+			style = warningStyle
+		}
+		if style > 0 {
+			f.SetCellStyle(sheetAlerts, "B"+rowStr, "B"+rowStr, style)
+		}
+	}
+
+	return nil
+}
+
+// Helper functions
+
+func (w *Writer) createHeaderStyle(f *excelize.File) (int, error) {
+	return f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Bold:  true,
+			Size:  11,
+			Color: colorHeaderFg,
+		},
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{colorHeaderBg},
+			Pattern: 1,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+}
+
+func (w *Writer) createWarningStyle(f *excelize.File) (int, error) {
+	return f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Color: colorWarningFg,
+		},
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{colorWarningBg},
+			Pattern: 1,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+}
+
+func (w *Writer) createCriticalStyle(f *excelize.File) (int, error) {
+	return f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Color: colorCriticalFg,
+		},
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{colorCriticalBg},
+			Pattern: 1,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+}
+
+func (w *Writer) createNormalStyle(f *excelize.File) (int, error) {
+	return f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{
+			Color: colorNormalFg,
+		},
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{colorNormalBg},
+			Pattern: 1,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+}
+
+func (w *Writer) setMetricCell(f *excelize.File, sheet, cell string, metric *model.MetricValue, warningStyle, criticalStyle, normalStyle int) {
+	if metric == nil || metric.IsNA {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+
+	f.SetCellValue(sheet, cell, metric.FormattedValue)
+
+	// Apply style based on metric status
+	var style int
+	switch metric.Status {
+	case model.MetricStatusCritical:
+		style = criticalStyle
+	case model.MetricStatusWarning:
+		style = warningStyle
+	case model.MetricStatusNormal:
+		// Only apply normal style if styles are provided
+		if normalStyle > 0 && warningStyle > 0 && criticalStyle > 0 {
+			// Don't apply normal style to avoid visual clutter
+		}
+	}
+	if style > 0 {
+		f.SetCellStyle(sheet, cell, cell, style)
+	}
+}
+
+func (w *Writer) collectDiskPaths(hosts []*model.HostResult) []string {
+	pathSet := make(map[string]bool)
+	for _, host := range hosts {
+		for name := range host.Metrics {
+			if strings.HasPrefix(name, "disk_usage:") {
+				path := strings.TrimPrefix(name, "disk_usage:")
+				pathSet[path] = true
+			}
+		}
+	}
+
+	paths := make([]string, 0, len(pathSet))
+	for path := range pathSet {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func (w *Writer) getStatusStyle(status model.HostStatus, normalStyle, warningStyle, criticalStyle int) int {
+	switch status {
+	case model.HostStatusCritical:
+		return criticalStyle
+	case model.HostStatusWarning:
+		return warningStyle
+	case model.HostStatusNormal:
+		return normalStyle
+	default:
+		return 0
+	}
+}
+
+// columnName converts a 1-based column index to Excel column name (A, B, ..., Z, AA, AB, ...).
+func columnName(index int) string {
+	result := ""
+	for index > 0 {
+		index--
+		result = string(rune('A'+index%26)) + result
+		index /= 26
+	}
+	return result
+}
+
+// formatDuration formats a duration in a human-readable format.
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1f秒", d.Seconds())
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%.1f分钟", d.Minutes())
+	}
+	return fmt.Sprintf("%.1f小时", d.Hours())
+}
+
+// statusText converts host status to Chinese text.
+func statusText(status model.HostStatus) string {
+	switch status {
+	case model.HostStatusNormal:
+		return "正常"
+	case model.HostStatusWarning:
+		return "警告"
+	case model.HostStatusCritical:
+		return "严重"
+	case model.HostStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// alertLevelText converts alert level to Chinese text.
+func alertLevelText(level model.AlertLevel) string {
+	switch level {
+	case model.AlertLevelNormal:
+		return "正常"
+	case model.AlertLevelWarning:
+		return "警告"
+	case model.AlertLevelCritical:
+		return "严重"
+	default:
+		return "未知"
+	}
+}
+
+// alertLevelPriority returns a numeric priority for sorting (higher = more severe).
+func alertLevelPriority(level model.AlertLevel) int {
+	switch level {
+	case model.AlertLevelCritical:
+		return 2
+	case model.AlertLevelWarning:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// formatThreshold formats a threshold value based on metric type.
+func formatThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "cpu_usage", "memory_usage", "disk_usage_max":
+		return fmt.Sprintf("%.1f%%", value)
+	case "load_per_core":
+		return fmt.Sprintf("%.2f", value)
+	case "processes_zombies":
+		return fmt.Sprintf("%.0f", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
