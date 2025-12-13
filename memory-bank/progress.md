@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段四 - API 客户端实现（进行中）
-**进度**: 步骤 16/41 完成
+**进度**: 步骤 17/41 完成
 
 ---
 
@@ -775,12 +775,91 @@ type Client struct {
 
 ---
 
+### 步骤 17：定义 VictoriaMetrics 客户端类型 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/client/vm/types.go` 中定义 VictoriaMetrics/Prometheus API 类型
+2. 定义 `QueryResponse` API 响应结构体（status、data、errorType、error、warnings）
+3. 定义 `QueryData` 结果数据结构体（resultType、result）
+4. 定义 `Sample` 样本结构体（metric、value、values）
+5. 定义 `Metric` 类型（map[string]string）用于存储标签
+6. 定义 `SampleValue` 类型（[2]interface{}）解析 [timestamp, value] 数组
+7. 定义 `QueryResult` 便捷结构体用于处理结果
+8. 定义 `HostFilter` 主机筛选结构体（业务组、标签）
+9. 实现辅助函数和方法：
+   - `IsSuccess()`、`IsVector()`、`IsMatrix()`
+   - `GetIdent()`、`GetLabel()`、`Name()`
+   - `Timestamp()`、`TimestampUnix()`、`Value()`、`MustValue()`、`IsNaN()`
+   - `ParseQueryResults()`、`GroupResultsByIdent()`、`IsEmpty()`
+10. 编写完整的单元测试（14 个测试用例，48 个子测试）
+
+**生成文件**:
+- `internal/client/vm/types.go` - VM API 类型定义
+- `internal/client/vm/types_test.go` - 单元测试
+
+**类型定义概览**:
+```go
+// API 响应结构
+type QueryResponse struct {
+    Status    string     `json:"status"`    // success 或 error
+    Data      QueryData  `json:"data"`      // 查询数据
+    ErrorType string     `json:"errorType"` // 错误类型
+    Error     string     `json:"error"`     // 错误信息
+    Warnings  []string   `json:"warnings"`  // 警告信息
+}
+
+type QueryData struct {
+    ResultType string   `json:"resultType"` // vector, matrix, scalar, string
+    Result     []Sample `json:"result"`     // 结果样本列表
+}
+
+type Sample struct {
+    Metric Metric        `json:"metric"` // 指标标签
+    Value  SampleValue   `json:"value"`  // 即时查询值
+    Values []SampleValue `json:"values"` // 范围查询值列表
+}
+
+type SampleValue [2]interface{} // [timestamp, value]
+
+// 主机筛选
+type HostFilter struct {
+    BusinessGroups []string          // 业务组（OR 关系）
+    Tags           map[string]string // 标签（AND 关系）
+}
+```
+
+**关键功能**:
+| 功能 | 说明 |
+|------|------|
+| `ParseQueryResults()` | 将 QueryResponse 转换为 []QueryResult 便于处理 |
+| `GetIdent()` | 从标签中提取主机标识符（优先级：ident > host > instance） |
+| `GroupResultsByIdent()` | 按主机标识符分组结果 |
+| `IsNaN()` | 检测 NaN/Inf/无效值 |
+| `Value()` | 安全解析字符串格式的指标值为 float64 |
+
+**验证结果**:
+- [x] 类型定义符合 Prometheus HTTP API 规范
+- [x] 能够正确解析 vector 类型响应（JSON 解析测试通过）
+- [x] 能够正确解析 error 类型响应
+- [x] 执行 `go build ./internal/client/vm/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test ./internal/client/vm/` 全部通过（14 个测试用例）
+- [x] 测试覆盖率达到 93.0%（超过目标 70%）
+
+---
+
 ## 下一步骤
 
-**步骤 17**: 定义 VictoriaMetrics 客户端类型（阶段四 - API 客户端实现继续）
-- 在 `internal/client/vm/types.go` 中定义类型
-- 定义 Prometheus API 响应格式（status、data、resultType）
-- 定义即时查询结果结构（metric 标签、value）
+**步骤 18**: 实现 VictoriaMetrics 客户端（阶段四 - API 客户端实现继续）
+- 在 `internal/client/vm/client.go` 中实现客户端
+- 实现构造函数，接收配置参数
+- 实现即时查询方法（/api/v1/query）
+- 支持 PromQL 查询语句
+- 实现结果解析，提取指标值和标签
+- 集成重试机制
+- 支持主机筛选标签注入（业务组 OR + 标签 AND）
 
 ---
 
@@ -804,3 +883,4 @@ type Client struct {
 | 2025-12-13 | 步骤 14 | 定义 N9E 客户端接口和类型完成（阶段四开始） |
 | 2025-12-13 | 步骤 15 | 实现 N9E 客户端完成 |
 | 2025-12-13 | 步骤 16 | 编写 N9E 客户端单元测试完成（覆盖率 91.6%） |
+| 2025-12-13 | 步骤 17 | 定义 VictoriaMetrics 客户端类型完成（覆盖率 93.0%） |

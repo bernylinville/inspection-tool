@@ -28,8 +28,13 @@ inspection-tool/
 │   ├── client/
 │   │   ├── n9e/                # 夜莺 API 客户端
 │   │   │   ├── types.go        # API 类型定义（已实现）
-│   │   │   └── types_test.go   # 类型单元测试（已实现）
-│   │   └── vm/                 # VictoriaMetrics 客户端（待实现）
+│   │   │   ├── types_test.go   # 类型单元测试（已实现）
+│   │   │   ├── client.go       # API 客户端实现（已实现）
+│   │   │   └── client_test.go  # 客户端单元测试（已实现）
+│   │   └── vm/                 # VictoriaMetrics 客户端
+│   │       ├── types.go        # API 类型定义（已实现）
+│   │       ├── types_test.go   # 类型单元测试（已实现）
+│   │       └── client.go       # API 客户端实现（待实现）
 │   ├── config/
 │   │   └── config.go          # 配置结构体定义（已实现）
 │   ├── model/                  # 数据模型
@@ -98,7 +103,8 @@ type Config struct {
 | `n9e/types_test.go` | N9E 类型单元测试（12 个测试，82.2% 覆盖率） | ✅ 已实现 |
 | `n9e/client.go` | 夜莺 API 客户端（主机元信息） | ✅ 已实现 |
 | `n9e/client_test.go` | N9E 客户端单元测试（17 个测试，整体覆盖率 91.6%） | ✅ 已实现 |
-| `vm/types.go` | PromQL 查询类型定义 | 待实现 |
+| `vm/types.go` | VictoriaMetrics/Prometheus API 类型定义 | ✅ 已实现 |
+| `vm/types_test.go` | VM 类型单元测试（14 个测试，覆盖率 93.0%） | ✅ 已实现 |
 | `vm/client.go` | VictoriaMetrics 客户端（指标查询） | 待实现 |
 
 **N9E Client 核心方法**：
@@ -145,6 +151,43 @@ type ExtendInfo struct {
 func ParseExtendInfo(extendInfoStr string) (*ExtendInfo, error)  // 解析 JSON
 func (t *TargetData) ToHostMeta() (*model.HostMeta, error)       // 转换为 HostMeta
 func (f *FilesystemInfo) IsPhysicalDisk() bool                   // 过滤物理磁盘
+```
+
+**VM API 类型结构**：
+```go
+// API 响应结构（符合 Prometheus HTTP API 规范）
+type QueryResponse struct {
+    Status    string     `json:"status"`    // success 或 error
+    Data      QueryData  `json:"data"`      // 查询数据
+    ErrorType string     `json:"errorType"` // 错误类型
+    Error     string     `json:"error"`     // 错误信息
+    Warnings  []string   `json:"warnings"`  // 警告信息
+}
+
+type QueryData struct {
+    ResultType string   `json:"resultType"` // vector, matrix, scalar, string
+    Result     []Sample `json:"result"`     // 结果样本列表
+}
+
+type Sample struct {
+    Metric Metric        `json:"metric"` // 指标标签 map[string]string
+    Value  SampleValue   `json:"value"`  // 即时查询值 [timestamp, value]
+    Values []SampleValue `json:"values"` // 范围查询值列表
+}
+
+type SampleValue [2]interface{} // [timestamp, value]
+
+// 主机筛选配置
+type HostFilter struct {
+    BusinessGroups []string          // 业务组（OR 关系）
+    Tags           map[string]string // 标签（AND 关系）
+}
+
+// 关键辅助函数
+func ParseQueryResults(resp *QueryResponse) ([]QueryResult, error)  // 解析查询结果
+func GroupResultsByIdent(results []QueryResult) map[string]QueryResult  // 按主机分组
+func (s *Sample) GetIdent() string  // 提取主机标识符（ident > host > instance）
+func (v SampleValue) Value() (float64, error)  // 解析指标值
 ```
 
 ### 数据模型 (internal/model/)
@@ -352,3 +395,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 14（N9E 客户端类型），添加 types.go 和测试，阶段四开始 |
 | 2025-12-13 | 完成步骤 15（N9E 客户端），添加 client.go |
 | 2025-12-13 | 完成步骤 16（N9E 客户端测试），添加 client_test.go，覆盖率 91.6% |
+| 2025-12-13 | 完成步骤 17（VM 客户端类型），添加 vm/types.go 和测试，覆盖率 93.0% |
