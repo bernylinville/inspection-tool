@@ -535,7 +535,8 @@ func (i *Inspector) GetVersion() string
 | 目录/文件 | 作用 | 状态 |
 |-----------|------|------|
 | `writer.go` | ReportWriter 接口定义 | ✅ 已实现 |
-| `registry.go` | 报告格式注册表 | 待实现 |
+| `registry.go` | 报告格式注册表（Excel + HTML） | ✅ 已实现 |
+| `registry_test.go` | 注册表单元测试（10 个测试，覆盖率 100%） | ✅ 已实现 |
 | `excel/writer.go` | Excel 报告生成（3 工作表、条件格式） | ✅ 已实现 |
 | `excel/writer_test.go` | Excel 报告单元测试（15 个测试，覆盖率 89.6%） | ✅ 已实现 |
 | `html/writer.go` | HTML 报告生成（响应式、支持自定义模板） | ✅ 已实现 |
@@ -554,6 +555,20 @@ type ReportWriter interface {
     // Common values are "excel" and "html".
     Format() string
 }
+```
+
+**Registry 报告格式注册表**（已实现）:
+```go
+// Registry manages report writers for different formats.
+type Registry struct {
+    writers map[string]ReportWriter
+}
+
+// 核心方法
+func NewRegistry(timezone *time.Location, htmlTemplatePath string) *Registry
+func (r *Registry) Get(format string) (ReportWriter, error)  // 大小写不敏感
+func (r *Registry) GetAll() []string                         // 返回排序后的格式列表
+func (r *Registry) Has(format string) bool                   // 检查格式是否支持
 ```
 
 **Excel Writer 实现**（已实现）:

@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段六 - 报告生成模块（进行中）
-**进度**: 步骤 31/41 完成
+**进度**: 步骤 32/41 完成
 
 ---
 
@@ -1729,11 +1729,72 @@ type TemplateData struct {
 
 ---
 
+### 步骤 32：实现报告格式注册表 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/report/registry.go` 中实现格式注册表
+2. 定义 `Registry` 结构体，管理已注册的 ReportWriter
+3. 实现 `NewRegistry()` 构造函数，预注册 Excel 和 HTML 两种格式
+4. 实现 `Get(format)` 方法，支持按格式名称获取 Writer
+5. 实现 `GetAll()` 方法，获取所有支持的格式名称（排序）
+6. 实现 `Has(format)` 方法，检查格式是否支持
+7. 支持格式名称大小写不敏感
+8. 未知格式返回明确错误信息（含支持的格式列表）
+9. 编写完整的单元测试（10 个测试用例，含子测试）
+
+**生成文件**:
+- `internal/report/registry.go` - 报告格式注册表实现（80 行）
+- `internal/report/registry_test.go` - 单元测试（180 行）
+
+**核心结构体**:
+```go
+// Registry manages report writers for different formats.
+type Registry struct {
+    writers map[string]ReportWriter
+}
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewRegistry(timezone, htmlTemplatePath)` | 创建注册表，预注册 Excel 和 HTML Writer |
+| `Get(format)` | 按格式名称获取 Writer（大小写不敏感） |
+| `GetAll()` | 获取所有支持的格式名称（排序） |
+| `Has(format)` | 检查格式是否支持 |
+
+**测试用例列表**:
+| 测试函数 | 场景 |
+|----------|------|
+| `TestNewRegistry` | 构造函数（3 个子测试：nil 时区、自定义时区、自定义模板路径） |
+| `TestRegistry_Get_Excel` | 获取 Excel Writer |
+| `TestRegistry_Get_HTML` | 获取 HTML Writer |
+| `TestRegistry_Get_Unknown` | 未知格式返回错误 |
+| `TestRegistry_Get_CaseInsensitive` | 格式名称大小写不敏感（9 个子测试） |
+| `TestRegistry_GetAll` | 获取所有支持的格式 |
+| `TestRegistry_Has` | 检查格式是否支持（8 个子测试） |
+| `TestRegistry_Get_EmptyFormat` | 空格式返回错误 |
+| `TestRegistry_Get_WhitespaceFormat` | 纯空白格式返回错误 |
+
+**验证结果**:
+- [x] 能够通过 "excel" 获取 ExcelWriter
+- [x] 能够通过 "html" 获取 HTMLWriter
+- [x] 请求未知格式时返回明确错误（含支持的格式列表）
+- [x] 格式名称大小写不敏感
+- [x] 执行 `go build ./internal/report/` 无编译错误
+- [x] 执行 `go test ./internal/report/` 全部通过（10 个测试用例）
+- [x] 测试覆盖率达到 **100%**（超过目标 80%）
+- [x] 执行 `go test ./...` 整个项目测试全部通过
+
+---
+
 ## 下一步骤
 
-**步骤 32**: 实现报告格式注册表
-- 在 `internal/report/registry.go` 中实现
-- 支持按格式名称获取对应的 Writer
+**步骤 33**: 实现根命令
+- 使用 cobra 创建根命令
+- 设置应用名称、描述、版本信息
+- 添加全局标志：配置文件路径、日志级别
 
 ---
 
@@ -1772,3 +1833,4 @@ type TemplateData struct {
 | 2025-12-13 | 步骤 29 | 实现 HTML 报告生成器基础结构（覆盖率 90.4%） |
 | 2025-12-13 | 步骤 30 | 实现 HTML 报告 - 摘要区域（已在步骤 29 中完成，验证通过） |
 | 2025-12-13 | 步骤 31 | 实现 HTML 报告 - 主机详情表格排序功能（修复排序 Bug + 默认排序） |
+| 2025-12-13 | 步骤 32 | 实现报告格式注册表（覆盖率 100%，阶段六完成） |
