@@ -34,7 +34,8 @@ inspection-tool/
 │   │   └── vm/                 # VictoriaMetrics 客户端
 │   │       ├── types.go        # API 类型定义（已实现）
 │   │       ├── types_test.go   # 类型单元测试（已实现）
-│   │       └── client.go       # API 客户端实现（待实现）
+│   │       ├── client.go       # API 客户端实现（已实现）
+│   │       └── client_test.go  # 客户端单元测试（已实现）
 │   ├── config/
 │   │   └── config.go          # 配置结构体定义（已实现）
 │   ├── model/                  # 数据模型
@@ -105,7 +106,8 @@ type Config struct {
 | `n9e/client_test.go` | N9E 客户端单元测试（17 个测试，整体覆盖率 91.6%） | ✅ 已实现 |
 | `vm/types.go` | VictoriaMetrics/Prometheus API 类型定义 | ✅ 已实现 |
 | `vm/types_test.go` | VM 类型单元测试（14 个测试，覆盖率 93.0%） | ✅ 已实现 |
-| `vm/client.go` | VictoriaMetrics 客户端（指标查询） | 待实现 |
+| `vm/client.go` | VictoriaMetrics 客户端（指标查询） | ✅ 已实现 |
+| `vm/client_test.go` | VM 客户端单元测试（14 个测试，整体覆盖率 94.0%） | ✅ 已实现 |
 
 **N9E Client 核心方法**：
 ```go
@@ -188,6 +190,24 @@ func ParseQueryResults(resp *QueryResponse) ([]QueryResult, error)  // 解析查
 func GroupResultsByIdent(results []QueryResult) map[string]QueryResult  // 按主机分组
 func (s *Sample) GetIdent() string  // 提取主机标识符（ident > host > instance）
 func (v SampleValue) Value() (float64, error)  // 解析指标值
+```
+
+**VM Client 核心方法**：
+```go
+// 创建客户端
+func NewClient(cfg *config.VictoriaMetricsConfig, retryCfg *config.RetryConfig, logger zerolog.Logger) *Client
+
+// 执行即时查询
+func (c *Client) Query(ctx context.Context, query string) (*QueryResponse, error)
+
+// 带主机筛选的即时查询
+func (c *Client) QueryWithFilter(ctx context.Context, query string, filter *HostFilter) (*QueryResponse, error)
+
+// 查询并解析为便捷结构
+func (c *Client) QueryResults(ctx context.Context, query string) ([]QueryResult, error)
+
+// 查询并按主机标识符分组
+func (c *Client) QueryByIdent(ctx context.Context, query string) (map[string]QueryResult, error)
 ```
 
 ### 数据模型 (internal/model/)
@@ -396,3 +416,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 15（N9E 客户端），添加 client.go |
 | 2025-12-13 | 完成步骤 16（N9E 客户端测试），添加 client_test.go，覆盖率 91.6% |
 | 2025-12-13 | 完成步骤 17（VM 客户端类型），添加 vm/types.go 和测试，覆盖率 93.0% |
+| 2025-12-13 | 完成步骤 18（VM 客户端），添加 vm/client.go 和测试，覆盖率 94.0% |

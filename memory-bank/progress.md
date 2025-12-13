@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段四 - API 客户端实现（进行中）
-**进度**: 步骤 17/41 完成
+**进度**: 步骤 18/41 完成
 
 ---
 
@@ -850,16 +850,87 @@ type HostFilter struct {
 
 ---
 
+### 步骤 18：实现 VictoriaMetrics 客户端 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/client/vm/client.go` 中实现 VictoriaMetrics API 客户端
+2. 实现 `NewClient()` 构造函数，接收配置参数
+3. 实现即时查询方法 `Query()` 和 `QueryWithFilter()`
+4. 支持 PromQL 查询语句，正确进行 URL 编码
+5. 实现结果解析，提取指标值和标签
+6. 集成重试机制（指数退避，5xx 重试、4xx 不重试）
+7. 实现主机筛选标签注入功能（业务组 OR + 标签 AND）
+8. 提供便捷方法：`QueryResults()`、`QueryByIdent()` 及其带筛选版本
+9. 编写完整的单元测试（14 个客户端测试用例）
+
+**生成文件**:
+- `internal/client/vm/client.go` - VM API 客户端实现
+- `internal/client/vm/client_test.go` - 客户端单元测试
+
+**客户端结构**:
+```go
+type Client struct {
+    endpoint   string             // API endpoint
+    timeout    time.Duration      // Request timeout
+    retry      config.RetryConfig // Retry configuration
+    httpClient *resty.Client      // HTTP client
+    logger     zerolog.Logger     // Logger
+}
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewClient()` | 创建客户端，配置超时和重试策略 |
+| `Query()` | 执行即时查询 /api/v1/query |
+| `QueryWithFilter()` | 带主机筛选的即时查询 |
+| `QueryResults()` | 查询并解析为 []QueryResult |
+| `QueryByIdent()` | 查询并按主机标识符分组 |
+| `injectLabelMatchers()` | 注入主机筛选标签到 PromQL |
+
+**主机筛选实现**:
+```go
+// 业务组 - OR 关系使用正则
+busigroup=~"生产环境|测试环境"
+
+// 标签 - AND 关系
+env="prod", region="cn-east"
+
+// 注入到查询
+cpu_usage_active{cpu="cpu-total"}
+  → cpu_usage_active{cpu="cpu-total", busigroup=~"生产环境|测试环境", env="prod"}
+```
+
+**重试机制**:
+- 使用 resty 内置 `SetRetryCount()` 和 `SetRetryWaitTime()`
+- 最大重试次数：从配置读取（默认 3 次）
+- 重试间隔：指数退避（baseDelay * 2^attempt）
+- 可重试错误：超时、5xx、连接失败
+- 4xx 错误不重试
+
+**验证结果**:
+- [x] 执行 `go build ./internal/client/vm/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test ./internal/client/vm/` 全部通过（28 个测试用例）
+- [x] 测试覆盖率达到 94.0%（超过目标 70%）
+- [x] 即时查询功能正常（Query、QueryResults、QueryByIdent）
+- [x] 主机筛选标签注入正确（业务组 OR + 标签 AND）
+- [x] 重试机制工作正常（5xx 重试、4xx 不重试）
+- [x] 错误处理包含明确的上下文信息
+
+---
+
 ## 下一步骤
 
-**步骤 18**: 实现 VictoriaMetrics 客户端（阶段四 - API 客户端实现继续）
-- 在 `internal/client/vm/client.go` 中实现客户端
-- 实现构造函数，接收配置参数
-- 实现即时查询方法（/api/v1/query）
-- 支持 PromQL 查询语句
-- 实现结果解析，提取指标值和标签
-- 集成重试机制
-- 支持主机筛选标签注入（业务组 OR + 标签 AND）
+**步骤 19**: 编写 VictoriaMetrics 客户端单元测试（阶段四 - API 客户端实现继续）
+- 在 `internal/client/vm/client_test.go` 中补充更多测试用例
+- 模拟各种 PromQL 查询响应
+- 测试空结果、多结果、错误响应等场景
+- 测试主机筛选标签注入
+- 测试重试机制
+- 测试覆盖率达到 70% 以上
 
 ---
 
@@ -884,3 +955,4 @@ type HostFilter struct {
 | 2025-12-13 | 步骤 15 | 实现 N9E 客户端完成 |
 | 2025-12-13 | 步骤 16 | 编写 N9E 客户端单元测试完成（覆盖率 91.6%） |
 | 2025-12-13 | 步骤 17 | 定义 VictoriaMetrics 客户端类型完成（覆盖率 93.0%） |
+| 2025-12-13 | 步骤 18 | 实现 VictoriaMetrics 客户端完成（覆盖率 94.0%） |
