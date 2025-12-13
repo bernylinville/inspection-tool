@@ -26,7 +26,8 @@ inspection-tool/
 │   ├── client/
 │   │   ├── n9e/                # 夜莺 API 客户端（待实现）
 │   │   └── vm/                 # VictoriaMetrics 客户端（待实现）
-│   ├── config/                 # 配置管理（待实现）
+│   ├── config/
+│   │   └── config.go          # 配置结构体定义（已实现）
 │   ├── model/                  # 数据模型（待实现）
 │   ├── report/
 │   │   ├── excel/              # Excel 报告生成（待实现）
@@ -63,11 +64,23 @@ var (
 
 ### 配置管理 (internal/config/)
 
-| 文件 | 作用 |
-|------|------|
-| `config.go` | 配置结构体定义 |
-| `loader.go` | 配置加载（YAML + 环境变量） |
-| `validator.go` | 配置验证 |
+| 文件 | 作用 | 状态 |
+|------|------|------|
+| `config.go` | 配置结构体定义 | ✅ 已实现 |
+| `loader.go` | 配置加载（YAML + 环境变量） | 待实现 |
+| `validator.go` | 配置验证 | 待实现 |
+
+**配置结构体概览**：
+```go
+type Config struct {
+    Datasources DatasourcesConfig  // N9E + VictoriaMetrics 数据源配置
+    Inspection  InspectionConfig   // 并发数、超时、主机筛选
+    Thresholds  ThresholdsConfig   // CPU/内存/磁盘/僵尸进程/负载阈值
+    Report      ReportConfig       // 输出目录、格式、模板、时区
+    Logging     LoggingConfig      // 日志级别、格式
+    HTTP        HTTPConfig         // 重试次数、延迟（指数退避）
+}
+```
 
 ### API 客户端 (internal/client/)
 
@@ -157,3 +170,4 @@ type Evaluator interface {
 | 2025-12-13 | 初始版本，完成步骤 1（Go 模块初始化） |
 | 2025-12-13 | 完成步骤 2（创建目录结构），更新架构文档 |
 | 2025-12-13 | 完成步骤 4（程序入口），阶段一全部完成 |
+| 2025-12-13 | 完成步骤 5（配置结构体），阶段二开始 |

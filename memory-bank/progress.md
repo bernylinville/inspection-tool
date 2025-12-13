@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段一 - 项目初始化与基础架构
-**进度**: 步骤 4/41 完成（阶段一完成）
+**阶段**: 阶段二 - 配置管理模块
+**进度**: 步骤 5/41 完成
 
 ---
 
@@ -138,12 +138,50 @@ OS/Arch: linux/amd64
 
 ---
 
+### 步骤 5：定义配置结构体 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/config/config.go` 中定义完整的配置结构体
+2. 定义数据源配置（N9E、VictoriaMetrics）
+3. 定义巡检配置（并发数、超时、主机筛选）
+4. 定义阈值配置（CPU、内存、磁盘、僵尸进程、负载）
+5. 定义报告配置（输出目录、格式、模板、时区）
+6. 定义日志配置（级别、格式）
+7. 定义 HTTP 重试配置（重试次数、延迟）
+8. 为所有字段添加 `mapstructure` 和 `validate` 标签
+
+**生成文件**:
+- `internal/config/config.go` - 配置结构体定义
+
+**配置结构概览**:
+```go
+type Config struct {
+    Datasources DatasourcesConfig  // N9E + VM 数据源
+    Inspection  InspectionConfig   // 并发、超时、筛选
+    Thresholds  ThresholdsConfig   // 告警阈值
+    Report      ReportConfig       // 报告输出设置
+    Logging     LoggingConfig      // 日志配置
+    HTTP        HTTPConfig         // 重试策略
+}
+```
+
+**验证结果**:
+- [x] 结构体定义完整，字段命名符合 Go 规范
+- [x] 所有必填字段都有 `validate:"required"` 标签
+- [x] 执行 `go build ./internal/config/` 无编译错误
+
+---
+
 ## 下一步骤
 
-**步骤 5**: 定义配置结构体（阶段二开始）
-- 在 `internal/config/config.go` 中定义配置结构体
-- 包含数据源、巡检、阈值、报告、日志、HTTP 重试等配置节
-- 为所有字段添加 `mapstructure` 和 `validate` 标签
+**步骤 6**: 实现配置加载器
+- 在 `internal/config/loader.go` 中实现配置加载功能
+- 支持从 YAML 文件加载配置
+- 支持环境变量覆盖（特别是敏感信息如 Token）
+- 实现默认值设置（包括重试策略默认值）
+- 设置默认时区为 `Asia/Shanghai`
 
 ---
 
@@ -155,3 +193,4 @@ OS/Arch: linux/amd64
 | 2025-12-13 | 步骤 2 | 创建目录结构完成 |
 | 2025-12-13 | 步骤 3 | 添加核心依赖完成 |
 | 2025-12-13 | 步骤 4 | 创建程序入口文件完成（阶段一完成） |
+| 2025-12-13 | 步骤 5 | 定义配置结构体完成（阶段二开始） |
