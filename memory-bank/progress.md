@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段五 - 核心业务逻辑（完成）
-**进度**: 步骤 23/41 完成
+**阶段**: 阶段六 - 报告生成模块（进行中）
+**进度**: 步骤 24/41 完成
 
 ---
 
@@ -1318,15 +1318,57 @@ for _, metric := range activeMetrics {
 
 ---
 
+### 步骤 24：定义报告写入器接口 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/report/writer.go` 中定义 ReportWriter 接口
+2. 定义 `Write()` 方法 - 将巡检结果写入文件
+3. 定义 `Format()` 方法 - 返回格式标识符
+4. 添加完整的包级和接口级注释
+
+**生成文件**:
+- `internal/report/writer.go` - ReportWriter 接口定义
+
+**接口定义**:
+```go
+// ReportWriter defines the interface for generating inspection reports.
+type ReportWriter interface {
+    // Write generates a report from the inspection result and saves it
+    // to the specified output path.
+    Write(result *model.InspectionResult, outputPath string) error
+
+    // Format returns the format identifier for this writer.
+    // Common values are "excel" and "html".
+    Format() string
+}
+```
+
+**设计考量**:
+| 考量点 | 决策 |
+|--------|------|
+| 参数类型 | 使用 `*model.InspectionResult` 指针避免大对象拷贝 |
+| 路径参数 | `outputPath` 由调用方控制，包含完整路径和扩展名 |
+| 错误处理 | 返回 `error` 用于报告生成或文件写入失败 |
+| 扩展性 | 接口简洁，易于实现新格式（如 PDF） |
+
+**验证结果**:
+- [x] 文件创建在正确位置 `internal/report/writer.go`
+- [x] 包注释遵循项目规范
+- [x] 接口方法定义清晰，职责单一
+- [x] 执行 `go build ./internal/report/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+
+---
+
 ## 下一步骤
 
-**步骤 24**: 实现 Excel 报告生成器（阶段六 - 报告生成开始）
-- 在 `internal/report/excel/writer.go` 中实现 Excel 报告生成
+**步骤 25**: 实现 Excel 报告生成器 - 基础结构
+- 在 `internal/report/excel/writer.go` 中实现 ExcelWriter
+- 实现 ReportWriter 接口
+- 创建包含三个工作表的 Excel 文件：巡检概览、详细数据、异常汇总
 - 使用 `xuri/excelize/v2` 库
-- 实现主机概览表（状态、基础信息）
-- 实现指标详情表（所有指标值、告警状态）
-- 实现条件格式（正常=绿色、警告=黄色、严重=红色）
-- 实现告警汇总表
 
 ---
 
@@ -1357,3 +1399,4 @@ for _, metric := range activeMetrics {
 | 2025-12-13 | 步骤 21 | 实现阈值评估服务完成（覆盖率 94.0%） |
 | 2025-12-13 | 步骤 22 | 实现巡检编排服务完成（覆盖率 93.4%，阶段五完成） |
 | 2025-12-13 | 步骤 23 | 补充并发采集功能 + 并发测试（覆盖率 80.1%） |
+| 2025-12-13 | 步骤 24 | 定义报告写入器接口（阶段六开始） |

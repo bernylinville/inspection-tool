@@ -529,12 +529,26 @@ func (i *Inspector) GetVersion() string
 
 ### 报告生成 (internal/report/)
 
-| 目录/文件 | 作用 |
-|-----------|------|
-| `writer.go` | ReportWriter 接口定义 |
-| `registry.go` | 报告格式注册表 |
-| `excel/writer.go` | Excel 报告生成 |
-| `html/writer.go` | HTML 报告生成 |
+| 目录/文件 | 作用 | 状态 |
+|-----------|------|------|
+| `writer.go` | ReportWriter 接口定义 | ✅ 已实现 |
+| `registry.go` | 报告格式注册表 | 待实现 |
+| `excel/writer.go` | Excel 报告生成 | 待实现 |
+| `html/writer.go` | HTML 报告生成 | 待实现 |
+
+**ReportWriter 接口定义**（已实现）:
+```go
+// ReportWriter defines the interface for generating inspection reports.
+type ReportWriter interface {
+    // Write generates a report from the inspection result and saves it
+    // to the specified output path.
+    Write(result *model.InspectionResult, outputPath string) error
+
+    // Format returns the format identifier for this writer.
+    // Common values are "excel" and "html".
+    Format() string
+}
+```
 
 ### 配置文件 (configs/)
 
@@ -612,3 +626,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 21（阈值评估服务），添加 evaluator.go 和测试，覆盖率 94.0% |
 | 2025-12-13 | 完成步骤 22（巡检编排服务），添加 inspector.go 和测试，覆盖率 93.4%，阶段五完成 |
 | 2025-12-13 | 完成步骤 23（并发采集 + 测试），添加 errgroup 并发逻辑，覆盖率 80.1% |
+| 2025-12-13 | 完成步骤 24（报告写入器接口），添加 writer.go，阶段六开始 |
