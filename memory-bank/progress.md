@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段五 - 核心业务逻辑（进行中）
-**进度**: 步骤 20/41 完成
+**进度**: 步骤 21/41 完成
 
 ---
 
@@ -1079,15 +1079,113 @@ type Collector struct {
 
 ---
 
+### 步骤 21：实现阈值评估服务 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/service/evaluator.go` 中实现阈值评估服务
+2. 定义 `Evaluator` 结构体和 `EvaluationResult`、`HostEvaluationResult` 结果类型
+3. 实现 `NewEvaluator()` 构造函数
+4. 实现 `EvaluateHost()` 单主机评估方法
+5. 实现 `EvaluateAll()` 批量评估方法
+6. 实现 `evaluateMetric()` 单指标评估私有方法
+7. 实现 `getThreshold()` 指标名到阈值映射方法
+8. 实现 `determineHostStatus()` 主机状态确定方法
+9. 实现辅助方法：`getMetricDisplayName()`、`buildAlertMessage()`、`getMetricUnit()`
+10. 编写完整的单元测试（30+ 个测试用例）
+
+**生成文件**:
+- `internal/service/evaluator.go` - 阈值评估服务实现（270 行）
+- `internal/service/evaluator_test.go` - 单元测试（847 行）
+
+**核心结构体**:
+```go
+// 单主机评估结果
+type HostEvaluationResult struct {
+    Hostname string                          // 主机名
+    Status   model.HostStatus                // 主机整体状态
+    Metrics  map[string]*model.MetricValue   // 更新后的指标
+    Alerts   []*model.Alert                  // 该主机的告警列表
+}
+
+// 完整评估结果
+type EvaluationResult struct {
+    HostResults []*HostEvaluationResult // 各主机评估结果
+    Alerts      []*model.Alert          // 所有告警列表
+    Summary     *model.AlertSummary     // 告警摘要
+}
+
+// 阈值评估器
+type Evaluator struct {
+    thresholds *config.ThresholdsConfig
+    metricDefs map[string]*model.MetricDefinition
+    logger     zerolog.Logger
+}
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewEvaluator()` | 创建评估器，指标定义映射 |
+| `EvaluateAll()` | 批量评估所有主机 |
+| `EvaluateHost()` | 评估单个主机所有指标 |
+| `evaluateMetric()` | 评估单个指标，生成告警 |
+| `getThreshold()` | 指标名映射到阈值配置 |
+| `determineHostStatus()` | 根据告警确定主机状态 |
+
+**指标阈值映射**:
+| 指标名称 | 阈值配置项 | 警告 | 严重 |
+|----------|------------|------|------|
+| `cpu_usage` | CPUUsage | 70% | 90% |
+| `memory_usage` | MemoryUsage | 70% | 90% |
+| `disk_usage_max` | DiskUsage | 70% | 90% |
+| `processes_zombies` | ZombieProcesses | 1 | 10 |
+| `load_per_core` | LoadPerCore | 0.7 | 1.0 |
+
+**特殊处理**:
+- 磁盘使用 `disk_usage_max` 聚合值进行告警判断
+- 扩展指标（如 `disk_usage:/home`）仅用于展示，不触发告警
+- N/A 指标（`IsNA=true`）跳过评估，状态设为 `MetricStatusPending`
+- 主机状态取最严重告警级别（Critical > Warning > Normal）
+
+**测试用例列表**:
+| 类别 | 测试数 | 场景 |
+|------|--------|------|
+| 构造函数 | 2 | 正常构造、nil 指标定义 |
+| CPU 评估 | 4 | Normal/Warning/Critical/精确阈值 |
+| 内存评估 | 3 | 三级阈值评估 |
+| 磁盘评估 | 3 | 聚合最大值、扩展指标不告警、多磁盘场景 |
+| 负载评估 | 3 | 三级阈值评估 |
+| 僵尸进程 | 3 | 0/警告/严重场景 |
+| N/A 处理 | 2 | 单独/混合指标 |
+| 主机状态 | 3 | 最严重/正常/仅警告 |
+| 批量评估 | 2 | 多主机/空输入 |
+| 边界条件 | 5 | 空指标/nil/未配置阈值等 |
+| 辅助函数 | 4 | 显示名称/阈值获取/消息构建/状态判断 |
+
+**验证结果**:
+- [x] CPU 75% 被判定为警告级别
+- [x] CPU 95% 被判定为严重级别
+- [x] 多个告警时主机状态取最严重级别
+- [x] 无异常时状态为正常
+- [x] 磁盘告警基于 `disk_usage_max`（最大使用率）判断
+- [x] N/A 指标不触发告警
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go test ./internal/service/` 全部通过（49 个测试用例）
+- [x] 测试覆盖率达到 **94.0%**（超过目标 80%）
+
+---
+
 ## 下一步骤
 
-**步骤 21**: 实现阈值评估服务（阶段五 - 核心业务逻辑继续）
-- 在 `internal/service/evaluator.go` 中实现评估服务
-- 实现 Evaluator 接口
-- 根据配置阈值评估指标状态（normal/warning/critical）
-- 生成告警信息
-- 实现负载/核心数计算逻辑
-- 编写单元测试
+**步骤 22**: 实现巡检编排服务（阶段五 - 核心业务逻辑继续）
+- 在 `internal/service/inspector.go` 中实现核心编排逻辑
+- 协调配置加载、数据采集、阈值评估流程
+- 实现并发采集（使用 errgroup 控制并发数，默认 20）
+- 聚合所有主机结果，生成巡检摘要
+- 单主机失败不影响整体流程
+- 所有时间使用 `Asia/Shanghai` 时区
 
 ---
 
@@ -1115,3 +1213,4 @@ type Collector struct {
 | 2025-12-13 | 步骤 18 | 实现 VictoriaMetrics 客户端完成（覆盖率 94.0%） |
 | 2025-12-13 | 步骤 19 | 编写 VictoriaMetrics 客户端单元测试完成（阶段四完成） |
 | 2025-12-13 | 步骤 20 | 实现数据采集服务完成（覆盖率 92.5%，阶段五开始） |
+| 2025-12-13 | 步骤 21 | 实现阈值评估服务完成（覆盖率 94.0%） |

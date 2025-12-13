@@ -341,7 +341,8 @@ type InspectionResult struct {
 |------|------|------|
 | `collector.go` | 数据采集服务（整合 N9E + VM 客户端） | ✅ 已实现 |
 | `collector_test.go` | 采集服务单元测试（15 个测试，覆盖率 92.5%） | ✅ 已实现 |
-| `evaluator.go` | 阈值评估服务 | 待实现 |
+| `evaluator.go` | 阈值评估服务 | ✅ 已实现 |
+| `evaluator_test.go` | 评估服务单元测试（30+ 个测试，覆盖率 94.0%） | ✅ 已实现 |
 | `inspector.go` | 巡检编排服务（核心流程） | 待实现 |
 
 **Collector 数据采集器**：
@@ -394,6 +395,53 @@ func (c *Collector) CollectMetrics(ctx context.Context, hosts []*model.HostMeta,
 // disk_usage:/var  → var 分区使用率
 // disk_usage_max   → 聚合最大值（用于告警判断）
 ```
+
+**Evaluator 阈值评估器**：
+```go
+// 单主机评估结果
+type HostEvaluationResult struct {
+    Hostname string                          // 主机名
+    Status   model.HostStatus                // 主机整体状态
+    Metrics  map[string]*model.MetricValue   // 更新后的指标（含 Status）
+    Alerts   []*model.Alert                  // 该主机的告警列表
+}
+
+// 完整评估结果
+type EvaluationResult struct {
+    HostResults []*HostEvaluationResult // 各主机评估结果
+    Alerts      []*model.Alert          // 所有告警列表
+    Summary     *model.AlertSummary     // 告警摘要
+}
+
+// 阈值评估器
+type Evaluator struct {
+    thresholds *config.ThresholdsConfig       // 阈值配置
+    metricDefs map[string]*model.MetricDefinition // 指标定义映射
+    logger     zerolog.Logger                 // 日志
+}
+```
+
+**Evaluator 核心方法**：
+```go
+// 创建评估器
+func NewEvaluator(thresholds *config.ThresholdsConfig, metrics []*model.MetricDefinition, logger zerolog.Logger) *Evaluator
+
+// 批量评估所有主机
+func (e *Evaluator) EvaluateAll(hostMetrics map[string]*model.HostMetrics) *EvaluationResult
+
+// 评估单个主机
+func (e *Evaluator) EvaluateHost(hostname string, hostMetrics *model.HostMetrics) *HostEvaluationResult
+```
+
+**指标阈值映射**：
+| 指标名称 | 阈值配置项 | 警告 | 严重 |
+|----------|------------|------|------|
+| `cpu_usage` | CPUUsage | 70% | 90% |
+| `memory_usage` | MemoryUsage | 70% | 90% |
+| `disk_usage_max` | DiskUsage | 70% | 90% |
+| `processes_zombies` | ZombieProcesses | 1 | 10 |
+| `load_per_core` | LoadPerCore | 0.7 | 1.0 |
+
 
 ### 报告生成 (internal/report/)
 
@@ -477,3 +525,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 18（VM 客户端），添加 vm/client.go 和测试，覆盖率 94.0% |
 | 2025-12-13 | 完成步骤 19（VM 客户端测试），阶段四全部完成，测试覆盖率均超 90% |
 | 2025-12-13 | 完成步骤 20（数据采集服务），添加 collector.go 和测试，覆盖率 92.5%，阶段五开始 |
+| 2025-12-13 | 完成步骤 21（阈值评估服务），添加 evaluator.go 和测试，覆盖率 94.0% |
