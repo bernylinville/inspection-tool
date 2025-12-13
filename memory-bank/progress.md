@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段二 - 配置管理模块
-**进度**: 步骤 6/41 完成
+**进度**: 步骤 7/41 完成
 
 ---
 
@@ -222,13 +222,63 @@ func setDefaults(v *viper.Viper)               // 设置默认值
 
 ---
 
+### 步骤 7：实现配置验证器 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/config/validator.go` 中实现配置验证功能
+2. 使用 `go-playground/validator/v10` 库执行结构体验证
+3. 实现自定义验证规则：
+   - `threshold_order`：验证 warning < critical
+   - `timezone`：验证时区字符串有效性
+4. 实现友好的错误消息翻译
+5. 将验证集成到 `Load()` 函数
+6. 编写完整的单元测试
+
+**生成文件**:
+- `internal/config/validator.go` - 配置验证器实现
+- `internal/config/validator_test.go` - 配置验证器单元测试
+
+**核心类型**:
+```go
+type ValidationError struct {
+    Field   string      // 字段路径 (e.g., "datasources.n9e.endpoint")
+    Tag     string      // 验证标签 (e.g., "required", "url")
+    Value   interface{} // 实际值
+    Message string      // 友好错误信息
+}
+
+type ValidationErrors []*ValidationError
+```
+
+**验证覆盖**:
+| 验证类型 | 说明 |
+|----------|------|
+| 必填字段 | N9E endpoint、token；VM endpoint |
+| URL 格式 | endpoint 字段必须是有效 URL |
+| 数值范围 | concurrency 1-100；阈值 ≥ 0；重试次数 0-10 |
+| 枚举值 | 报告格式 excel/html；日志级别 debug/info/warn/error |
+| 阈值逻辑 | warning 必须小于 critical |
+| 时区有效性 | 验证时区字符串可被解析 |
+
+**验证结果**:
+- [x] 缺少必填字段时返回具体的字段名和错误原因
+- [x] 无效 URL 格式能被检测出来
+- [x] 阈值数值超出合理范围时报错
+- [x] 执行 `go test ./internal/config/` 全部通过（26 个测试用例）
+- [x] 测试覆盖率 88.4%（超过目标 80%）
+- [x] 执行 `go build ./cmd/inspect` 无编译错误
+
+---
+
 ## 下一步骤
 
-**步骤 7**: 实现配置验证器
-- 在 `internal/config/validator.go` 中实现配置验证
-- 使用 validator 库验证必填字段
-- 验证 URL 格式、数值范围等
-- 返回清晰的验证错误信息
+**步骤 8**: 创建示例配置文件
+- 在 `configs/` 目录下创建 `config.example.yaml`
+- 包含所有配置项及详细注释说明
+- 使用产品需求文档中的实际 API 地址作为示例
+- 包含重试策略和时区配置
 
 ---
 
@@ -242,3 +292,4 @@ func setDefaults(v *viper.Viper)               // 设置默认值
 | 2025-12-13 | 步骤 4 | 创建程序入口文件完成（阶段一完成） |
 | 2025-12-13 | 步骤 5 | 定义配置结构体完成（阶段二开始） |
 | 2025-12-13 | 步骤 6 | 实现配置加载器完成 |
+| 2025-12-13 | 步骤 7 | 实现配置验证器完成 |
