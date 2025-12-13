@@ -44,7 +44,9 @@ inspection-tool/
 │   ├── report/
 │   │   ├── excel/              # Excel 报告生成（待实现）
 │   │   └── html/               # HTML 报告生成（待实现）
-│   └── service/                # 业务逻辑（待实现）
+│   └── service/                # 业务逻辑
+│       ├── collector.go        # 数据采集服务（已实现）
+│       └── collector_test.go   # 采集服务单元测试（已实现）
 ├── templates/
 │   └── html/                   # 用户自定义 HTML 模板（外置）
 └── memory-bank/
@@ -335,11 +337,63 @@ type InspectionResult struct {
 
 ### 业务逻辑 (internal/service/)
 
-| 文件 | 作用 |
-|------|------|
-| `inspector.go` | 巡检编排服务（核心流程） |
-| `collector.go` | 数据采集服务 |
-| `evaluator.go` | 阈值评估服务 |
+| 文件 | 作用 | 状态 |
+|------|------|------|
+| `collector.go` | 数据采集服务（整合 N9E + VM 客户端） | ✅ 已实现 |
+| `collector_test.go` | 采集服务单元测试（15 个测试，覆盖率 92.5%） | ✅ 已实现 |
+| `evaluator.go` | 阈值评估服务 | 待实现 |
+| `inspector.go` | 巡检编排服务（核心流程） | 待实现 |
+
+**Collector 数据采集器**：
+```go
+// 采集失败的主机
+type FailedHost struct {
+    Hostname string // 主机名
+    Error    string // 错误信息
+}
+
+// 采集结果
+type CollectionResult struct {
+    Hosts       []*model.HostMeta             // 主机元信息列表
+    HostMetrics map[string]*model.HostMetrics // 按主机名分组的指标数据
+    FailedHosts []FailedHost                  // 采集失败的主机
+    CollectedAt time.Time                     // 采集时间
+}
+
+// 数据采集器
+type Collector struct {
+    n9eClient  *n9e.Client          // N9E 客户端
+    vmClient   *vm.Client           // VM 客户端
+    config     *config.Config       // 配置
+    metrics    []*model.MetricDefinition // 指标定义
+    hostFilter *vm.HostFilter       // 主机筛选
+    logger     zerolog.Logger       // 日志
+}
+```
+
+**Collector 核心方法**：
+```go
+// 创建采集器
+func NewCollector(cfg *config.Config, n9eClient *n9e.Client, vmClient *vm.Client, metrics []*model.MetricDefinition, logger zerolog.Logger) *Collector
+
+// 执行完整采集流程
+func (c *Collector) CollectAll(ctx context.Context) (*CollectionResult, error)
+
+// 采集主机元信息
+func (c *Collector) CollectHostMetas(ctx context.Context) ([]*model.HostMeta, error)
+
+// 采集指标数据
+func (c *Collector) CollectMetrics(ctx context.Context, hosts []*model.HostMeta, metrics []*model.MetricDefinition) (map[string]*model.HostMetrics, error)
+```
+
+**磁盘指标展开逻辑**：
+```go
+// 按 path 标签展开，生成：
+// disk_usage:/     → 根分区使用率
+// disk_usage:/home → home 分区使用率
+// disk_usage:/var  → var 分区使用率
+// disk_usage_max   → 聚合最大值（用于告警判断）
+```
 
 ### 报告生成 (internal/report/)
 
@@ -382,13 +436,17 @@ type ReportWriter interface {
     Format() string  // 返回格式名称：excel, html, pdf
 }
 
-// 数据采集器接口
-type Collector interface {
-    CollectHostMeta(ctx context.Context, hosts []string) ([]HostMeta, error)
-    CollectMetrics(ctx context.Context, hosts []string, metrics []MetricDef) ([]HostMetrics, error)
+// 数据采集器（已实现）
+type Collector struct {
+    // CollectAll 执行完整数据采集流程
+    CollectAll(ctx context.Context) (*CollectionResult, error)
+    // CollectHostMetas 采集主机元信息
+    CollectHostMetas(ctx context.Context) ([]*model.HostMeta, error)
+    // CollectMetrics 采集指标数据
+    CollectMetrics(ctx context.Context, hosts []*model.HostMeta, metrics []*model.MetricDefinition) (map[string]*model.HostMetrics, error)
 }
 
-// 阈值评估器接口
+// 阈值评估器接口（待实现）
 type Evaluator interface {
     Evaluate(metrics *HostMetrics, thresholds []Threshold) []Alert
 }
@@ -418,3 +476,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 17（VM 客户端类型），添加 vm/types.go 和测试，覆盖率 93.0% |
 | 2025-12-13 | 完成步骤 18（VM 客户端），添加 vm/client.go 和测试，覆盖率 94.0% |
 | 2025-12-13 | 完成步骤 19（VM 客户端测试），阶段四全部完成，测试覆盖率均超 90% |
+| 2025-12-13 | 完成步骤 20（数据采集服务），添加 collector.go 和测试，覆盖率 92.5%，阶段五开始 |

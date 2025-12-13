@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段四 - API 客户端实现（已完成）
-**进度**: 步骤 19/41 完成
+**阶段**: 阶段五 - 核心业务逻辑（进行中）
+**进度**: 步骤 20/41 完成
 
 ---
 
@@ -978,16 +978,116 @@ cpu_usage_active{cpu="cpu-total"}
 
 ---
 
+### 步骤 20：实现数据采集服务 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/service/collector.go` 中实现数据采集服务
+2. 定义 `Collector` 结构体和 `CollectionResult` 结果类型
+3. 实现 `NewCollector()` 构造函数
+4. 实现 `CollectHostMetas()` 主机元信息采集
+5. 实现 `CollectMetrics()` 指标数据采集
+6. 实现 `collectSimpleMetric()` 普通指标采集
+7. 实现 `collectExpandedMetric()` 按标签展开指标采集（磁盘按 path 展开）
+8. 实现 `setPendingMetrics()` 待定项处理（返回 N/A）
+9. 实现 `CollectAll()` 完整采集流程
+10. 实现 `buildVMHostFilter()` 主机筛选配置转换
+11. 编写完整的单元测试（15 个测试用例）
+
+**生成文件**:
+- `internal/service/collector.go` - 数据采集服务实现（350 行）
+- `internal/service/collector_test.go` - 单元测试（954 行）
+
+**核心结构体**:
+```go
+// 采集失败的主机
+type FailedHost struct {
+    Hostname string // 主机名
+    Error    string // 错误信息
+}
+
+// 采集结果
+type CollectionResult struct {
+    Hosts       []*model.HostMeta             // 主机元信息列表
+    HostMetrics map[string]*model.HostMetrics // 按主机名分组的指标数据
+    FailedHosts []FailedHost                  // 采集失败的主机
+    CollectedAt time.Time                     // 采集时间
+}
+
+// 数据采集器
+type Collector struct {
+    n9eClient  *n9e.Client
+    vmClient   *vm.Client
+    config     *config.Config
+    metrics    []*model.MetricDefinition
+    hostFilter *vm.HostFilter
+    logger     zerolog.Logger
+}
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewCollector()` | 创建采集器，转换主机筛选配置 |
+| `CollectAll()` | 执行完整采集流程 |
+| `CollectHostMetas()` | 从 N9E 获取主机元信息 |
+| `CollectMetrics()` | 从 VM 获取指标数据 |
+| `collectSimpleMetric()` | 采集普通指标 |
+| `collectExpandedMetric()` | 采集按标签展开的指标（如磁盘） |
+| `setPendingMetrics()` | 设置待定项为 N/A |
+| `buildVMHostFilter()` | 转换配置中的主机筛选 |
+
+**磁盘指标展开逻辑**:
+```go
+// 按 path 标签展开，生成：
+// disk_usage:/     → 根分区使用率
+// disk_usage:/home → home 分区使用率
+// disk_usage:/var  → var 分区使用率
+// disk_usage_max   → 聚合最大值（用于告警判断）
+```
+
+**测试用例列表**:
+| 类别 | 测试函数 | 场景 |
+|------|----------|------|
+| 构造函数 | `TestNewCollector` | 基础构造 |
+| 构造函数 | `TestNewCollector_WithHostFilter` | 带主机筛选 |
+| 主机采集 | `TestCollector_CollectHostMetas_Success` | 正常获取主机 |
+| 主机采集 | `TestCollector_CollectHostMetas_N9EError` | N9E 错误 |
+| 主机采集 | `TestCollector_CollectHostMetas_EmptyList` | 空主机列表 |
+| 主机采集 | `TestCollector_CollectHostMetas_ContextCanceled` | 上下文取消 |
+| 指标采集 | `TestCollector_CollectMetrics_Success` | 正常获取指标 |
+| 指标采集 | `TestCollector_CollectMetrics_PendingMetrics` | 待定项返回 N/A |
+| 指标采集 | `TestCollector_CollectMetrics_VMQueryError` | VM 查询失败 |
+| 完整流程 | `TestCollector_CollectAll_Success` | 完整流程成功 |
+| 完整流程 | `TestCollector_CollectAll_NoHosts` | 无主机场景 |
+| 完整流程 | `TestCollector_CollectAll_N9EFailure` | N9E 失败 |
+| 主机筛选 | `TestCollector_HostFilter_Applied` | 筛选正确注入 |
+| 主机筛选 | `TestCollector_HostFilter_Nil` | 无筛选保持原查询 |
+| 磁盘展开 | `TestCollector_ExpandedMetric_DiskByPath` | 磁盘按挂载点展开 |
+
+**验证结果**:
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go test ./internal/service/` 全部通过（15 个测试用例）
+- [x] 测试覆盖率达到 **92.5%**（超过目标 80%）
+- [x] 主机元信息采集正常（包括 CPU 核心数）
+- [x] 指标数据采集正常（普通指标 + 展开指标）
+- [x] 磁盘数据按挂载点展开（生成 disk_usage:/ 等）
+- [x] 聚合值计算正确（disk_usage_max）
+- [x] 待定项正确返回 N/A
+- [x] 主机筛选正确应用到 VM 查询
+
+---
+
 ## 下一步骤
 
-**步骤 20**: 实现数据采集服务（阶段五 - 核心业务逻辑开始）
-- 在 `internal/service/collector.go` 中实现采集服务
-- 实现 Collector 接口
-- 整合 N9E 客户端获取主机元信息（包括 CPU 核心数）
-- 整合 VM 客户端获取指标数据
-- 将原始数据转换为内部模型
-- 实现磁盘数据按挂载点展开
-- 处理待定项（返回 N/A）
+**步骤 21**: 实现阈值评估服务（阶段五 - 核心业务逻辑继续）
+- 在 `internal/service/evaluator.go` 中实现评估服务
+- 实现 Evaluator 接口
+- 根据配置阈值评估指标状态（normal/warning/critical）
+- 生成告警信息
+- 实现负载/核心数计算逻辑
+- 编写单元测试
 
 ---
 
@@ -1014,3 +1114,4 @@ cpu_usage_active{cpu="cpu-total"}
 | 2025-12-13 | 步骤 17 | 定义 VictoriaMetrics 客户端类型完成（覆盖率 93.0%） |
 | 2025-12-13 | 步骤 18 | 实现 VictoriaMetrics 客户端完成（覆盖率 94.0%） |
 | 2025-12-13 | 步骤 19 | 编写 VictoriaMetrics 客户端单元测试完成（阶段四完成） |
+| 2025-12-13 | 步骤 20 | 实现数据采集服务完成（覆盖率 92.5%，阶段五开始） |
