@@ -103,7 +103,7 @@ type Config struct {
 |------|------|------|
 | `host.go` | 主机模型（HostMeta、DiskMountInfo、HostStatus） | ✅ 已实现 |
 | `metric.go` | 指标模型（MetricDefinition、MetricValue、HostMetrics） | ✅ 已实现 |
-| `alert.go` | 告警模型（级别、阈值） | 待实现 |
+| `alert.go` | 告警模型（AlertLevel、Alert、AlertSummary） | ✅ 已实现 |
 | `inspection.go` | 巡检结果模型（摘要、主机列表） | 待实现 |
 
 **主机模型结构**：
@@ -145,6 +145,38 @@ type MetricValue struct {
     Status         MetricStatus      `json:"status"`          // 评估状态
     Labels         map[string]string `json:"labels"`          // 标签
     IsNA           bool              `json:"is_na"`           // 是否为 N/A
+}
+```
+
+**告警模型结构**：
+```go
+// 告警级别枚举
+type AlertLevel string
+const (
+    AlertLevelNormal   AlertLevel = "normal"   // 正常
+    AlertLevelWarning  AlertLevel = "warning"  // 警告
+    AlertLevelCritical AlertLevel = "critical" // 严重
+)
+
+// 告警详情
+type Alert struct {
+    Hostname          string            `json:"hostname"`           // 主机名
+    MetricName        string            `json:"metric_name"`        // 指标名称
+    MetricDisplayName string            `json:"metric_display_name"`// 指标中文显示名称
+    CurrentValue      float64           `json:"current_value"`      // 当前值
+    FormattedValue    string            `json:"formatted_value"`    // 格式化后的当前值
+    WarningThreshold  float64           `json:"warning_threshold"`  // 警告阈值
+    CriticalThreshold float64           `json:"critical_threshold"` // 严重阈值
+    Level             AlertLevel        `json:"level"`              // 告警级别
+    Message           string            `json:"message"`            // 告警消息
+    Labels            map[string]string `json:"labels,omitempty"`   // 额外标签
+}
+
+// 告警摘要
+type AlertSummary struct {
+    TotalAlerts   int `json:"total_alerts"`   // 告警总数
+    WarningCount  int `json:"warning_count"`  // 警告级别数量
+    CriticalCount int `json:"critical_count"` // 严重级别数量
 }
 ```
 
@@ -225,3 +257,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 9（指标定义文件），添加 metrics.yaml，阶段二完成 |
 | 2025-12-13 | 完成步骤 10（主机模型），添加 host.go，阶段三开始 |
 | 2025-12-13 | 完成步骤 11（指标模型），添加 metric.go |
+| 2025-12-13 | 完成步骤 12（告警模型），添加 alert.go |

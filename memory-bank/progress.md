@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段三 - 数据模型定义（进行中）
-**进度**: 步骤 11/41 完成
+**进度**: 步骤 12/41 完成
 
 ---
 
@@ -482,12 +482,69 @@ type HostMetrics struct {
 
 ---
 
+### 步骤 12：定义告警模型 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/model/alert.go` 中定义告警相关结构体
+2. 定义 `AlertLevel` 告警级别枚举（normal/warning/critical）
+3. 定义 `Alert` 告警详情结构体
+4. 定义 `AlertSummary` 告警摘要结构体
+5. 实现辅助函数：`NewAlert()`、`IsWarning()`、`IsCritical()`、`NewAlertSummary()`
+
+**生成文件**:
+- `internal/model/alert.go` - 告警模型定义
+
+**结构体定义**:
+```go
+// 告警级别枚举
+type AlertLevel string
+const (
+    AlertLevelNormal   AlertLevel = "normal"
+    AlertLevelWarning  AlertLevel = "warning"
+    AlertLevelCritical AlertLevel = "critical"
+)
+
+// 告警详情
+type Alert struct {
+    Hostname          string            `json:"hostname"`
+    MetricName        string            `json:"metric_name"`
+    MetricDisplayName string            `json:"metric_display_name"`
+    CurrentValue      float64           `json:"current_value"`
+    FormattedValue    string            `json:"formatted_value"`
+    WarningThreshold  float64           `json:"warning_threshold"`
+    CriticalThreshold float64           `json:"critical_threshold"`
+    Level             AlertLevel        `json:"level"`
+    Message           string            `json:"message"`
+    Labels            map[string]string `json:"labels,omitempty"`
+}
+
+// 告警摘要
+type AlertSummary struct {
+    TotalAlerts   int `json:"total_alerts"`
+    WarningCount  int `json:"warning_count"`
+    CriticalCount int `json:"critical_count"`
+}
+```
+
+**验证结果**:
+- [x] 告警级别定义完整（Normal、Warning、Critical）
+- [x] 告警信息包含定位问题所需的所有字段
+- [x] 执行 `go build ./internal/model/` 无编译错误
+- [x] 代码风格与 `host.go`、`metric.go` 一致
+- [x] 包含 package 级和 type 级注释
+
+---
+
 ## 下一步骤
 
-**步骤 12**: 定义告警模型（阶段三 - 数据模型定义继续）
-- 在 `internal/model/alert.go` 中定义告警相关结构体
-- 包含：告警级别枚举（正常、警告、严重）
-- 包含：告警详情（主机、指标、当前值、阈值、消息）
+**步骤 13**: 定义巡检结果模型（阶段三 - 数据模型定义继续）
+- 在 `internal/model/inspection.go` 中定义巡检结果结构体
+- 包含：巡检摘要（时间、耗时、主机统计）
+- 包含：主机结果列表
+- 包含：告警汇总列表
+- 时间字段使用 `Asia/Shanghai` 时区
 
 ---
 
@@ -506,3 +563,4 @@ type HostMetrics struct {
 | 2025-12-13 | 步骤 9 | 创建指标定义文件完成（阶段二完成） |
 | 2025-12-13 | 步骤 10 | 定义主机模型完成（阶段三开始） |
 | 2025-12-13 | 步骤 11 | 定义指标模型完成 |
+| 2025-12-13 | 步骤 12 | 定义告警模型完成 |
