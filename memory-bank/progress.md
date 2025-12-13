@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段一 - 项目初始化与基础架构
-**进度**: 步骤 2/41 完成
+**进度**: 步骤 3/41 完成
 
 ---
 
@@ -70,16 +70,40 @@ inspection-tool/
 
 ---
 
+### 步骤 3：添加核心依赖 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 添加 CLI 框架：`github.com/spf13/cobra v1.10.2`
+2. 添加配置管理：`github.com/spf13/viper v1.21.0`
+3. 添加 HTTP 客户端：`github.com/go-resty/resty/v2 v2.17.0`
+4. 添加 Excel 生成：`github.com/xuri/excelize/v2 v2.10.0`
+5. 添加结构化日志：`github.com/rs/zerolog v1.34.0`
+6. 添加并发控制：`golang.org/x/sync v0.19.0`
+7. 添加数据验证：`github.com/go-playground/validator/v10 v10.29.0`
+
+**自动添加的传递依赖**:
+- `github.com/fsnotify/fsnotify` - 文件系统监听（viper 依赖）
+- `github.com/go-viper/mapstructure/v2` - 结构体映射（viper 依赖）
+- `github.com/spf13/pflag` - 命令行标志（cobra 依赖）
+- `golang.org/x/crypto` - 加密库（validator 依赖）
+- `golang.org/x/net` - 网络扩展（resty 依赖）
+- 等 20+ 个传递依赖
+
+**验证结果**:
+- [x] `go.mod` 中包含所有 7 个核心依赖
+- [x] `go mod download` 执行成功
+- [x] `go mod verify` 输出 "all modules verified"
+
+---
+
 ## 下一步骤
 
-**步骤 3**: 添加核心依赖
-- 添加 CLI 框架：`github.com/spf13/cobra`
-- 添加配置管理：`github.com/spf13/viper`
-- 添加 HTTP 客户端：`github.com/go-resty/resty/v2`
-- 添加 Excel 生成：`github.com/xuri/excelize/v2`
-- 添加结构化日志：`github.com/rs/zerolog`
-- 添加并发控制：`golang.org/x/sync`
-- 添加数据验证：`github.com/go-playground/validator/v10`
+**步骤 4**: 创建程序入口文件
+- 在 `cmd/inspect/` 目录下创建 `main.go`
+- 实现最简单的 main 函数，仅打印版本信息
+- 验证：`go build -o bin/inspect ./cmd/inspect` 成功
 
 ---
 
@@ -89,3 +113,4 @@ inspection-tool/
 |------|------|------|
 | 2025-12-13 | 步骤 1 | 初始化 Go 模块完成 |
 | 2025-12-13 | 步骤 2 | 创建目录结构完成 |
+| 2025-12-13 | 步骤 3 | 添加核心依赖完成 |
