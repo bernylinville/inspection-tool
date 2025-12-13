@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段七 - CLI 命令实现（进行中）
-**进度**: 步骤 36/41 完成
+**进度**: 步骤 37/41 完成
 
 ---
 
@@ -1982,13 +1982,65 @@ OS/Arch: linux/amd64
 
 ---
 
+### 步骤 37：实现日志输出 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 修改 `cmd/inspect/cmd/run.go` 中的 `setupLogger` 函数
+2. 添加 `format` 参数，支持 `json` 和 `console` 两种日志格式
+3. 使用 `zerolog.TimestampFunc` 设置 Asia/Shanghai 时区
+4. 调整 `runInspection` 函数调用顺序，配置加载后根据配置文件重新创建 logger
+5. 命令行 `--log-level` 可覆盖配置文件设置
+6. 在关键节点添加日志输出：
+   - 配置加载成功（Debug）
+   - 指标定义加载（Debug）
+   - 数据源连接（Info）
+   - 客户端创建（Debug）
+   - 服务初始化（Debug）
+   - 报告生成开始/完成（Info）
+
+**修改文件**:
+- `cmd/inspect/cmd/run.go` - setupLogger 函数增强、runInspection 调用顺序调整
+
+**关键改进**:
+| 问题 | 解决方案 |
+|------|----------|
+| 时区未设置 | 使用 `zerolog.TimestampFunc` 设置 Asia/Shanghai 时区 |
+| 格式配置未实现 | 根据 `cfg.Logging.Format` 选择 JSON 或 Console 输出 |
+| 配置文件被忽略 | 配置加载后重新创建 logger，支持命令行覆盖 |
+
+**日志格式示例**:
+```bash
+# Console 格式（默认）
+15:04:05 INF connecting to data sources n9e_endpoint=http://n9e.example.com vm_endpoint=http://vm.example.com
+
+# JSON 格式
+{"level":"info","time":"2025-12-13T15:04:05+08:00","n9e_endpoint":"...","vm_endpoint":"...","message":"connecting to data sources"}
+```
+
+**验证结果**:
+- [x] 日志级别可通过配置文件 `logging.level` 控制
+- [x] 日志级别可通过命令行 `--log-level` 覆盖
+- [x] JSON 格式日志结构正确（`logging.format: json`）
+- [x] Console 格式日志人类可读（`logging.format: console`）
+- [x] 日志时间显示为 Asia/Shanghai 时区
+- [x] 错误日志包含足够的上下文信息
+- [x] 执行 `go build ./cmd/inspect` 无编译错误
+- [x] 执行 `go test ./...` 全部通过
+
+---
+
 ## 下一步骤
 
-**步骤 37**: 实现日志输出
-- 集成 zerolog 日志库
-- 根据配置设置日志级别和格式
-- 在关键节点输出日志（开始、完成、错误）
-- 日志时间使用 `Asia/Shanghai` 时区
+**步骤 38**: 创建 Makefile
+- 创建 Makefile 包含以下目标：
+  - build：构建本地二进制
+  - build-all：交叉编译多平台
+  - test：运行测试
+  - lint：代码检查
+  - clean：清理构建产物
+  - coverage：生成测试覆盖率报告
 
 ---
 
@@ -2032,3 +2084,4 @@ OS/Arch: linux/amd64
 | 2025-12-13 | 步骤 34 | 实现 version 子命令 |
 | 2025-12-13 | 步骤 35 | 实现 validate 子命令 |
 | 2025-12-13 | 步骤 36 | 实现 run 子命令（完整巡检流程） |
+| 2025-12-13 | 步骤 37 | 实现日志输出（时区、格式配置、关键节点日志，阶段七完成） |
