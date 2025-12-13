@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段三 - 数据模型定义（已完成）
-**进度**: 步骤 13/41 完成
+**阶段**: 阶段四 - API 客户端实现（进行中）
+**进度**: 步骤 14/41 完成
 
 ---
 
@@ -604,12 +604,85 @@ type InspectionResult struct {
 
 ---
 
+### 步骤 14：定义 N9E 客户端接口和类型 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/client/n9e/types.go` 中定义夜莺 API 请求和响应类型
+2. 定义 `TargetResponse` 和 `TargetsResponse` API 响应结构体
+3. 定义 `ExtendInfo` 结构体解析嵌套 JSON 字符串
+4. 定义子结构体：`CPUInfo`、`MemoryInfo`、`NetworkInfo`、`PlatformInfo`、`FilesystemInfo`
+5. 实现辅助函数：`ParseExtendInfo()`、`ToHostMeta()`
+6. 实现类型转换方法：`GetCPUCores()`、`GetTotal()`、`GetSizeBytes()`、`IsPhysicalDisk()`
+7. 编写完整的单元测试（12 个测试用例）
+
+**生成文件**:
+- `internal/client/n9e/types.go` - N9E API 类型定义
+- `internal/client/n9e/types_test.go` - 单元测试
+
+**类型定义概览**:
+```go
+// API 响应
+type TargetResponse struct {
+    Dat TargetData `json:"dat"`
+    Err string     `json:"err"`
+}
+
+type TargetData struct {
+    Ident      string `json:"ident"`
+    ExtendInfo string `json:"extend_info"` // JSON 字符串，需要二次解析
+}
+
+// ExtendInfo 解析结构
+type ExtendInfo struct {
+    CPU        CPUInfo           `json:"cpu"`
+    Memory     MemoryInfo        `json:"memory"`
+    Network    NetworkInfo       `json:"network"`
+    Platform   PlatformInfo      `json:"platform"`
+    Filesystem []FilesystemInfo  `json:"filesystem"`
+}
+
+// 平台信息
+type PlatformInfo struct {
+    Hostname      string `json:"hostname"`
+    OS            string `json:"os"`
+    KernelRelease string `json:"kernel_release"`
+    // ... 更多字段
+}
+```
+
+**关键功能**:
+| 功能 | 说明 |
+|------|------|
+| `ParseExtendInfo()` | 解析 extend_info JSON 字符串 |
+| `ToHostMeta()` | 将 N9E 数据转换为内部 HostMeta 模型 |
+| `IsPhysicalDisk()` | 过滤物理磁盘，排除 tmpfs、overlay、containerd 等 |
+| `GetCPUCores()` | 从字符串解析 CPU 核心数 |
+| `GetTotal()` | 从字符串解析内存总量 |
+
+**验证结果**:
+- [x] 类型定义与夜莺 API 响应格式匹配（使用 `n9e.json` 验证）
+- [x] `ExtendInfo` 能够正确解析嵌套 JSON 字符串
+- [x] 包含所有需要的字段（主机名、IP、OS、版本、CPU、内存等）
+- [x] 执行 `go build ./internal/client/n9e/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test ./internal/client/n9e/` 全部通过（12 个测试用例）
+- [x] 测试覆盖率 82.2%（超过目标 70%）
+- [x] 物理磁盘过滤正确排除 tmpfs、overlay、containerd 挂载点
+
+---
+
 ## 下一步骤
 
-**步骤 14**: 定义 N9E 客户端接口和类型（阶段四 - API 客户端实现开始）
-- 在 `internal/client/n9e/types.go` 中定义请求和响应类型
-- 根据夜莺 API 响应格式定义结构体（参考关键技术决策第 1 节）
-- 定义 `ExtendInfo` 结构体解析嵌套 JSON
+**步骤 15**: 实现 N9E 客户端（阶段四 - API 客户端实现继续）
+- 在 `internal/client/n9e/client.go` 中实现客户端
+- 实现构造函数，接收配置参数
+- 实现获取主机列表方法
+- 实现 Token 认证（X-User-Token 请求头）
+- 实现超时和错误处理
+- 集成重试机制（指数退避）
+- 实现 ident 清理逻辑
 
 ---
 
@@ -630,3 +703,4 @@ type InspectionResult struct {
 | 2025-12-13 | 步骤 11 | 定义指标模型完成 |
 | 2025-12-13 | 步骤 12 | 定义告警模型完成 |
 | 2025-12-13 | 步骤 13 | 定义巡检结果模型完成（阶段三完成） |
+| 2025-12-13 | 步骤 14 | 定义 N9E 客户端接口和类型完成（阶段四开始） |

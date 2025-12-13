@@ -26,7 +26,9 @@ inspection-tool/
 │   └── metrics.yaml            # 指标定义文件（已创建）
 ├── internal/
 │   ├── client/
-│   │   ├── n9e/                # 夜莺 API 客户端（待实现）
+│   │   ├── n9e/                # 夜莺 API 客户端
+│   │   │   ├── types.go        # API 类型定义（已实现）
+│   │   │   └── types_test.go   # 类型单元测试（已实现）
 │   │   └── vm/                 # VictoriaMetrics 客户端（待实现）
 │   ├── config/
 │   │   └── config.go          # 配置结构体定义（已实现）
@@ -90,12 +92,41 @@ type Config struct {
 
 ### API 客户端 (internal/client/)
 
-| 目录/文件 | 作用 |
-|-----------|------|
-| `n9e/client.go` | 夜莺 API 客户端（主机元信息） |
-| `n9e/types.go` | 夜莺请求/响应类型定义 |
-| `vm/client.go` | VictoriaMetrics 客户端（指标查询） |
-| `vm/types.go` | PromQL 查询类型定义 |
+| 目录/文件 | 作用 | 状态 |
+|-----------|------|------|
+| `n9e/types.go` | 夜莺 API 请求/响应类型定义 | ✅ 已实现 |
+| `n9e/types_test.go` | N9E 类型单元测试（12 个测试，82.2% 覆盖率） | ✅ 已实现 |
+| `n9e/client.go` | 夜莺 API 客户端（主机元信息） | 待实现 |
+| `vm/types.go` | PromQL 查询类型定义 | 待实现 |
+| `vm/client.go` | VictoriaMetrics 客户端（指标查询） | 待实现 |
+
+**N9E API 类型结构**：
+```go
+// API 响应结构
+type TargetResponse struct {
+    Dat TargetData `json:"dat"` // 响应数据
+    Err string     `json:"err"` // 错误信息
+}
+
+type TargetData struct {
+    Ident      string `json:"ident"`       // 主机标识符
+    ExtendInfo string `json:"extend_info"` // JSON 字符串，需要二次解析
+}
+
+// ExtendInfo 解析结构（从 extend_info JSON 字符串解析）
+type ExtendInfo struct {
+    CPU        CPUInfo           `json:"cpu"`        // CPU 信息
+    Memory     MemoryInfo        `json:"memory"`     // 内存信息
+    Network    NetworkInfo       `json:"network"`    // 网络信息
+    Platform   PlatformInfo      `json:"platform"`   // 平台/系统信息
+    Filesystem []FilesystemInfo  `json:"filesystem"` // 文件系统信息
+}
+
+// 关键辅助函数
+func ParseExtendInfo(extendInfoStr string) (*ExtendInfo, error)  // 解析 JSON
+func (t *TargetData) ToHostMeta() (*model.HostMeta, error)       // 转换为 HostMeta
+func (f *FilesystemInfo) IsPhysicalDisk() bool                   // 过滤物理磁盘
+```
 
 ### 数据模型 (internal/model/)
 
@@ -299,3 +330,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 11（指标模型），添加 metric.go |
 | 2025-12-13 | 完成步骤 12（告警模型），添加 alert.go |
 | 2025-12-13 | 完成步骤 13（巡检结果模型），添加 inspection.go，阶段三完成 |
+| 2025-12-13 | 完成步骤 14（N9E 客户端类型），添加 types.go 和测试，阶段四开始 |
