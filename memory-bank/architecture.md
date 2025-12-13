@@ -104,7 +104,7 @@ type Config struct {
 | `host.go` | 主机模型（HostMeta、DiskMountInfo、HostStatus） | ✅ 已实现 |
 | `metric.go` | 指标模型（MetricDefinition、MetricValue、HostMetrics） | ✅ 已实现 |
 | `alert.go` | 告警模型（AlertLevel、Alert、AlertSummary） | ✅ 已实现 |
-| `inspection.go` | 巡检结果模型（摘要、主机列表） | 待实现 |
+| `inspection.go` | 巡检结果模型（InspectionSummary、HostResult、InspectionResult） | ✅ 已实现 |
 
 **主机模型结构**：
 ```go
@@ -177,6 +177,46 @@ type AlertSummary struct {
     TotalAlerts   int `json:"total_alerts"`   // 告警总数
     WarningCount  int `json:"warning_count"`  // 警告级别数量
     CriticalCount int `json:"critical_count"` // 严重级别数量
+}
+```
+
+**巡检结果模型结构**：
+```go
+// 巡检摘要
+type InspectionSummary struct {
+    TotalHosts    int `json:"total_hosts"`    // 主机总数
+    NormalHosts   int `json:"normal_hosts"`   // 正常主机数
+    WarningHosts  int `json:"warning_hosts"`  // 警告主机数
+    CriticalHosts int `json:"critical_hosts"` // 严重主机数
+    FailedHosts   int `json:"failed_hosts"`   // 采集失败主机数
+}
+
+// 单主机巡检结果
+type HostResult struct {
+    Hostname      string                  `json:"hostname"`        // 主机名
+    IP            string                  `json:"ip"`              // IP 地址
+    OS            string                  `json:"os"`              // 操作系统类型
+    OSVersion     string                  `json:"os_version"`      // 操作系统版本
+    KernelVersion string                  `json:"kernel_version"`  // 内核版本
+    CPUCores      int                     `json:"cpu_cores"`       // CPU 核心数
+    CPUModel      string                  `json:"cpu_model"`       // CPU 型号
+    MemoryTotal   int64                   `json:"memory_total"`    // 内存总量
+    Status        HostStatus              `json:"status"`          // 整体状态
+    Metrics       map[string]*MetricValue `json:"metrics"`         // 指标集合
+    Alerts        []*Alert                `json:"alerts"`          // 告警列表
+    CollectedAt   time.Time               `json:"collected_at"`    // 采集时间
+    Error         string                  `json:"error,omitempty"` // 错误信息
+}
+
+// 完整巡检结果
+type InspectionResult struct {
+    InspectionTime time.Time          `json:"inspection_time"` // 巡检开始时间
+    Duration       time.Duration      `json:"duration"`        // 巡检耗时
+    Summary        *InspectionSummary `json:"summary"`         // 摘要统计
+    Hosts          []*HostResult      `json:"hosts"`           // 主机结果列表
+    Alerts         []*Alert           `json:"alerts"`          // 所有告警列表
+    AlertSummary   *AlertSummary      `json:"alert_summary"`   // 告警摘要
+    Version        string             `json:"version"`         // 工具版本号
 }
 ```
 
@@ -258,3 +298,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 10（主机模型），添加 host.go，阶段三开始 |
 | 2025-12-13 | 完成步骤 11（指标模型），添加 metric.go |
 | 2025-12-13 | 完成步骤 12（告警模型），添加 alert.go |
+| 2025-12-13 | 完成步骤 13（巡检结果模型），添加 inspection.go，阶段三完成 |

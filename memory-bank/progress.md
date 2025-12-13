@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段三 - 数据模型定义（进行中）
-**进度**: 步骤 12/41 完成
+**阶段**: 阶段三 - 数据模型定义（已完成）
+**进度**: 步骤 13/41 完成
 
 ---
 
@@ -537,14 +537,79 @@ type AlertSummary struct {
 
 ---
 
+### 步骤 13：定义巡检结果模型 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/model/inspection.go` 中定义巡检结果相关结构体
+2. 定义 `InspectionSummary` 巡检摘要结构体（主机统计）
+3. 定义 `HostResult` 单主机巡检结果结构体
+4. 定义 `InspectionResult` 完整巡检结果结构体
+5. 实现辅助函数：`NewInspectionSummary()`、`NewHostResult()`、`NewInspectionResult()`
+6. 实现辅助方法：`SetMetric()`、`GetMetric()`、`AddAlert()`、`AddHost()`、`Finalize()`
+7. 实现查询方法：`GetCriticalHosts()`、`GetWarningHosts()`、`GetFailedHosts()`、`HasCritical()`、`HasWarning()`、`HasAlerts()`
+
+**生成文件**:
+- `internal/model/inspection.go` - 巡检结果模型定义
+
+**结构体定义**:
+```go
+// 巡检摘要
+type InspectionSummary struct {
+    TotalHosts    int `json:"total_hosts"`    // 主机总数
+    NormalHosts   int `json:"normal_hosts"`   // 正常主机数
+    WarningHosts  int `json:"warning_hosts"`  // 警告主机数
+    CriticalHosts int `json:"critical_hosts"` // 严重主机数
+    FailedHosts   int `json:"failed_hosts"`   // 采集失败主机数
+}
+
+// 单主机巡检结果
+type HostResult struct {
+    Hostname      string                  `json:"hostname"`        // 主机名
+    IP            string                  `json:"ip"`              // IP 地址
+    OS            string                  `json:"os"`              // 操作系统类型
+    OSVersion     string                  `json:"os_version"`      // 操作系统版本
+    KernelVersion string                  `json:"kernel_version"`  // 内核版本
+    CPUCores      int                     `json:"cpu_cores"`       // CPU 核心数
+    CPUModel      string                  `json:"cpu_model"`       // CPU 型号
+    MemoryTotal   int64                   `json:"memory_total"`    // 内存总量
+    Status        HostStatus              `json:"status"`          // 整体状态
+    Metrics       map[string]*MetricValue `json:"metrics"`         // 指标集合
+    Alerts        []*Alert                `json:"alerts"`          // 告警列表
+    CollectedAt   time.Time               `json:"collected_at"`    // 采集时间
+    Error         string                  `json:"error,omitempty"` // 错误信息
+}
+
+// 完整巡检结果
+type InspectionResult struct {
+    InspectionTime time.Time          `json:"inspection_time"` // 巡检开始时间
+    Duration       time.Duration      `json:"duration"`        // 巡检耗时
+    Summary        *InspectionSummary `json:"summary"`         // 摘要统计
+    Hosts          []*HostResult      `json:"hosts"`           // 主机结果列表
+    Alerts         []*Alert           `json:"alerts"`          // 所有告警列表
+    AlertSummary   *AlertSummary      `json:"alert_summary"`   // 告警摘要
+    Version        string             `json:"version"`         // 工具版本号
+}
+```
+
+**验证结果**:
+- [x] 结构体能够承载完整的巡检数据
+- [x] 支持 JSON 序列化（所有字段都有 json 标签）
+- [x] 时间字段使用 `time.Time` 类型（运行时设置 Asia/Shanghai 时区）
+- [x] 执行 `go build ./internal/model/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 代码风格与 `host.go`、`metric.go`、`alert.go` 一致
+- [x] 包含 package 级和 type 级注释
+
+---
+
 ## 下一步骤
 
-**步骤 13**: 定义巡检结果模型（阶段三 - 数据模型定义继续）
-- 在 `internal/model/inspection.go` 中定义巡检结果结构体
-- 包含：巡检摘要（时间、耗时、主机统计）
-- 包含：主机结果列表
-- 包含：告警汇总列表
-- 时间字段使用 `Asia/Shanghai` 时区
+**步骤 14**: 定义 N9E 客户端接口和类型（阶段四 - API 客户端实现开始）
+- 在 `internal/client/n9e/types.go` 中定义请求和响应类型
+- 根据夜莺 API 响应格式定义结构体（参考关键技术决策第 1 节）
+- 定义 `ExtendInfo` 结构体解析嵌套 JSON
 
 ---
 
@@ -564,3 +629,4 @@ type AlertSummary struct {
 | 2025-12-13 | 步骤 10 | 定义主机模型完成（阶段三开始） |
 | 2025-12-13 | 步骤 11 | 定义指标模型完成 |
 | 2025-12-13 | 步骤 12 | 定义告警模型完成 |
+| 2025-12-13 | 步骤 13 | 定义巡检结果模型完成（阶段三完成） |
