@@ -538,7 +538,9 @@ func (i *Inspector) GetVersion() string
 | `registry.go` | 报告格式注册表 | 待实现 |
 | `excel/writer.go` | Excel 报告生成（3 工作表、条件格式） | ✅ 已实现 |
 | `excel/writer_test.go` | Excel 报告单元测试（15 个测试，覆盖率 89.6%） | ✅ 已实现 |
-| `html/writer.go` | HTML 报告生成 | 待实现 |
+| `html/writer.go` | HTML 报告生成（响应式、支持自定义模板） | ✅ 已实现 |
+| `html/templates/default.html` | 内置默认 HTML 模板 | ✅ 已实现 |
+| `html/writer_test.go` | HTML 报告单元测试（21 个测试，覆盖率 90.4%） | ✅ 已实现 |
 
 **ReportWriter 接口定义**（已实现）:
 ```go
@@ -586,6 +588,55 @@ func (w *Writer) createAlertsSheet(f *excelize.File, result *model.InspectionRes
 | 警告 | #FFEB9C (黄) | #9C6500 (深黄) | 警告级别指标/告警 |
 | 严重 | #FFC7CE (红) | #9C0006 (深红) | 严重级别指标/告警 |
 | 正常 | #C6EFCE (绿) | #006100 (深绿) | 正常状态显示 |
+
+**HTML Writer 实现**（已实现）:
+```go
+// Writer implements report.ReportWriter for HTML format.
+type Writer struct {
+    timezone     *time.Location
+    templatePath string  // User-defined template path (optional)
+}
+
+// TemplateData holds all data passed to the HTML template.
+type TemplateData struct {
+    Title          string
+    InspectionTime string
+    Duration       string
+    Summary        *model.InspectionSummary
+    AlertSummary   *model.AlertSummary
+    Hosts          []*HostData
+    Alerts         []*AlertData
+    DiskPaths      []string
+    Version        string
+    GeneratedAt    string
+}
+
+// 核心方法
+func NewWriter(timezone *time.Location, templatePath string) *Writer
+func (w *Writer) Format() string  // 返回 "html"
+func (w *Writer) Write(result *model.InspectionResult, outputPath string) error
+func (w *Writer) loadTemplate() (*template.Template, error)  // 加载模板
+func (w *Writer) prepareTemplateData(result *model.InspectionResult) *TemplateData
+```
+
+**HTML 模板特性**:
+| 特性 | 说明 |
+|------|------|
+| 响应式布局 | CSS Grid/Flexbox，支持移动端和打印 |
+| 摘要卡片 | 主机统计、告警统计，颜色编码 |
+| 主机详情表 | 完整指标、磁盘按挂载点展开 |
+| 异常汇总表 | 按严重程度排序（严重优先） |
+| 条件样式 | 与 Excel 一致的颜色方案 |
+| 模板加载 | 优先用户自定义，回退内置默认 |
+| 排序功能 | 客户端 JavaScript 实现 |
+
+**HTML 样式配置**:
+| 状态 | 背景色 | 说明 |
+|------|--------|------|
+| 正常 | `#c6efce` (绿) | 所有指标正常 |
+| 警告 | `#ffeb9c` (黄) | 达到警告阈值 |
+| 严重 | `#ffc7ce` (红) | 达到严重阈值 |
+| 失败 | `#d9d9d9` (灰) | 采集失败 |
 
 ### 配置文件 (configs/)
 

@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段六 - 报告生成模块（进行中）
-**进度**: 步骤 28/41 完成
+**进度**: 步骤 29/41 完成
 
 ---
 
@@ -1525,14 +1525,126 @@ type Writer struct {
 
 ---
 
+### 步骤 29：实现 HTML 报告生成器 - 基础结构 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/report/html/writer.go` 中实现 HTMLWriter
+2. 实现 ReportWriter 接口（Write 和 Format 方法）
+3. 使用 Go 标准库 `html/template` 渲染
+4. 使用 Go `embed` 嵌入内置默认模板
+5. 支持外置模板（优先加载用户自定义模板，不存在时回退内置模板）
+6. 创建响应式 HTML 模板（支持移动端、打印）
+7. 定义模板数据结构（TemplateData、HostData、MetricData、AlertData）
+8. 实现辅助函数（formatDuration、formatSize、statusText、statusClass 等）
+9. 编写完整的单元测试（21 个测试用例）
+
+**生成文件**:
+- `internal/report/html/writer.go` - HTML Writer 实现（330 行）
+- `internal/report/html/templates/default.html` - 内置默认模板（400+ 行）
+- `internal/report/html/writer_test.go` - 单元测试（400+ 行）
+
+**核心结构体**:
+```go
+// Writer implements report.ReportWriter for HTML format.
+type Writer struct {
+    timezone     *time.Location
+    templatePath string  // User-defined template path (optional)
+}
+
+// TemplateData holds all data passed to the HTML template.
+type TemplateData struct {
+    Title          string
+    InspectionTime string
+    Duration       string
+    Summary        *model.InspectionSummary
+    AlertSummary   *model.AlertSummary
+    Hosts          []*HostData
+    Alerts         []*AlertData
+    DiskPaths      []string
+    Version        string
+    GeneratedAt    string
+}
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewWriter()` | 创建 HTML 写入器，支持自定义时区和模板路径 |
+| `Format()` | 返回 "html" 格式标识符 |
+| `Write()` | 生成 HTML 报告到指定路径 |
+| `loadTemplate()` | 加载模板（优先用户自定义，回退内置默认） |
+| `prepareTemplateData()` | 转换 InspectionResult 为模板数据 |
+
+**模板特性**:
+| 特性 | 说明 |
+|------|------|
+| 响应式布局 | CSS Grid/Flexbox，移动端友好 |
+| 摘要卡片 | 主机统计、告警统计，颜色编码 |
+| 主机详情表 | 完整指标、磁盘按挂载点展开 |
+| 异常汇总表 | 按严重程度排序 |
+| 条件样式 | 警告黄色、严重红色、正常绿色 |
+| 打印支持 | 专用打印样式 |
+| 预留排序 | JavaScript 排序功能框架（步骤 31 完善） |
+
+**样式规范**:
+| 状态 | 背景色 | 说明 |
+|------|--------|------|
+| 正常 | `#c6efce` (绿) | 所有指标正常 |
+| 警告 | `#ffeb9c` (黄) | 达到警告阈值 |
+| 严重 | `#ffc7ce` (红) | 达到严重阈值 |
+| 失败 | `#d9d9d9` (灰) | 采集失败 |
+
+**测试用例列表**:
+| 测试函数 | 场景 |
+|----------|------|
+| `TestNewWriter` | 构造函数（3 个子测试） |
+| `TestWriter_Format` | 格式标识符返回 |
+| `TestWriter_Write_NilResult` | nil 结果错误处理 |
+| `TestWriter_Write_Success` | 完整写入流程 |
+| `TestWriter_Write_AddsHtmlExtension` | 自动添加 .html 扩展名 |
+| `TestWriter_LoadTemplate_Default` | 加载内置默认模板 |
+| `TestWriter_LoadTemplate_CustomNotFound` | 自定义模板不存在回退默认 |
+| `TestWriter_LoadTemplate_Custom` | 加载用户自定义模板 |
+| `TestWriter_EmptyResult` | 空结果处理 |
+| `TestPrepareTemplateData` | 模板数据构建 |
+| `TestCollectDiskPaths` | 磁盘路径收集和排序 |
+| `TestFormatDuration` | 时长格式化 |
+| `TestFormatSize` | 字节大小格式化 |
+| `TestStatusText` | 状态中文转换 |
+| `TestStatusClass` | 状态 CSS 类名 |
+| `TestAlertLevelText` | 告警级别中文转换 |
+| `TestAlertLevelClass` | 告警级别 CSS 类名 |
+| `TestAlertLevelPriority` | 告警级别优先级 |
+| `TestMetricStatusClass` | 指标状态 CSS 类名 |
+| `TestFormatThreshold` | 阈值格式化 |
+
+**验证结果**:
+- [x] 执行 `go build ./internal/report/html/` 无编译错误
+- [x] 执行 `go test ./internal/report/html/` 全部通过（21 个测试用例）
+- [x] 测试覆盖率达到 **90.4%**（远超目标 60%）
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test -race ./internal/report/...` 无数据竞争
+- [x] 生成的 HTML 文件可在浏览器正常打开
+- [x] 内置模板正确加载
+- [x] 用户自定义模板正确加载
+- [x] 自定义模板不存在时正确回退内置模板
+
+---
+
 ## 下一步骤
 
-**步骤 29**: 实现 HTML 报告生成器 - 基础结构
-- 在 `internal/report/html/writer.go` 中实现 HTMLWriter
-- 实现 ReportWriter 接口
-- 使用 Go 标准库 html/template 渲染
-- 支持外置模板（优先加载用户自定义模板）
-- 创建默认 HTML 模板文件
+**步骤 30**: 实现 HTML 报告 - 摘要区域
+- 已在步骤 29 中完成（默认模板包含摘要卡片）
+
+**步骤 31**: 实现 HTML 报告 - 主机详情表格
+- 已在步骤 29 中完成基础结构
+- 待完善：增强客户端排序功能（可选）
+
+**步骤 32**: 实现报告格式注册表
+- 在 `internal/report/registry.go` 中实现
+- 支持按格式名称获取对应的 Writer
 
 ---
 
@@ -1568,3 +1680,4 @@ type Writer struct {
 | 2025-12-13 | 步骤 26 | 实现 Excel 报告 - 巡检概览表（已在步骤 25 完成） |
 | 2025-12-13 | 步骤 27 | 实现 Excel 报告 - 详细数据表（已在步骤 25 完成） |
 | 2025-12-13 | 步骤 28 | 实现 Excel 报告 - 异常汇总表（已在步骤 25 完成，阶段六 Excel 部分完成） |
+| 2025-12-13 | 步骤 29 | 实现 HTML 报告生成器基础结构（覆盖率 90.4%） |
