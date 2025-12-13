@@ -339,8 +339,8 @@ type InspectionResult struct {
 
 | 文件 | 作用 | 状态 |
 |------|------|------|
-| `collector.go` | 数据采集服务（整合 N9E + VM 客户端） | ✅ 已实现 |
-| `collector_test.go` | 采集服务单元测试（15 个测试，覆盖率 92.5%） | ✅ 已实现 |
+| `collector.go` | 数据采集服务（整合 N9E + VM 客户端，errgroup 并发） | ✅ 已实现 |
+| `collector_test.go` | 采集服务单元测试（19 个测试，覆盖率 80.1%） | ✅ 已实现 |
 | `evaluator.go` | 阈值评估服务 | ✅ 已实现 |
 | `evaluator_test.go` | 评估服务单元测试（30+ 个测试，覆盖率 94.0%） | ✅ 已实现 |
 | `inspector.go` | 巡检编排服务（核心流程） | ✅ 已实现 |
@@ -384,9 +384,43 @@ func (c *Collector) CollectAll(ctx context.Context) (*CollectionResult, error)
 // 采集主机元信息
 func (c *Collector) CollectHostMetas(ctx context.Context) ([]*model.HostMeta, error)
 
-// 采集指标数据
+// 采集指标数据（并发）
 func (c *Collector) CollectMetrics(ctx context.Context, hosts []*model.HostMeta, metrics []*model.MetricDefinition) (map[string]*model.HostMetrics, error)
+
+// 并发安全的简单指标采集
+func (c *Collector) collectSimpleMetricConcurrent(ctx context.Context, metric *model.MetricDefinition, hostMetricsMap map[string]*model.HostMetrics, mu *sync.Mutex) error
+
+// 并发安全的展开指标采集
+func (c *Collector) collectExpandedMetricConcurrent(ctx context.Context, metric *model.MetricDefinition, hostMetricsMap map[string]*model.HostMetrics, mu *sync.Mutex) error
 ```
+
+**并发采集模式**：
+```go
+// 使用 errgroup 并发采集，限制并发数
+g, ctx := errgroup.WithContext(ctx)
+concurrency := c.config.Inspection.Concurrency
+if concurrency <= 0 {
+    concurrency = 20 // 默认并发数
+}
+g.SetLimit(concurrency)
+
+var mu sync.Mutex // 保护 hostMetricsMap 的并发写入
+
+for _, metric := range activeMetrics {
+    metric := metric // 捕获循环变量
+    g.Go(func() error {
+        // 使用 mutex 保护的并发安全采集
+        return nil // 单个指标失败不中止整体
+    })
+}
+```
+
+**并发特性**：
+- 使用 `golang.org/x/sync/errgroup` 控制并发
+- 并发数由 `config.Inspection.Concurrency` 配置（默认 20）
+- 使用 `sync.Mutex` 保护共享 map 的写入
+- 单个指标采集失败不影响其他指标
+- 支持上下文取消（context cancellation）
 
 **磁盘指标展开逻辑**：
 ```go
@@ -577,3 +611,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 20（数据采集服务），添加 collector.go 和测试，覆盖率 92.5%，阶段五开始 |
 | 2025-12-13 | 完成步骤 21（阈值评估服务），添加 evaluator.go 和测试，覆盖率 94.0% |
 | 2025-12-13 | 完成步骤 22（巡检编排服务），添加 inspector.go 和测试，覆盖率 93.4%，阶段五完成 |
+| 2025-12-13 | 完成步骤 23（并发采集 + 测试），添加 errgroup 并发逻辑，覆盖率 80.1% |

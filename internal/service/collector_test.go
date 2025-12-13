@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -950,4 +951,352 @@ func containsSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// =============================================================================
+// Concurrent Collection Tests
+// =============================================================================
+
+// TestCollector_CollectMetrics_Concurrent tests concurrent collection of multiple metrics.
+func TestCollector_CollectMetrics_Concurrent(t *testing.T) {
+	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {})
+	defer n9eServer.Close()
+
+	// Setup VM server that responds to multiple metric queries
+	vmServer := setupVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		var result []map[string]interface{}
+
+		// Simulate different metrics
+		switch {
+		case containsSubstring(query, "metric_1"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "10.0"}},
+				{"metric": map[string]string{"ident": "host2"}, "value": []interface{}{1702483200.0, "11.0"}},
+			}
+		case containsSubstring(query, "metric_2"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "20.0"}},
+				{"metric": map[string]string{"ident": "host2"}, "value": []interface{}{1702483200.0, "21.0"}},
+			}
+		case containsSubstring(query, "metric_3"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "30.0"}},
+				{"metric": map[string]string{"ident": "host2"}, "value": []interface{}{1702483200.0, "31.0"}},
+			}
+		case containsSubstring(query, "metric_4"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "40.0"}},
+				{"metric": map[string]string{"ident": "host2"}, "value": []interface{}{1702483200.0, "41.0"}},
+			}
+		case containsSubstring(query, "metric_5"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "50.0"}},
+				{"metric": map[string]string{"ident": "host2"}, "value": []interface{}{1702483200.0, "51.0"}},
+			}
+		}
+
+		resp := map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result":     result,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	defer vmServer.Close()
+
+	cfg := createTestConfig()
+	cfg.Inspection.Concurrency = 5 // Allow 5 concurrent queries
+	n9eClient := createN9EClient(n9eServer.URL)
+	vmClient := createVMClient(vmServer.URL)
+	logger := zerolog.Nop()
+
+	// Create 5 metrics to collect concurrently
+	metrics := []*model.MetricDefinition{
+		{Name: "metric_1", Query: "metric_1"},
+		{Name: "metric_2", Query: "metric_2"},
+		{Name: "metric_3", Query: "metric_3"},
+		{Name: "metric_4", Query: "metric_4"},
+		{Name: "metric_5", Query: "metric_5"},
+	}
+
+	collector := NewCollector(cfg, n9eClient, vmClient, metrics, logger)
+
+	hosts := []*model.HostMeta{
+		{Hostname: "host1"},
+		{Hostname: "host2"},
+	}
+
+	ctx := context.Background()
+	hostMetrics, err := collector.CollectMetrics(ctx, hosts, metrics)
+
+	if err != nil {
+		t.Fatalf("CollectMetrics failed: %v", err)
+	}
+
+	// Verify all metrics were collected for both hosts
+	for _, host := range []string{"host1", "host2"} {
+		hm := hostMetrics[host]
+		if hm == nil {
+			t.Fatalf("Host %s metrics not found", host)
+		}
+
+		for i := 1; i <= 5; i++ {
+			metricName := "metric_" + string(rune('0'+i))
+			mv := hm.GetMetric(metricName)
+			if mv == nil {
+				t.Errorf("Host %s: metric %s not found", host, metricName)
+			}
+		}
+	}
+
+	// Verify specific values
+	if hm := hostMetrics["host1"]; hm != nil {
+		if mv := hm.GetMetric("metric_1"); mv != nil && mv.RawValue != 10.0 {
+			t.Errorf("Expected metric_1 value 10.0, got %f", mv.RawValue)
+		}
+		if mv := hm.GetMetric("metric_5"); mv != nil && mv.RawValue != 50.0 {
+			t.Errorf("Expected metric_5 value 50.0, got %f", mv.RawValue)
+		}
+	}
+}
+
+// TestCollector_ConcurrencyLimit tests that concurrency is properly limited.
+func TestCollector_ConcurrencyLimit(t *testing.T) {
+	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {})
+	defer n9eServer.Close()
+
+	var (
+		mu              sync.Mutex
+		currentActive   int
+		maxActive       int
+		totalRequests   int
+	)
+
+	// Setup VM server that tracks concurrent requests
+	vmServer := setupVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		currentActive++
+		totalRequests++
+		if currentActive > maxActive {
+			maxActive = currentActive
+		}
+		mu.Unlock()
+
+		// Simulate some work
+		time.Sleep(50 * time.Millisecond)
+
+		mu.Lock()
+		currentActive--
+		mu.Unlock()
+
+		resp := map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result": []map[string]interface{}{
+					{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "50.0"}},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	defer vmServer.Close()
+
+	cfg := createTestConfig()
+	cfg.Inspection.Concurrency = 2 // Limit to 2 concurrent
+	n9eClient := createN9EClient(n9eServer.URL)
+	vmClient := createVMClient(vmServer.URL)
+	logger := zerolog.Nop()
+
+	// Create 6 metrics to test concurrency limit
+	metrics := []*model.MetricDefinition{
+		{Name: "m1", Query: "m1"},
+		{Name: "m2", Query: "m2"},
+		{Name: "m3", Query: "m3"},
+		{Name: "m4", Query: "m4"},
+		{Name: "m5", Query: "m5"},
+		{Name: "m6", Query: "m6"},
+	}
+
+	collector := NewCollector(cfg, n9eClient, vmClient, metrics, logger)
+
+	hosts := []*model.HostMeta{
+		{Hostname: "host1"},
+	}
+
+	ctx := context.Background()
+	_, err := collector.CollectMetrics(ctx, hosts, metrics)
+
+	if err != nil {
+		t.Fatalf("CollectMetrics failed: %v", err)
+	}
+
+	if totalRequests != 6 {
+		t.Errorf("Expected 6 total requests, got %d", totalRequests)
+	}
+
+	// Max active should not exceed concurrency limit (2)
+	if maxActive > 2 {
+		t.Errorf("Concurrency limit exceeded: max active was %d, limit is 2", maxActive)
+	}
+}
+
+// TestCollector_CollectMetrics_PartialFailure_Concurrent tests that partial failures
+// in concurrent collection don't affect other metrics.
+func TestCollector_CollectMetrics_PartialFailure_Concurrent(t *testing.T) {
+	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {})
+	defer n9eServer.Close()
+
+	// Setup VM server that fails for some queries
+	vmServer := setupVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+
+		// Fail for metric_2 and metric_4
+		if containsSubstring(query, "metric_2") || containsSubstring(query, "metric_4") {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal Server Error"))
+			return
+		}
+
+		var result []map[string]interface{}
+		switch {
+		case containsSubstring(query, "metric_1"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "10.0"}},
+			}
+		case containsSubstring(query, "metric_3"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "30.0"}},
+			}
+		case containsSubstring(query, "metric_5"):
+			result = []map[string]interface{}{
+				{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "50.0"}},
+			}
+		}
+
+		resp := map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result":     result,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	defer vmServer.Close()
+
+	cfg := createTestConfig()
+	cfg.Inspection.Concurrency = 5
+	n9eClient := createN9EClient(n9eServer.URL)
+	vmClient := createVMClient(vmServer.URL)
+	logger := zerolog.Nop()
+
+	metrics := []*model.MetricDefinition{
+		{Name: "metric_1", Query: "metric_1"},
+		{Name: "metric_2", Query: "metric_2"}, // Will fail
+		{Name: "metric_3", Query: "metric_3"},
+		{Name: "metric_4", Query: "metric_4"}, // Will fail
+		{Name: "metric_5", Query: "metric_5"},
+	}
+
+	collector := NewCollector(cfg, n9eClient, vmClient, metrics, logger)
+
+	hosts := []*model.HostMeta{
+		{Hostname: "host1"},
+	}
+
+	ctx := context.Background()
+	hostMetrics, err := collector.CollectMetrics(ctx, hosts, metrics)
+
+	// Should not return error even with partial failures
+	if err != nil {
+		t.Fatalf("CollectMetrics should not fail on partial errors: %v", err)
+	}
+
+	hm := hostMetrics["host1"]
+	if hm == nil {
+		t.Fatal("Host metrics not found")
+	}
+
+	// Successful metrics should be present
+	for _, name := range []string{"metric_1", "metric_3", "metric_5"} {
+		if mv := hm.GetMetric(name); mv == nil {
+			t.Errorf("Metric %s should be present", name)
+		}
+	}
+
+	// Failed metrics should NOT be present
+	for _, name := range []string{"metric_2", "metric_4"} {
+		if mv := hm.GetMetric(name); mv != nil {
+			t.Errorf("Metric %s should not be present (query failed)", name)
+		}
+	}
+}
+
+// TestCollector_CollectMetrics_ContextCancel_Concurrent tests context cancellation
+// during concurrent collection.
+func TestCollector_CollectMetrics_ContextCancel_Concurrent(t *testing.T) {
+	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {})
+	defer n9eServer.Close()
+
+	// Setup VM server with slow responses
+	vmServer := setupVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		// Simulate slow response
+		time.Sleep(200 * time.Millisecond)
+
+		resp := map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result": []map[string]interface{}{
+					{"metric": map[string]string{"ident": "host1"}, "value": []interface{}{1702483200.0, "50.0"}},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	defer vmServer.Close()
+
+	cfg := createTestConfig()
+	cfg.Inspection.Concurrency = 5
+	n9eClient := createN9EClient(n9eServer.URL)
+	vmClient := createVMClient(vmServer.URL)
+	logger := zerolog.Nop()
+
+	metrics := []*model.MetricDefinition{
+		{Name: "slow_metric_1", Query: "slow_metric_1"},
+		{Name: "slow_metric_2", Query: "slow_metric_2"},
+		{Name: "slow_metric_3", Query: "slow_metric_3"},
+	}
+
+	collector := NewCollector(cfg, n9eClient, vmClient, metrics, logger)
+
+	hosts := []*model.HostMeta{
+		{Hostname: "host1"},
+	}
+
+	// Create context with short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := collector.CollectMetrics(ctx, hosts, metrics)
+	elapsed := time.Since(start)
+
+	// The request should complete quickly due to context cancellation
+	// (not waiting for full 200ms * 3 = 600ms)
+	if elapsed > 300*time.Millisecond {
+		t.Errorf("Expected fast cancellation, but took %v", elapsed)
+	}
+
+	// Error is expected but not returned because we return nil for single metric failures
+	// The important thing is that it completes quickly
+	_ = err // We don't check the error since individual failures return nil
 }

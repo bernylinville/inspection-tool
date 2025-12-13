@@ -4,9 +4,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 
 	"inspection-tool/internal/client/n9e"
 	"inspection-tool/internal/client/vm"
@@ -176,25 +178,39 @@ func (c *Collector) CollectMetrics(
 	// Set N/A for pending metrics
 	c.setPendingMetrics(hostMetricsMap, pendingMetrics)
 
-	// Collect active metrics
+	// Collect active metrics concurrently using errgroup
+	g, ctx := errgroup.WithContext(ctx)
+	concurrency := c.config.Inspection.Concurrency
+	if concurrency <= 0 {
+		concurrency = 20 // Default concurrency
+	}
+	g.SetLimit(concurrency)
+
+	var mu sync.Mutex // Protect hostMetricsMap concurrent writes
+
 	for _, metric := range activeMetrics {
-		if metric.HasExpandLabel() {
-			// Handle metrics that need to be expanded by label (e.g., disk by path)
-			if err := c.collectExpandedMetric(ctx, metric, hostMetricsMap); err != nil {
-				c.logger.Warn().
-					Err(err).
-					Str("metric", metric.Name).
-					Msg("failed to collect expanded metric, continuing with other metrics")
+		metric := metric // Capture loop variable
+		g.Go(func() error {
+			var err error
+			if metric.HasExpandLabel() {
+				// Handle metrics that need to be expanded by label (e.g., disk by path)
+				err = c.collectExpandedMetricConcurrent(ctx, metric, hostMetricsMap, &mu)
+			} else {
+				// Handle regular metrics
+				err = c.collectSimpleMetricConcurrent(ctx, metric, hostMetricsMap, &mu)
 			}
-		} else {
-			// Handle regular metrics
-			if err := c.collectSimpleMetric(ctx, metric, hostMetricsMap); err != nil {
+			if err != nil {
 				c.logger.Warn().
 					Err(err).
 					Str("metric", metric.Name).
 					Msg("failed to collect metric, continuing with other metrics")
 			}
-		}
+			return nil // Single metric failure does not abort the entire collection
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("concurrent metric collection failed: %w", err)
 	}
 
 	return hostMetricsMap, nil
@@ -346,4 +362,138 @@ func (c *Collector) setPendingMetrics(
 			hostMetrics.SetMetric(mv)
 		}
 	}
+}
+
+// collectSimpleMetricConcurrent is the concurrent-safe version of collectSimpleMetric.
+// It uses a mutex to protect writes to hostMetricsMap.
+func (c *Collector) collectSimpleMetricConcurrent(
+	ctx context.Context,
+	metric *model.MetricDefinition,
+	hostMetricsMap map[string]*model.HostMetrics,
+	mu *sync.Mutex,
+) error {
+	c.logger.Debug().
+		Str("metric", metric.Name).
+		Str("query", metric.Query).
+		Msg("collecting simple metric (concurrent)")
+
+	// Execute query with optional host filter
+	results, err := c.vmClient.QueryByIdentWithFilter(ctx, metric.Query, c.hostFilter)
+	if err != nil {
+		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
+	}
+
+	// Use mutex to protect map writes
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Map results to hosts
+	matchedCount := 0
+	for ident, result := range results {
+		// Try to match by hostname (clean ident)
+		hostname := model.CleanIdent(ident)
+		if hostMetrics, exists := hostMetricsMap[hostname]; exists {
+			mv := model.NewMetricValue(metric.Name, result.Value)
+			mv.Timestamp = time.Now().Unix()
+			hostMetrics.SetMetric(mv)
+			matchedCount++
+		}
+	}
+
+	c.logger.Debug().
+		Str("metric", metric.Name).
+		Int("results", len(results)).
+		Int("matched", matchedCount).
+		Msg("simple metric collected (concurrent)")
+
+	return nil
+}
+
+// collectExpandedMetricConcurrent is the concurrent-safe version of collectExpandedMetric.
+// It uses a mutex to protect writes to hostMetricsMap.
+func (c *Collector) collectExpandedMetricConcurrent(
+	ctx context.Context,
+	metric *model.MetricDefinition,
+	hostMetricsMap map[string]*model.HostMetrics,
+	mu *sync.Mutex,
+) error {
+	c.logger.Debug().
+		Str("metric", metric.Name).
+		Str("expand_by", metric.ExpandByLabel).
+		Str("query", metric.Query).
+		Msg("collecting expanded metric (concurrent)")
+
+	// Execute query - need raw results to access labels
+	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, c.hostFilter)
+	if err != nil {
+		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
+	}
+
+	// Process data locally first to minimize lock hold time
+	hostMaxValues := make(map[string]float64)
+	hostExpandedMetrics := make(map[string][]*model.MetricValue)
+
+	for _, result := range results {
+		hostname := model.CleanIdent(result.Ident)
+		if hostname == "" {
+			continue
+		}
+
+		// Get the expansion label value (e.g., path)
+		labelValue := result.Labels[metric.ExpandByLabel]
+		if labelValue == "" {
+			labelValue = "unknown"
+		}
+
+		// Create expanded metric name (e.g., "disk_usage:/home")
+		expandedName := fmt.Sprintf("%s:%s", metric.Name, labelValue)
+
+		// Create metric value with labels
+		mv := model.NewMetricValue(expandedName, result.Value)
+		mv.Timestamp = time.Now().Unix()
+		mv.Labels = map[string]string{
+			metric.ExpandByLabel: labelValue,
+		}
+
+		// Track for this host
+		hostExpandedMetrics[hostname] = append(hostExpandedMetrics[hostname], mv)
+
+		// Track max value for aggregation
+		if current, exists := hostMaxValues[hostname]; !exists || result.Value > current {
+			hostMaxValues[hostname] = result.Value
+		}
+	}
+
+	// Use mutex to protect map writes
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Apply expanded metrics to hosts
+	for hostname, metrics := range hostExpandedMetrics {
+		if hostMetrics, exists := hostMetricsMap[hostname]; exists {
+			for _, mv := range metrics {
+				hostMetrics.SetMetric(mv)
+			}
+		}
+	}
+
+	// Apply aggregated max value for alert evaluation
+	if metric.Aggregate == model.AggregateMax {
+		for hostname, maxValue := range hostMaxValues {
+			if hostMetrics, exists := hostMetricsMap[hostname]; exists {
+				aggregatedName := fmt.Sprintf("%s_max", metric.Name)
+				mv := model.NewMetricValue(aggregatedName, maxValue)
+				mv.Timestamp = time.Now().Unix()
+				hostMetrics.SetMetric(mv)
+			}
+		}
+	}
+
+	c.logger.Debug().
+		Str("metric", metric.Name).
+		Int("results", len(results)).
+		Int("hosts_with_data", len(hostExpandedMetrics)).
+		Msg("expanded metric collected (concurrent)")
+
+	return nil
 }

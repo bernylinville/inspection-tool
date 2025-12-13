@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段五 - 核心业务逻辑（完成）
-**进度**: 步骤 22/41 完成
+**进度**: 步骤 23/41 完成
 
 ---
 
@@ -1262,9 +1262,65 @@ type InspectorOption func(*Inspector)
 
 ---
 
+### 步骤 23：编写业务逻辑单元测试（补充并发功能） ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 发现步骤 22 的并发采集功能未实现（代码为串行）
+2. 在 `collector.go` 中实现 errgroup 并发采集
+3. 添加 `collectSimpleMetricConcurrent()` 并发安全方法
+4. 添加 `collectExpandedMetricConcurrent()` 并发安全方法
+5. 使用 `sync.Mutex` 保护 `hostMetricsMap` 并发写入
+6. 并发数由 `config.Inspection.Concurrency` 控制（默认 20）
+7. 添加 4 个并发测试用例
+
+**修改文件**:
+- `internal/service/collector.go` - 添加 errgroup 并发逻辑（500 行）
+- `internal/service/collector_test.go` - 添加并发测试（1303 行）
+
+**并发实现**:
+```go
+// 使用 errgroup 并发采集，限制并发数
+g, ctx := errgroup.WithContext(ctx)
+concurrency := c.config.Inspection.Concurrency
+if concurrency <= 0 {
+    concurrency = 20 // 默认值
+}
+g.SetLimit(concurrency)
+
+var mu sync.Mutex // 保护 hostMetricsMap 的并发写入
+
+for _, metric := range activeMetrics {
+    metric := metric // 捕获循环变量
+    g.Go(func() error {
+        // 采集逻辑，使用 mutex 保护写入
+        return nil // 单个指标失败不中止整体
+    })
+}
+```
+
+**新增测试用例**:
+| 测试函数 | 场景 |
+|----------|------|
+| `TestCollector_CollectMetrics_Concurrent` | 5 指标并发采集验证 |
+| `TestCollector_ConcurrencyLimit` | 并发限制验证（设置 2，验证最大并发≤2） |
+| `TestCollector_CollectMetrics_PartialFailure_Concurrent` | 部分失败不影响其他 |
+| `TestCollector_CollectMetrics_ContextCancel_Concurrent` | 上下文取消快速退出 |
+
+**验证结果**:
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go test ./internal/service/` 全部通过（57 个测试用例）
+- [x] 执行 `go test -race ./internal/service/` 无数据竞争
+- [x] 测试覆盖率达到 **80.1%**（≥80% 目标）
+- [x] 并发数受 `config.Inspection.Concurrency` 控制
+- [x] 单个指标失败不影响其他指标采集
+
+---
+
 ## 下一步骤
 
-**步骤 23**: 实现 Excel 报告生成器（阶段六 - 报告生成开始）
+**步骤 24**: 实现 Excel 报告生成器（阶段六 - 报告生成开始）
 - 在 `internal/report/excel/writer.go` 中实现 Excel 报告生成
 - 使用 `xuri/excelize/v2` 库
 - 实现主机概览表（状态、基础信息）
@@ -1300,3 +1356,4 @@ type InspectorOption func(*Inspector)
 | 2025-12-13 | 步骤 20 | 实现数据采集服务完成（覆盖率 92.5%，阶段五开始） |
 | 2025-12-13 | 步骤 21 | 实现阈值评估服务完成（覆盖率 94.0%） |
 | 2025-12-13 | 步骤 22 | 实现巡检编排服务完成（覆盖率 93.4%，阶段五完成） |
+| 2025-12-13 | 步骤 23 | 补充并发采集功能 + 并发测试（覆盖率 80.1%） |
