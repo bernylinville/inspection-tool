@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段七 - CLI 命令实现（进行中）
-**进度**: 步骤 35/41 完成
+**进度**: 步骤 36/41 完成
 
 ---
 
@@ -1902,13 +1902,93 @@ OS/Arch: linux/amd64
 
 ---
 
+### 步骤 36：实现 run 子命令 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/config/metrics.go` 中实现指标定义加载函数
+2. 实现 `LoadMetrics()` 从 YAML 文件加载指标定义
+3. 实现 `CountActiveMetrics()` 统计活跃指标数量
+4. 在 `cmd/inspect/cmd/run.go` 中创建 run 子命令
+5. 添加命令标志：`--format/-f`、`--output/-o`、`--metrics/-m`
+6. 整合完整的巡检流程：
+   - 加载配置文件（config.Load）
+   - 加载指标定义（LoadMetrics）
+   - 创建 N9E 和 VM 客户端
+   - 创建 Collector 和 Evaluator 服务
+   - 创建 Inspector 并执行巡检
+   - 生成 Excel/HTML 报告
+7. 实现友好的控制台进度输出和结果摘要
+8. 实现日志初始化（基于 --log-level）
+9. 实现文件名模板解析（支持 {{.Date}} 占位符）
+10. 编写指标加载单元测试（12 个测试用例）
+
+**生成文件**:
+- `internal/config/metrics.go` - 指标定义加载函数
+- `internal/config/metrics_test.go` - 单元测试
+- `cmd/inspect/cmd/run.go` - run 子命令实现
+
+**命令用法**:
+```bash
+# 使用默认配置执行巡检
+./bin/inspect run -c config.yaml
+
+# 指定输出格式和目录
+./bin/inspect run -c config.yaml -f excel,html -o ./reports
+
+# 使用自定义指标定义文件
+./bin/inspect run -c config.yaml -m custom_metrics.yaml
+
+# 查看帮助
+./bin/inspect run --help
+```
+
+**命令标志**:
+| 标志 | 短选项 | 默认值 | 说明 |
+|------|--------|--------|------|
+| `--format` | `-f` | 从配置读取 | 输出格式（excel,html） |
+| `--output` | `-o` | 从配置读取 | 输出目录 |
+| `--metrics` | `-m` | `configs/metrics.yaml` | 指标定义文件路径 |
+
+**执行流程**:
+```
+1. 初始化日志（基于 --log-level）
+2. 加载配置文件（config.Load）
+3. 加载指标定义（LoadMetrics）
+4. 创建客户端（N9E + VM）
+5. 创建服务（Collector + Evaluator）
+6. 创建编排器（Inspector）
+7. 执行巡检（Inspector.Run）
+8. 创建报告注册表（Registry）
+9. 生成报告（遍历 formats）
+10. 输出结果摘要
+```
+
+**退出码**:
+| 退出码 | 含义 |
+|--------|------|
+| 0 | 巡检成功，无告警 |
+| 1 | 巡检完成，有警告级别告警 |
+| 2 | 巡检完成，有严重级别告警 |
+| 非零 | 巡检失败 |
+
+**验证结果**:
+- [x] `./bin/inspect run --help` 显示完整帮助信息
+- [x] 命令标志正确解析（format、output、metrics）
+- [x] 执行 `go build ./cmd/inspect` 无编译错误
+- [x] 执行 `go test ./...` 全部通过
+- [x] 指标加载测试覆盖率达标
+
+---
+
 ## 下一步骤
 
-**步骤 36**: 实现 run 子命令
-- 添加 run 子命令
-- 添加标志：--format（输出格式）、--output（输出目录）
-- 整合完整的巡检流程：加载配置 → 数据采集 → 阈值评估 → 生成报告
-- 输出执行进度和结果摘要
+**步骤 37**: 实现日志输出
+- 集成 zerolog 日志库
+- 根据配置设置日志级别和格式
+- 在关键节点输出日志（开始、完成、错误）
+- 日志时间使用 `Asia/Shanghai` 时区
 
 ---
 
@@ -1951,3 +2031,4 @@ OS/Arch: linux/amd64
 | 2025-12-13 | 步骤 33 | 实现根命令（Cobra CLI，阶段七开始） |
 | 2025-12-13 | 步骤 34 | 实现 version 子命令 |
 | 2025-12-13 | 步骤 35 | 实现 validate 子命令 |
+| 2025-12-13 | 步骤 36 | 实现 run 子命令（完整巡检流程） |
