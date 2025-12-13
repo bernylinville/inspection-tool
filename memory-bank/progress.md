@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段五 - 核心业务逻辑（进行中）
-**进度**: 步骤 21/41 完成
+**阶段**: 阶段五 - 核心业务逻辑（完成）
+**进度**: 步骤 22/41 完成
 
 ---
 
@@ -1177,15 +1177,100 @@ type Evaluator struct {
 
 ---
 
+### 步骤 22：实现巡检编排服务 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/service/inspector.go` 中实现核心巡检编排逻辑
+2. 定义 `Inspector` 结构体和 `InspectorOption` 函数选项
+3. 实现 `NewInspector()` 构造函数，支持时区加载和版本设置
+4. 实现 `WithVersion()` 函数选项设置工具版本号
+5. 实现 `Run()` 核心巡检流程方法
+6. 实现 `buildInspectionResult()` 合并采集和评估结果
+7. 实现 `GetTimezone()` 和 `GetVersion()` 访问方法
+8. 编写完整的单元测试（10 个测试用例）
+
+**生成文件**:
+- `internal/service/inspector.go` - 巡检编排服务实现（192 行）
+- `internal/service/inspector_test.go` - 单元测试（729 行）
+
+**核心结构体**:
+```go
+// 巡检编排器
+type Inspector struct {
+    collector *Collector        // 数据采集器
+    evaluator *Evaluator        // 阈值评估器
+    config    *config.Config    // 配置
+    timezone  *time.Location    // 时区（Asia/Shanghai）
+    version   string            // 工具版本号
+    logger    zerolog.Logger    // 日志
+}
+
+// 函数选项
+type InspectorOption func(*Inspector)
+```
+
+**核心方法**:
+| 方法 | 功能 |
+|------|------|
+| `NewInspector()` | 创建编排器，加载时区，应用选项 |
+| `WithVersion()` | 设置工具版本号 |
+| `Run()` | 执行完整巡检流程 |
+| `buildInspectionResult()` | 合并采集和评估结果 |
+| `GetTimezone()` | 获取配置的时区 |
+| `GetVersion()` | 获取配置的版本号 |
+
+**Run() 执行流程**:
+```
+1. 记录开始时间（Asia/Shanghai）
+2. 调用 Collector.CollectAll() 获取数据
+3. 调用 Evaluator.EvaluateAll() 评估阈值
+4. 合并结果到 InspectionResult
+   ├── 为每个主机创建 HostResult
+   ├── 填充主机元信息（来自 CollectionResult.Hosts）
+   ├── 填充指标数据（来自 EvaluationResult.HostResults）
+   ├── 填充告警信息（来自 EvaluationResult.HostResults）
+   └── 处理失败主机（来自 CollectionResult.FailedHosts）
+5. 调用 Finalize() 计算摘要
+6. 返回 InspectionResult
+```
+
+**测试用例列表**:
+| 类别 | 测试函数 | 场景 |
+|------|----------|------|
+| 构造函数 | `TestNewInspector` | 基础构造、with version、无效时区 |
+| 成功流程 | `TestInspector_Run_Success` | 完整巡检流程 |
+| 成功流程 | `TestInspector_Run_NoHosts` | 无主机场景 |
+| 告警评估 | `TestInspector_Run_WithWarning` | 警告级别告警 |
+| 告警评估 | `TestInspector_Run_WithCritical` | 严重级别告警 |
+| 多主机 | `TestInspector_Run_MultipleHosts` | 3 台主机混合状态 |
+| 错误处理 | `TestInspector_Run_CollectorError` | Collector 失败 |
+| 时区处理 | `TestInspector_Timezone` | Asia/Shanghai 正确应用 |
+| 版本信息 | `TestInspector_GetVersion` | 版本号获取 |
+| 上下文取消 | `TestInspector_Run_ContextCanceled` | 上下文超时/取消 |
+
+**验证结果**:
+- [x] 能够完成端到端的巡检流程
+- [x] 所有时间使用 Asia/Shanghai 时区
+- [x] 巡检摘要统计正确（TotalHosts, NormalHosts, WarningHosts, CriticalHosts）
+- [x] 告警摘要统计正确（TotalAlerts, WarningCount, CriticalCount）
+- [x] 单主机失败不影响整体流程
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go test ./internal/service/` 全部通过（10 个 Inspector 测试）
+- [x] 测试覆盖率达到 **93.4%**（超过目标 80%）
+
+---
+
 ## 下一步骤
 
-**步骤 22**: 实现巡检编排服务（阶段五 - 核心业务逻辑继续）
-- 在 `internal/service/inspector.go` 中实现核心编排逻辑
-- 协调配置加载、数据采集、阈值评估流程
-- 实现并发采集（使用 errgroup 控制并发数，默认 20）
-- 聚合所有主机结果，生成巡检摘要
-- 单主机失败不影响整体流程
-- 所有时间使用 `Asia/Shanghai` 时区
+**步骤 23**: 实现 Excel 报告生成器（阶段六 - 报告生成开始）
+- 在 `internal/report/excel/writer.go` 中实现 Excel 报告生成
+- 使用 `xuri/excelize/v2` 库
+- 实现主机概览表（状态、基础信息）
+- 实现指标详情表（所有指标值、告警状态）
+- 实现条件格式（正常=绿色、警告=黄色、严重=红色）
+- 实现告警汇总表
 
 ---
 
@@ -1214,3 +1299,4 @@ type Evaluator struct {
 | 2025-12-13 | 步骤 19 | 编写 VictoriaMetrics 客户端单元测试完成（阶段四完成） |
 | 2025-12-13 | 步骤 20 | 实现数据采集服务完成（覆盖率 92.5%，阶段五开始） |
 | 2025-12-13 | 步骤 21 | 实现阈值评估服务完成（覆盖率 94.0%） |
+| 2025-12-13 | 步骤 22 | 实现巡检编排服务完成（覆盖率 93.4%，阶段五完成） |

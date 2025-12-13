@@ -343,7 +343,8 @@ type InspectionResult struct {
 | `collector_test.go` | 采集服务单元测试（15 个测试，覆盖率 92.5%） | ✅ 已实现 |
 | `evaluator.go` | 阈值评估服务 | ✅ 已实现 |
 | `evaluator_test.go` | 评估服务单元测试（30+ 个测试，覆盖率 94.0%） | ✅ 已实现 |
-| `inspector.go` | 巡检编排服务（核心流程） | 待实现 |
+| `inspector.go` | 巡检编排服务（核心流程） | ✅ 已实现 |
+| `inspector_test.go` | 编排服务单元测试（10 个测试，覆盖率 93.4%） | ✅ 已实现 |
 
 **Collector 数据采集器**：
 ```go
@@ -442,6 +443,55 @@ func (e *Evaluator) EvaluateHost(hostname string, hostMetrics *model.HostMetrics
 | `processes_zombies` | ZombieProcesses | 1 | 10 |
 | `load_per_core` | LoadPerCore | 0.7 | 1.0 |
 
+**Inspector 巡检编排器**：
+```go
+// 巡检编排器
+type Inspector struct {
+    collector *Collector        // 数据采集器
+    evaluator *Evaluator        // 阈值评估器
+    config    *config.Config    // 配置
+    timezone  *time.Location    // 时区（Asia/Shanghai）
+    version   string            // 工具版本号
+    logger    zerolog.Logger    // 日志
+}
+
+// 函数选项
+type InspectorOption func(*Inspector)
+```
+
+**Inspector 核心方法**：
+```go
+// 创建编排器
+func NewInspector(cfg *config.Config, collector *Collector, evaluator *Evaluator, logger zerolog.Logger, opts ...InspectorOption) (*Inspector, error)
+
+// 设置工具版本号
+func WithVersion(version string) InspectorOption
+
+// 执行完整巡检流程
+func (i *Inspector) Run(ctx context.Context) (*model.InspectionResult, error)
+
+// 获取配置的时区
+func (i *Inspector) GetTimezone() *time.Location
+
+// 获取配置的版本号
+func (i *Inspector) GetVersion() string
+```
+
+**Inspector Run() 执行流程**：
+```
+1. 记录开始时间（Asia/Shanghai）
+2. 调用 Collector.CollectAll() 获取数据
+3. 调用 Evaluator.EvaluateAll() 评估阈值
+4. 合并结果到 InspectionResult
+   ├── 为每个主机创建 HostResult
+   ├── 填充主机元信息（来自 CollectionResult.Hosts）
+   ├── 填充指标数据（来自 EvaluationResult.HostResults）
+   ├── 填充告警信息（来自 EvaluationResult.HostResults）
+   └── 处理失败主机（来自 CollectionResult.FailedHosts）
+5. 调用 Finalize() 计算摘要
+6. 返回 InspectionResult
+```
+
 
 ### 报告生成 (internal/report/)
 
@@ -526,3 +576,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 19（VM 客户端测试），阶段四全部完成，测试覆盖率均超 90% |
 | 2025-12-13 | 完成步骤 20（数据采集服务），添加 collector.go 和测试，覆盖率 92.5%，阶段五开始 |
 | 2025-12-13 | 完成步骤 21（阈值评估服务），添加 evaluator.go 和测试，覆盖率 94.0% |
+| 2025-12-13 | 完成步骤 22（巡检编排服务），添加 inspector.go 和测试，覆盖率 93.4%，阶段五完成 |
