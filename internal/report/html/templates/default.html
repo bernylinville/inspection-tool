@@ -456,56 +456,95 @@
         </footer>
     </div>
 
-    <!-- JavaScript for sorting (to be enhanced in Step 31) -->
+    <!-- JavaScript for table sorting -->
     <script>
-        // Table sorting functionality placeholder
-        // Full implementation in Step 31
-        document.addEventListener('DOMContentLoaded', function() {
-            const tables = document.querySelectorAll('table');
-            tables.forEach(table => {
-                const headers = table.querySelectorAll('th.sortable');
-                headers.forEach((header, index) => {
+        // Table sorting functionality (Step 31)
+        (function() {
+            let currentSortColumn = null;
+            let currentSortDirection = 'desc';
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const hostsTable = document.getElementById('hosts-table');
+                if (!hostsTable) return;
+
+                const headers = hostsTable.querySelectorAll('th.sortable');
+
+                headers.forEach((header) => {
                     header.addEventListener('click', function() {
-                        sortTable(table, index, this.dataset.sort);
-                        // Update sort indicator
-                        headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
-                        this.classList.toggle('sort-asc', !this.classList.contains('sort-desc'));
-                        this.classList.toggle('sort-desc', this.classList.contains('sort-asc'));
+                        const actualIndex = getActualColumnIndex(hostsTable, header);
+                        const sortType = this.dataset.sort;
+
+                        // Toggle direction if same column, otherwise default to desc
+                        if (currentSortColumn === actualIndex) {
+                            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSortDirection = 'desc';
+                            currentSortColumn = actualIndex;
+                        }
+
+                        // Update visual indicators
+                        headers.forEach(h => {
+                            h.classList.remove('sort-asc', 'sort-desc');
+                        });
+                        this.classList.add('sort-' + currentSortDirection);
+
+                        // Perform sort
+                        sortTable(hostsTable, actualIndex, sortType, currentSortDirection);
                     });
                 });
-            });
-        });
 
-        function sortTable(table, columnIndex, sortType) {
-            const tbody = table.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            const direction = table.dataset.sortDir === 'asc' ? 'desc' : 'asc';
-            table.dataset.sortDir = direction;
-
-            rows.sort((a, b) => {
-                const aCell = a.cells[columnIndex];
-                const bCell = b.cells[columnIndex];
-                let aValue = aCell.textContent.trim();
-                let bValue = bCell.textContent.trim();
-
-                if (sortType === 'number') {
-                    aValue = parseFloat(aValue.replace('%', '')) || 0;
-                    bValue = parseFloat(bValue.replace('%', '')) || 0;
-                } else if (sortType === 'status') {
-                    const statusOrder = {'严重': 0, '警告': 1, '失败': 2, '正常': 3, '未知': 4};
-                    aValue = statusOrder[aValue] !== undefined ? statusOrder[aValue] : 5;
-                    bValue = statusOrder[bValue] !== undefined ? statusOrder[bValue] : 5;
-                }
-
-                if (direction === 'asc') {
-                    return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-                } else {
-                    return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+                // Default sort by status (column index 2) descending
+                const statusHeader = hostsTable.querySelector('th[data-sort="status"]');
+                if (statusHeader) {
+                    currentSortColumn = 2;
+                    currentSortDirection = 'desc';
+                    statusHeader.classList.add('sort-desc');
+                    sortTable(hostsTable, 2, 'status', 'desc');
                 }
             });
 
-            rows.forEach(row => tbody.appendChild(row));
-        }
+            function getActualColumnIndex(table, header) {
+                const headers = table.querySelectorAll('th');
+                return Array.from(headers).indexOf(header);
+            }
+
+            function sortTable(table, columnIndex, sortType, direction) {
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                rows.sort((a, b) => {
+                    const aCell = a.cells[columnIndex];
+                    const bCell = b.cells[columnIndex];
+                    let aValue = aCell ? aCell.textContent.trim() : '';
+                    let bValue = bCell ? bCell.textContent.trim() : '';
+
+                    // Handle N/A values - always sort to bottom
+                    if (aValue === 'N/A' && bValue !== 'N/A') return 1;
+                    if (bValue === 'N/A' && aValue !== 'N/A') return -1;
+                    if (aValue === 'N/A' && bValue === 'N/A') return 0;
+
+                    if (sortType === 'number') {
+                        aValue = parseFloat(aValue.replace('%', '').replace(/[^\d.-]/g, '')) || 0;
+                        bValue = parseFloat(bValue.replace('%', '').replace(/[^\d.-]/g, '')) || 0;
+                    } else if (sortType === 'status') {
+                        const statusOrder = {'严重': 0, '警告': 1, '失败': 2, '正常': 3};
+                        aValue = statusOrder[aValue] !== undefined ? statusOrder[aValue] : 4;
+                        bValue = statusOrder[bValue] !== undefined ? statusOrder[bValue] : 4;
+                    }
+
+                    let result;
+                    if (typeof aValue === 'number' && typeof bValue === 'number') {
+                        result = aValue - bValue;
+                    } else {
+                        result = String(aValue).localeCompare(String(bValue), 'zh-CN');
+                    }
+
+                    return direction === 'asc' ? result : -result;
+                });
+
+                rows.forEach(row => tbody.appendChild(row));
+            }
+        })();
     </script>
 </body>
 </html>

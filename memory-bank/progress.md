@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段六 - 报告生成模块（进行中）
-**进度**: 步骤 30/41 完成
+**进度**: 步骤 31/41 完成
 
 ---
 
@@ -1670,11 +1670,66 @@ type TemplateData struct {
 
 ---
 
-## 下一步骤
+### 步骤 31：实现 HTML 报告 - 主机详情表格排序功能 ✅
 
-**步骤 31**: 实现 HTML 报告 - 主机详情表格
-- 已在步骤 29 中完成基础结构
-- 待完善：增强客户端排序功能（可选）
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 修复 `default.html` 中的 JavaScript 排序功能 Bug
+2. 修复排序指示器切换逻辑（原代码 toggle 顺序错误）
+3. 添加页面加载时的默认按状态排序（严重 > 警告 > 失败 > 正常）
+4. 正确处理 N/A 值（始终排序到底部）
+5. 使用 IIFE 封装排序代码，避免全局变量污染
+6. 改进代码可读性和可维护性
+
+**修改文件**:
+- `internal/report/html/templates/default.html` - 替换 JavaScript 排序代码
+
+**排序功能特性**:
+| 特性 | 说明 |
+|------|------|
+| 可排序列 | 主机名、状态、CPU%、内存%、磁盘% |
+| 默认排序 | 按状态降序（严重优先） |
+| 方向切换 | 点击同一列切换升序/降序 |
+| 新列排序 | 点击新列默认降序 |
+| N/A 处理 | 始终排序到底部 |
+| 排序指示 | 列头显示 ↑ 或 ↓ |
+
+**JavaScript 改进**:
+```javascript
+// 关键改进点
+1. 使用闭包变量追踪当前排序状态
+   let currentSortColumn = null;
+   let currentSortDirection = 'desc';
+
+2. 正确的方向切换逻辑
+   if (currentSortColumn === actualIndex) {
+       currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+   } else {
+       currentSortDirection = 'desc';
+   }
+
+3. 默认按状态排序
+   const statusHeader = hostsTable.querySelector('th[data-sort="status"]');
+   if (statusHeader) {
+       statusHeader.classList.add('sort-desc');
+       sortTable(hostsTable, 2, 'status', 'desc');
+   }
+```
+
+**验证结果**:
+- [x] 表格数据完整正确
+- [x] 异常值高亮显示
+- [x] 点击表头可排序（主机名、CPU%、内存%、磁盘%、状态）
+- [x] 默认按状态排序（严重 > 警告 > 失败 > 正常）
+- [x] N/A 值始终排在底部
+- [x] 排序图标正确显示（↑ 或 ↓）
+- [x] 执行 `go test ./internal/report/html/` 全部通过（21 个测试用例）
+- [x] 执行 `go test ./...` 全部通过
+
+---
+
+## 下一步骤
 
 **步骤 32**: 实现报告格式注册表
 - 在 `internal/report/registry.go` 中实现
@@ -1716,3 +1771,4 @@ type TemplateData struct {
 | 2025-12-13 | 步骤 28 | 实现 Excel 报告 - 异常汇总表（已在步骤 25 完成，阶段六 Excel 部分完成） |
 | 2025-12-13 | 步骤 29 | 实现 HTML 报告生成器基础结构（覆盖率 90.4%） |
 | 2025-12-13 | 步骤 30 | 实现 HTML 报告 - 摘要区域（已在步骤 29 中完成，验证通过） |
+| 2025-12-13 | 步骤 31 | 实现 HTML 报告 - 主机详情表格排序功能（修复排序 Bug + 默认排序） |
