@@ -20,7 +20,9 @@ inspection-tool/
 │   └── inspect                 # 编译后的二进制文件（已生成）
 ├── cmd/
 │   └── inspect/
-│       └── main.go             # 程序入口（已实现）
+│       ├── main.go             # 程序入口（已实现）
+│       └── cmd/
+│           └── root.go         # Cobra 根命令（已实现）
 ├── configs/                    # 配置文件示例
 │   ├── config.example.yaml     # 主配置示例（已创建）
 │   └── metrics.yaml            # 指标定义文件（已创建）
@@ -68,14 +70,29 @@ inspection-tool/
 
 | 文件 | 作用 | 状态 |
 |------|------|------|
-| `main.go` | 程序入口，版本信息输出，后续集成 cobra CLI | ✅ 已实现 |
+| `main.go` | 程序入口，调用 cmd.Execute() | ✅ 已实现 |
+| `cmd/root.go` | Cobra 根命令（全局标志、帮助信息） | ✅ 已实现 |
 
-**版本信息变量**（通过 `-ldflags` 注入）：
+**Cobra CLI 结构**：
 ```go
+// 根命令
+var rootCmd = &cobra.Command{
+    Use:   "inspect",
+    Short: "系统巡检工具 - 基于监控数据的无侵入式巡检",
+    // ...
+}
+
+// 全局标志
 var (
-    Version   = "dev"      // 版本号
-    BuildTime = "unknown"  // 构建时间
-    GitCommit = "unknown"  // Git 提交哈希
+    cfgFile  string  // -c, --config (default: config.yaml)
+    logLevel string  // --log-level (default: info)
+)
+
+// 版本信息（通过 -ldflags 注入）
+var (
+    Version   = "dev"
+    BuildTime = "unknown"
+    GitCommit = "unknown"
 )
 ```
 

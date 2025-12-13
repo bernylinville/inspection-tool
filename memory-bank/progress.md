@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段六 - 报告生成模块（进行中）
-**进度**: 步骤 32/41 完成
+**阶段**: 阶段七 - CLI 命令实现（进行中）
+**进度**: 步骤 33/41 完成
 
 ---
 
@@ -1789,12 +1789,46 @@ type Registry struct {
 
 ---
 
+### 步骤 33：实现根命令 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 创建 `cmd/inspect/cmd/` 目录结构
+2. 在 `cmd/inspect/cmd/root.go` 中实现 Cobra 根命令
+3. 设置应用名称、描述（中文）、版本信息
+4. 添加全局标志：`-c, --config`（配置文件路径）、`--log-level`（日志级别）
+5. 更新 `cmd/inspect/main.go`，调用 `cmd.Execute()`
+6. 保留版本信息变量（Version、BuildTime、GitCommit），支持 `-ldflags` 注入
+7. 提供 `GetConfigFile()`、`GetLogLevel()`、`GetVersionInfo()` 辅助函数
+
+**生成文件**:
+- `cmd/inspect/cmd/root.go` - Cobra 根命令实现
+
+**修改文件**:
+- `cmd/inspect/main.go` - 调用 cmd.Execute()
+
+**全局标志配置**:
+| 标志 | 短选项 | 默认值 | 说明 |
+|------|--------|--------|------|
+| `--config` | `-c` | `config.yaml` | 配置文件路径 |
+| `--log-level` | - | `info` | 日志级别 (debug, info, warn, error) |
+
+**验证结果**:
+- [x] 执行 `./bin/inspect` 显示帮助信息（Usage、Flags）
+- [x] 执行 `./bin/inspect --help` 显示详细帮助
+- [x] 执行 `./bin/inspect -h` 显示帮助（短选项）
+- [x] 执行 `./bin/inspect --version` 显示版本号
+- [x] 全局标志 `--config` 和 `--log-level` 正确解析
+- [x] 执行 `go test ./...` 全部通过
+
+---
+
 ## 下一步骤
 
-**步骤 33**: 实现根命令
-- 使用 cobra 创建根命令
-- 设置应用名称、描述、版本信息
-- 添加全局标志：配置文件路径、日志级别
+**步骤 34**: 实现 version 子命令
+- 添加 version 子命令
+- 显示版本号、构建时间、Go 版本
 
 ---
 
@@ -1834,3 +1868,4 @@ type Registry struct {
 | 2025-12-13 | 步骤 30 | 实现 HTML 报告 - 摘要区域（已在步骤 29 中完成，验证通过） |
 | 2025-12-13 | 步骤 31 | 实现 HTML 报告 - 主机详情表格排序功能（修复排序 Bug + 默认排序） |
 | 2025-12-13 | 步骤 32 | 实现报告格式注册表（覆盖率 100%，阶段六完成） |
+| 2025-12-13 | 步骤 33 | 实现根命令（Cobra CLI，阶段七开始） |
