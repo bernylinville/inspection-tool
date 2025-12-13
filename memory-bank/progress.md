@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段四 - API 客户端实现（进行中）
-**进度**: 步骤 15/41 完成
+**进度**: 步骤 16/41 完成
 
 ---
 
@@ -730,14 +730,57 @@ type Client struct {
 
 ---
 
+### 步骤 16：编写 N9E 客户端单元测试 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/client/n9e/client_test.go` 中编写完整的单元测试
+2. 使用 `net/http/httptest` 模拟 N9E API 服务器
+3. 实现 5 个基础功能测试（构造函数、获取主机列表/详情、元信息转换）
+4. 实现 4 个错误处理测试（401、404、API 错误、主机不存在）
+5. 实现 5 个重试机制测试（重试条件函数、5xx 重试、4xx 不重试、最大重试次数）
+6. 实现 3 个边界条件测试（空列表、部分失败、上下文取消）
+
+**生成文件**:
+- `internal/client/n9e/client_test.go` - N9E 客户端单元测试
+
+**测试用例列表**:
+| 类别 | 测试函数 | 场景 |
+|------|----------|------|
+| 基础功能 | `TestNewClient` | 客户端构造（含默认值） |
+| 基础功能 | `TestGetTargets_Success` | 正常获取主机列表 |
+| 基础功能 | `TestGetTarget_Success` | 正常获取单主机 |
+| 基础功能 | `TestGetHostMetas_Success` | 获取主机元信息列表 |
+| 基础功能 | `TestGetHostMetaByIdent_Success` | 获取单主机元信息 |
+| 错误处理 | `TestGetTargets_Unauthorized` | 401 认证失败 |
+| 错误处理 | `TestGetTargets_NotFound` | 404 资源不存在 |
+| 错误处理 | `TestGetTargets_APIError` | N9E API 返回错误 |
+| 错误处理 | `TestGetTarget_NotFound` | 单主机不存在 |
+| 重试机制 | `TestRetryCondition` | 重试条件函数（8 个子测试） |
+| 重试机制 | `TestGetTargets_ServerError_Retry` | 5xx 错误重试成功 |
+| 重试机制 | `TestGetTargets_4xx_NoRetry` | 4xx 不重试 |
+| 重试机制 | `TestGetTargets_MaxRetries_Exceeded` | 最大重试次数耗尽 |
+| 边界条件 | `TestGetTargets_EmptyList` | 空主机列表 |
+| 边界条件 | `TestGetHostMetas_PartialFailure` | 部分转换失败 |
+| 边界条件 | `TestGetTargets_ContextCanceled` | 上下文取消 |
+
+**验证结果**:
+- [x] 执行 `go test ./internal/client/n9e/` 全部通过（29 个测试用例）
+- [x] 测试覆盖率达到 91.6%（超过目标 70%）
+- [x] 包含正向和异常场景测试
+- [x] Token 认证头验证正确
+- [x] 重试机制测试完整（5xx 重试、4xx 不重试、最大重试次数）
+- [x] 边界条件测试完整（空列表、部分失败、上下文取消）
+
+---
+
 ## 下一步骤
 
-**步骤 16**: 编写 N9E 客户端单元测试（阶段四 - API 客户端实现继续）
-- 在 `internal/client/n9e/client_test.go` 中编写测试
-- 使用 httptest 模拟 API 响应
-- 测试正常响应、认证失败、超时等场景
-- 测试 ident 清理逻辑
-- 测试重试机制
+**步骤 17**: 定义 VictoriaMetrics 客户端类型（阶段四 - API 客户端实现继续）
+- 在 `internal/client/vm/types.go` 中定义类型
+- 定义 Prometheus API 响应格式（status、data、resultType）
+- 定义即时查询结果结构（metric 标签、value）
 
 ---
 
@@ -760,3 +803,4 @@ type Client struct {
 | 2025-12-13 | 步骤 13 | 定义巡检结果模型完成（阶段三完成） |
 | 2025-12-13 | 步骤 14 | 定义 N9E 客户端接口和类型完成（阶段四开始） |
 | 2025-12-13 | 步骤 15 | 实现 N9E 客户端完成 |
+| 2025-12-13 | 步骤 16 | 编写 N9E 客户端单元测试完成（覆盖率 91.6%） |

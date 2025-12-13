@@ -97,6 +97,7 @@ type Config struct {
 | `n9e/types.go` | 夜莺 API 请求/响应类型定义 | ✅ 已实现 |
 | `n9e/types_test.go` | N9E 类型单元测试（12 个测试，82.2% 覆盖率） | ✅ 已实现 |
 | `n9e/client.go` | 夜莺 API 客户端（主机元信息） | ✅ 已实现 |
+| `n9e/client_test.go` | N9E 客户端单元测试（17 个测试，整体覆盖率 91.6%） | ✅ 已实现 |
 | `vm/types.go` | PromQL 查询类型定义 | 待实现 |
 | `vm/client.go` | VictoriaMetrics 客户端（指标查询） | 待实现 |
 
@@ -350,3 +351,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 13（巡检结果模型），添加 inspection.go，阶段三完成 |
 | 2025-12-13 | 完成步骤 14（N9E 客户端类型），添加 types.go 和测试，阶段四开始 |
 | 2025-12-13 | 完成步骤 15（N9E 客户端），添加 client.go |
+| 2025-12-13 | 完成步骤 16（N9E 客户端测试），添加 client_test.go，覆盖率 91.6% |
