@@ -1,0 +1,221 @@
+# =============================================================================
+# 系统巡检工具 - 指标定义文件
+# =============================================================================
+#
+# 本文件定义了所有巡检指标的 PromQL 查询表达式和元数据。
+#
+# 指标字段说明:
+#   name:           指标唯一标识符（用于代码引用）
+#   display_name:   中文显示名称（用于报告展示）
+#   query:          PromQL 查询表达式（待定项为空字符串）
+#   unit:           单位（%、bytes、seconds、个、空字符串）
+#   category:       分类（cpu、memory、disk、system、process）
+#   format:         格式化类型（可选：size、duration、percent）
+#   aggregate:      聚合方式（可选：max、min、avg）
+#   expand_by_label: 按标签展开（可选：如 path）
+#   status:         状态（可选：pending 表示待实现）
+#
+# =============================================================================
+
+metrics:
+  # ---------------------------------------------------------------------------
+  # CPU 相关指标
+  # ---------------------------------------------------------------------------
+  - name: cpu_usage
+    display_name: "CPU 利用率"
+    query: 'cpu_usage_active{cpu="cpu-total"}'
+    unit: "%"
+    category: cpu
+    format: percent
+    note: "整机 CPU 利用率，标签 cpu=cpu-total 表示所有核心的聚合值"
+
+  # ---------------------------------------------------------------------------
+  # 内存相关指标
+  # ---------------------------------------------------------------------------
+  - name: memory_usage
+    display_name: "内存利用率"
+    query: '100 - mem_available_percent'
+    unit: "%"
+    category: memory
+    format: percent
+    note: "基于 MemAvailable 计算，比传统的 used/total 更准确"
+
+  - name: memory_total
+    display_name: "内存总量"
+    query: 'mem_total'
+    unit: "bytes"
+    category: memory
+    format: size
+    note: "物理内存总量，取自 /proc/meminfo"
+
+  - name: memory_free
+    display_name: "内存空闲"
+    query: 'mem_free'
+    unit: "bytes"
+    category: memory
+    format: size
+    note: "未使用的内存量，取自 /proc/meminfo"
+
+  - name: memory_available
+    display_name: "可分配内存"
+    query: 'mem_available'
+    unit: "bytes"
+    category: memory
+    format: size
+    note: "可立即分配给进程的内存量，取自 /proc/meminfo"
+
+  # ---------------------------------------------------------------------------
+  # 磁盘相关指标
+  # ---------------------------------------------------------------------------
+  - name: disk_usage
+    display_name: "磁盘利用率"
+    query: 'disk_used_percent'
+    unit: "%"
+    category: disk
+    format: percent
+    aggregate: max        # 告警判断时取所有挂载点的最大值
+    expand_by_label: path # 按挂载点展开显示
+    note: "各挂载点的磁盘使用率，告警基于最大值判断"
+
+  - name: disk_total
+    display_name: "磁盘总量"
+    query: 'disk_total'
+    unit: "bytes"
+    category: disk
+    format: size
+    expand_by_label: path # 按挂载点展开显示
+    note: "各挂载点的磁盘总容量"
+
+  - name: disk_free
+    display_name: "磁盘剩余"
+    query: 'disk_free'
+    unit: "bytes"
+    category: disk
+    format: size
+    expand_by_label: path # 按挂载点展开显示
+    note: "各挂载点的磁盘剩余空间"
+
+  # ---------------------------------------------------------------------------
+  # 系统相关指标
+  # ---------------------------------------------------------------------------
+  - name: uptime
+    display_name: "运行时间"
+    query: 'system_uptime'
+    unit: "seconds"
+    category: system
+    format: duration      # 转换为人类可读格式（天/小时/分钟）
+    note: "系统启动后运行的时长"
+
+  - name: cpu_cores
+    display_name: "CPU 核心数"
+    query: 'system_n_cpus'
+    unit: "个"
+    category: system
+    note: "CPU 逻辑核心数量"
+
+  - name: load_1m
+    display_name: "1分钟负载"
+    query: 'system_load1'
+    unit: ""
+    category: system
+    note: "最近 1 分钟的系统平均负载，取自 /proc/loadavg"
+
+  - name: load_5m
+    display_name: "5分钟负载"
+    query: 'system_load5'
+    unit: ""
+    category: system
+    note: "最近 5 分钟的系统平均负载，取自 /proc/loadavg"
+
+  - name: load_15m
+    display_name: "15分钟负载"
+    query: 'system_load15'
+    unit: ""
+    category: system
+    note: "最近 15 分钟的系统平均负载，取自 /proc/loadavg"
+
+  - name: load_per_core
+    display_name: "单核负载"
+    query: 'system_load_norm_1'
+    unit: ""
+    category: system
+    note: "1分钟负载除以CPU核心数，大于1.0表示过载"
+
+  # ---------------------------------------------------------------------------
+  # 进程相关指标
+  # ---------------------------------------------------------------------------
+  - name: processes_total
+    display_name: "总进程数"
+    query: 'processes_total'
+    unit: "个"
+    category: process
+    note: "系统中的进程总数"
+
+  - name: processes_zombies
+    display_name: "僵尸进程数"
+    query: 'processes_zombies'
+    unit: "个"
+    category: process
+    note: "僵尸状态(Z)的进程数，应保持为0"
+
+  # ---------------------------------------------------------------------------
+  # 待定巡检项 - 预留接口
+  # ---------------------------------------------------------------------------
+  # 以下指标当前监控数据不包含，在报告中显示 "N/A"
+  # 后续可通过扩展 Categraf 插件或其他方式实现
+
+  - name: ntp_check
+    display_name: "NTP 检查"
+    query: ""             # 空查询，显示 N/A
+    unit: ""
+    category: system
+    status: pending       # 标记为待实现
+    note: "时间同步状态检查，需额外检测"
+
+  - name: public_network
+    display_name: "公网访问检查"
+    query: ""
+    unit: ""
+    category: system
+    status: pending
+    note: "检查服务器是否可访问公网，需额外检测"
+
+  - name: password_expiry
+    display_name: "密码过期天数"
+    query: ""
+    unit: "天"
+    category: system
+    status: pending
+    note: "系统用户密码过期天数，监控数据不包含"
+
+  - name: password_policy
+    display_name: "密码策略"
+    query: ""
+    unit: ""
+    category: system
+    status: pending
+    note: "系统密码策略配置，监控数据不包含"
+
+  - name: open_files
+    display_name: "打开文件句柄数"
+    query: ""
+    unit: "个"
+    category: system
+    status: pending
+    note: "当前打开的文件句柄数，需额外采集"
+
+  - name: max_files
+    display_name: "句柄数最大值"
+    query: ""
+    unit: "个"
+    category: system
+    status: pending
+    note: "系统文件句柄数上限，需额外采集"
+
+  - name: system_params
+    display_name: "系统参数检查"
+    query: ""
+    unit: ""
+    category: system
+    status: pending
+    note: "内核参数等系统配置检查，需额外采集"

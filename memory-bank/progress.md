@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段二 - 配置管理模块
-**进度**: 步骤 8/41 完成
+**阶段**: 阶段二 - 配置管理模块（已完成）
+**进度**: 步骤 9/41 完成
 
 ---
 
@@ -304,13 +304,62 @@ type ValidationErrors []*ValidationError
 
 ---
 
+### 步骤 9：创建指标定义文件 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `configs/` 目录下创建 `metrics.yaml` 指标定义文件
+2. 定义所有巡检指标的 PromQL 查询表达式
+3. 包含指标名称、显示名称、查询语句、单位、分类、格式化类型
+4. 标记待定巡检项（status: pending）
+5. 为特殊指标添加聚合方式和标签展开配置
+
+**生成文件**:
+- `configs/metrics.yaml` - 指标定义文件
+
+**指标统计**:
+| 分类 | 数量 | 说明 |
+|------|------|------|
+| CPU | 1 | cpu_usage |
+| 内存 | 4 | memory_usage, total, free, available |
+| 磁盘 | 3 | disk_usage, total, free（按挂载点展开） |
+| 系统 | 6 | uptime, cpu_cores, load_1m/5m/15m, load_per_core |
+| 进程 | 2 | processes_total, zombies |
+| 待定项 | 7 | ntp_check, public_network, password_expiry 等 |
+| **总计** | **23** | |
+
+**指标字段结构**:
+```yaml
+- name: string           # 指标唯一标识
+  display_name: string   # 中文显示名称
+  query: string          # PromQL 查询表达式
+  unit: string           # 单位（%、bytes、seconds 等）
+  category: string       # 分类（cpu、memory、disk、system、process）
+  format: string         # 格式化类型（size、duration、percent）
+  aggregate: string      # 聚合方式（max、min、avg）
+  expand_by_label: string # 按标签展开（如 path）
+  status: string         # 待定项标记为 pending
+  note: string           # 备注说明
+```
+
+**验证结果**:
+- [x] YAML 格式正确（Python yaml.safe_load 验证通过）
+- [x] 包含产品需求文档中定义的所有指标（23 个）
+- [x] 每个指标都有完整的元数据定义
+- [x] 待定项正确标记 `status: pending`（7 个）
+- [x] PromQL 表达式与 `categraf-linux-metrics.json` 一致
+- [x] 中文注释清晰完整
+
+---
+
 ## 下一步骤
 
-**步骤 9**: 创建指标定义文件
-- 在 `configs/` 目录下创建 `metrics.yaml`
-- 定义所有巡检指标的 PromQL 查询表达式
-- 包含指标名称、显示名称、查询语句、单位、分类
-- 标记 "待定" 巡检项（预留接口）
+**步骤 10**: 定义主机模型（阶段三 - 数据模型定义开始）
+- 在 `internal/model/host.go` 中定义主机相关结构体
+- 包含主机基本信息（主机名、IP、操作系统、版本、内核、CPU核心数）
+- 定义主机状态枚举（正常、警告、严重、失败）
+- 添加磁盘挂载点列表字段
 
 ---
 
@@ -326,3 +375,4 @@ type ValidationErrors []*ValidationError
 | 2025-12-13 | 步骤 6 | 实现配置加载器完成 |
 | 2025-12-13 | 步骤 7 | 实现配置验证器完成 |
 | 2025-12-13 | 步骤 8 | 创建示例配置文件完成 |
+| 2025-12-13 | 步骤 9 | 创建指标定义文件完成（阶段二完成） |

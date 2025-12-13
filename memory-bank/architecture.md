@@ -22,7 +22,8 @@ inspection-tool/
 │   └── inspect/
 │       └── main.go             # 程序入口（已实现）
 ├── configs/                    # 配置文件示例
-│   └── config.example.yaml     # 主配置示例（已创建）
+│   ├── config.example.yaml     # 主配置示例（已创建）
+│   └── metrics.yaml            # 指标定义文件（已创建）
 ├── internal/
 │   ├── client/
 │   │   ├── n9e/                # 夜莺 API 客户端（待实现）
@@ -125,7 +126,7 @@ type Config struct {
 | 文件 | 作用 | 状态 |
 |------|------|------|
 | `config.example.yaml` | 主配置示例（数据源、阈值、报告设置） | ✅ 已创建 |
-| `metrics.yaml` | 指标定义（PromQL 查询表达式） | 待创建 |
+| `metrics.yaml` | 指标定义（PromQL 查询表达式，23 个指标） | ✅ 已创建 |
 
 ### 用户模板 (templates/html/)
 
@@ -177,3 +178,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 6（配置加载器），添加 loader.go 和测试文件 |
 | 2025-12-13 | 完成步骤 7（配置验证器），添加 validator.go 和测试文件 |
 | 2025-12-13 | 完成步骤 8（示例配置文件），添加 config.example.yaml |
+| 2025-12-13 | 完成步骤 9（指标定义文件），添加 metrics.yaml，阶段二完成 |
