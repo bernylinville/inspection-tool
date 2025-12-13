@@ -11,12 +11,16 @@
 ```
 inspection-tool/
 ├── go.mod                      # Go 模块定义
+├── go.sum                      # 依赖校验文件
 ├── CLAUDE.md                   # Claude Code 项目指令
 ├── mise.toml                   # mise 版本管理配置
 ├── n9e.json                    # 夜莺 API 响应示例数据
 ├── categraf-linux-metrics.json # Categraf 指标定义参考
+├── bin/
+│   └── inspect                 # 编译后的二进制文件（已生成）
 ├── cmd/
-│   └── inspect/                # 程序入口（待实现）
+│   └── inspect/
+│       └── main.go             # 程序入口（已实现）
 ├── configs/                    # 配置文件示例（待创建）
 ├── internal/
 │   ├── client/
@@ -44,9 +48,18 @@ inspection-tool/
 
 ### 程序入口 (cmd/inspect/)
 
-| 文件 | 作用 |
-|------|------|
-| `main.go` | 程序入口，初始化 cobra CLI |
+| 文件 | 作用 | 状态 |
+|------|------|------|
+| `main.go` | 程序入口，版本信息输出，后续集成 cobra CLI | ✅ 已实现 |
+
+**版本信息变量**（通过 `-ldflags` 注入）：
+```go
+var (
+    Version   = "dev"      // 版本号
+    BuildTime = "unknown"  // 构建时间
+    GitCommit = "unknown"  // Git 提交哈希
+)
+```
 
 ### 配置管理 (internal/config/)
 
@@ -143,3 +156,4 @@ type Evaluator interface {
 |------|------|
 | 2025-12-13 | 初始版本，完成步骤 1（Go 模块初始化） |
 | 2025-12-13 | 完成步骤 2（创建目录结构），更新架构文档 |
+| 2025-12-13 | 完成步骤 4（程序入口），阶段一全部完成 |

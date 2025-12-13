@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段一 - 项目初始化与基础架构
-**进度**: 步骤 3/41 完成
+**进度**: 步骤 4/41 完成（阶段一完成）
 
 ---
 
@@ -98,12 +98,52 @@ inspection-tool/
 
 ---
 
+### 步骤 4：创建程序入口文件 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `cmd/inspect/` 目录下创建 `main.go`
+2. 实现版本信息输出功能
+3. 支持通过 `-ldflags` 注入版本号、构建时间、Git 提交哈希
+4. 显示 Go 版本和运行平台信息
+
+**生成文件**:
+- `cmd/inspect/main.go` - 程序入口文件
+- `bin/inspect` - 编译后的二进制文件
+
+**代码结构**:
+```go
+var (
+    Version   = "dev"      // 通过 -ldflags 注入
+    BuildTime = "unknown"  // 通过 -ldflags 注入
+    GitCommit = "unknown"  // 通过 -ldflags 注入
+)
+```
+
+**验证结果**:
+- [x] `go build -o bin/inspect ./cmd/inspect` 执行成功
+- [x] 运行 `./bin/inspect` 输出版本信息
+- [x] 二进制文件大小 2.2MB（小于 20MB 限制）
+- [x] `-ldflags` 版本注入功能正常
+
+**运行输出示例**:
+```
+Inspection Tool dev
+Build Time: unknown
+Git Commit: unknown
+Go Version: go1.25.5
+OS/Arch: linux/amd64
+```
+
+---
+
 ## 下一步骤
 
-**步骤 4**: 创建程序入口文件
-- 在 `cmd/inspect/` 目录下创建 `main.go`
-- 实现最简单的 main 函数，仅打印版本信息
-- 验证：`go build -o bin/inspect ./cmd/inspect` 成功
+**步骤 5**: 定义配置结构体（阶段二开始）
+- 在 `internal/config/config.go` 中定义配置结构体
+- 包含数据源、巡检、阈值、报告、日志、HTTP 重试等配置节
+- 为所有字段添加 `mapstructure` 和 `validate` 标签
 
 ---
 
@@ -114,3 +154,4 @@ inspection-tool/
 | 2025-12-13 | 步骤 1 | 初始化 Go 模块完成 |
 | 2025-12-13 | 步骤 2 | 创建目录结构完成 |
 | 2025-12-13 | 步骤 3 | 添加核心依赖完成 |
+| 2025-12-13 | 步骤 4 | 创建程序入口文件完成（阶段一完成） |
