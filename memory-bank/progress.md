@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段七 - CLI 命令实现（进行中）
-**进度**: 步骤 33/41 完成
+**进度**: 步骤 34/41 完成
 
 ---
 
@@ -1824,11 +1824,55 @@ type Registry struct {
 
 ---
 
+### 步骤 34：实现 version 子命令 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `cmd/inspect/cmd/version.go` 中创建 version 子命令
+2. 复用 `GetVersionInfo()` 函数显示完整版本信息
+3. 使用 Cobra 的 `AddCommand()` 注册子命令
+
+**生成文件**:
+- `cmd/inspect/cmd/version.go` - version 子命令实现
+
+**命令结构**:
+```go
+var versionCmd = &cobra.Command{
+    Use:   "version",
+    Short: "显示版本信息",
+    Long:  "显示工具的版本号、构建时间、Git 提交哈希、Go 版本和运行平台信息。",
+    Run: func(cmd *cobra.Command, args []string) {
+        fmt.Println(GetVersionInfo())
+    },
+}
+```
+
+**输出示例**:
+```
+v0.1.0
+Build Time: 2025-12-13_10:38:03
+Git Commit: 1eaf326
+Go Version: go1.25.5
+OS/Arch: linux/amd64
+```
+
+**验证结果**:
+- [x] 执行 `go build -o bin/inspect ./cmd/inspect` 成功
+- [x] 执行 `./bin/inspect version` 显示完整版本信息
+- [x] 执行 `./bin/inspect --version` 显示简单版本号（保持原有行为）
+- [x] 执行 `./bin/inspect help version` 显示 version 命令帮助
+- [x] 使用 `-ldflags` 注入版本号后，`version` 命令正确显示
+- [x] 帮助信息中显示 version 子命令
+
+---
+
 ## 下一步骤
 
-**步骤 34**: 实现 version 子命令
-- 添加 version 子命令
-- 显示版本号、构建时间、Go 版本
+**步骤 35**: 实现 validate 子命令
+- 添加 validate 子命令
+- 加载并验证配置文件
+- 输出验证结果（成功或具体错误）
 
 ---
 
@@ -1869,3 +1913,4 @@ type Registry struct {
 | 2025-12-13 | 步骤 31 | 实现 HTML 报告 - 主机详情表格排序功能（修复排序 Bug + 默认排序） |
 | 2025-12-13 | 步骤 32 | 实现报告格式注册表（覆盖率 100%，阶段六完成） |
 | 2025-12-13 | 步骤 33 | 实现根命令（Cobra CLI，阶段七开始） |
+| 2025-12-13 | 步骤 34 | 实现 version 子命令 |
