@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段二 - 配置管理模块
-**进度**: 步骤 5/41 完成
+**进度**: 步骤 6/41 完成
 
 ---
 
@@ -174,14 +174,61 @@ type Config struct {
 
 ---
 
+### 步骤 6：实现配置加载器 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/config/loader.go` 中实现配置加载功能
+2. 使用 viper 库读取 YAML 配置文件
+3. 支持环境变量覆盖（前缀 `INSPECT_`，如 `INSPECT_DATASOURCES_N9E_TOKEN`）
+4. 实现所有配置项的默认值设置
+5. 编写单元测试验证功能
+
+**生成文件**:
+- `internal/config/loader.go` - 配置加载器实现
+- `internal/config/loader_test.go` - 配置加载器单元测试
+
+**核心函数**:
+```go
+func Load(configPath string) (*Config, error)  // 加载配置文件
+func setDefaults(v *viper.Viper)               // 设置默认值
+```
+
+**默认值配置**:
+| 配置项 | 默认值 |
+|--------|--------|
+| `inspection.concurrency` | 20 |
+| `inspection.host_timeout` | 10s |
+| `http.retry.max_retries` | 3 |
+| `http.retry.base_delay` | 1s |
+| `report.timezone` | Asia/Shanghai |
+| `report.output_dir` | ./reports |
+| `report.formats` | [excel, html] |
+| `logging.level` | info |
+| `logging.format` | json |
+| `datasources.*.timeout` | 30s |
+| `thresholds.cpu_usage` | warning=70, critical=90 |
+| `thresholds.memory_usage` | warning=70, critical=90 |
+| `thresholds.disk_usage` | warning=70, critical=90 |
+
+**验证结果**:
+- [x] 能够正确加载 YAML 配置文件
+- [x] 环境变量能够覆盖配置文件中的值
+- [x] 缺少配置文件时返回明确错误信息
+- [x] 默认值正确应用
+- [x] 执行 `go build ./internal/config/` 无编译错误
+- [x] 执行 `go test ./internal/config/` 全部通过（4 个测试用例）
+
+---
+
 ## 下一步骤
 
-**步骤 6**: 实现配置加载器
-- 在 `internal/config/loader.go` 中实现配置加载功能
-- 支持从 YAML 文件加载配置
-- 支持环境变量覆盖（特别是敏感信息如 Token）
-- 实现默认值设置（包括重试策略默认值）
-- 设置默认时区为 `Asia/Shanghai`
+**步骤 7**: 实现配置验证器
+- 在 `internal/config/validator.go` 中实现配置验证
+- 使用 validator 库验证必填字段
+- 验证 URL 格式、数值范围等
+- 返回清晰的验证错误信息
 
 ---
 
@@ -194,3 +241,4 @@ type Config struct {
 | 2025-12-13 | 步骤 3 | 添加核心依赖完成 |
 | 2025-12-13 | 步骤 4 | 创建程序入口文件完成（阶段一完成） |
 | 2025-12-13 | 步骤 5 | 定义配置结构体完成（阶段二开始） |
+| 2025-12-13 | 步骤 6 | 实现配置加载器完成 |
