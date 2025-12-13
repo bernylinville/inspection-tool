@@ -30,7 +30,8 @@ inspection-tool/
 │   │   └── vm/                 # VictoriaMetrics 客户端（待实现）
 │   ├── config/
 │   │   └── config.go          # 配置结构体定义（已实现）
-│   ├── model/                  # 数据模型（待实现）
+│   ├── model/                  # 数据模型
+│   │   └── host.go             # 主机模型（已实现）
 │   ├── report/
 │   │   ├── excel/              # Excel 报告生成（待实现）
 │   │   └── html/               # HTML 报告生成（待实现）
@@ -97,12 +98,28 @@ type Config struct {
 
 ### 数据模型 (internal/model/)
 
-| 文件 | 作用 |
-|------|------|
-| `host.go` | 主机模型（主机名、IP、OS 等） |
-| `metric.go` | 指标模型（名称、值、单位） |
-| `alert.go` | 告警模型（级别、阈值） |
-| `inspection.go` | 巡检结果模型（摘要、主机列表） |
+| 文件 | 作用 | 状态 |
+|------|------|------|
+| `host.go` | 主机模型（HostMeta、DiskMountInfo、HostStatus） | ✅ 已实现 |
+| `metric.go` | 指标模型（名称、值、单位） | 待实现 |
+| `alert.go` | 告警模型（级别、阈值） | 待实现 |
+| `inspection.go` | 巡检结果模型（摘要、主机列表） | 待实现 |
+
+**主机模型结构**：
+```go
+type HostMeta struct {
+    Ident         string          `json:"ident"`          // 原始标识符
+    Hostname      string          `json:"hostname"`       // 主机名
+    IP            string          `json:"ip"`             // IP 地址
+    OS            string          `json:"os"`             // 操作系统
+    OSVersion     string          `json:"os_version"`     // 系统版本
+    KernelVersion string          `json:"kernel_version"` // 内核版本
+    CPUCores      int             `json:"cpu_cores"`      // CPU 核心数
+    CPUModel      string          `json:"cpu_model"`      // CPU 型号
+    MemoryTotal   int64           `json:"memory_total"`   // 内存总量
+    DiskMounts    []DiskMountInfo `json:"disk_mounts"`    // 磁盘挂载点
+}
+```
 
 ### 业务逻辑 (internal/service/)
 
@@ -179,3 +196,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 7（配置验证器），添加 validator.go 和测试文件 |
 | 2025-12-13 | 完成步骤 8（示例配置文件），添加 config.example.yaml |
 | 2025-12-13 | 完成步骤 9（指标定义文件），添加 metrics.yaml，阶段二完成 |
+| 2025-12-13 | 完成步骤 10（主机模型），添加 host.go，阶段三开始 |

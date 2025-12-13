@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段二 - 配置管理模块（已完成）
-**进度**: 步骤 9/41 完成
+**阶段**: 阶段三 - 数据模型定义（进行中）
+**进度**: 步骤 10/41 完成
 
 ---
 
@@ -353,13 +353,70 @@ type ValidationErrors []*ValidationError
 
 ---
 
+### 步骤 10：定义主机模型 ✅
+
+**完成日期**: 2025-12-13
+
+**执行内容**:
+1. 在 `internal/model/host.go` 中定义主机相关结构体
+2. 定义 `HostStatus` 主机状态枚举（normal/warning/critical/failed）
+3. 定义 `DiskMountInfo` 磁盘挂载点信息结构体
+4. 定义 `HostMeta` 主机元信息结构体
+5. 实现 `CleanIdent()` 辅助函数（处理 `hostname@IP` 格式）
+
+**生成文件**:
+- `internal/model/host.go` - 主机模型定义
+
+**结构体定义**:
+```go
+// 主机状态枚举
+type HostStatus string
+const (
+    HostStatusNormal   HostStatus = "normal"
+    HostStatusWarning  HostStatus = "warning"
+    HostStatusCritical HostStatus = "critical"
+    HostStatusFailed   HostStatus = "failed"
+)
+
+// 磁盘挂载点信息
+type DiskMountInfo struct {
+    Path        string  `json:"path"`
+    Total       int64   `json:"total"`
+    Free        int64   `json:"free"`
+    UsedPercent float64 `json:"used_percent"`
+}
+
+// 主机元信息
+type HostMeta struct {
+    Ident         string          `json:"ident"`
+    Hostname      string          `json:"hostname"`
+    IP            string          `json:"ip"`
+    OS            string          `json:"os"`
+    OSVersion     string          `json:"os_version"`
+    KernelVersion string          `json:"kernel_version"`
+    CPUCores      int             `json:"cpu_cores"`
+    CPUModel      string          `json:"cpu_model"`
+    MemoryTotal   int64           `json:"memory_total"`
+    DiskMounts    []DiskMountInfo `json:"disk_mounts"`
+}
+```
+
+**验证结果**:
+- [x] 结构体字段覆盖产品需求文档中的所有主机属性
+- [x] JSON 标签正确设置（小写、下划线分隔）
+- [x] 执行 `go build ./internal/model/` 无编译错误
+- [x] 包含 package 级和 type 级注释
+- [x] 代码风格与 `internal/config/config.go` 一致
+
+---
+
 ## 下一步骤
 
-**步骤 10**: 定义主机模型（阶段三 - 数据模型定义开始）
-- 在 `internal/model/host.go` 中定义主机相关结构体
-- 包含主机基本信息（主机名、IP、操作系统、版本、内核、CPU核心数）
-- 定义主机状态枚举（正常、警告、严重、失败）
-- 添加磁盘挂载点列表字段
+**步骤 11**: 定义指标模型（阶段三 - 数据模型定义继续）
+- 在 `internal/model/metric.go` 中定义指标相关结构体
+- 包含：指标定义（名称、查询语句、单位、分类、聚合方式）
+- 包含：指标值（原始值、格式化值、状态）
+- 支持 "N/A" 值表示待定项
 
 ---
 
@@ -376,3 +433,4 @@ type ValidationErrors []*ValidationError
 | 2025-12-13 | 步骤 7 | 实现配置验证器完成 |
 | 2025-12-13 | 步骤 8 | 创建示例配置文件完成 |
 | 2025-12-13 | 步骤 9 | 创建指标定义文件完成（阶段二完成） |
+| 2025-12-13 | 步骤 10 | 定义主机模型完成（阶段三开始） |
