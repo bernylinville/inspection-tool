@@ -15,8 +15,8 @@ type Config struct {
 
 // DatasourcesConfig contains configurations for data sources.
 type DatasourcesConfig struct {
-	N9E              N9EConfig              `mapstructure:"n9e" validate:"required"`
-	VictoriaMetrics  VictoriaMetricsConfig  `mapstructure:"victoriametrics" validate:"required"`
+	N9E             N9EConfig             `mapstructure:"n9e" validate:"required"`
+	VictoriaMetrics VictoriaMetricsConfig `mapstructure:"victoriametrics" validate:"required"`
 }
 
 // N9EConfig contains configuration for N9E (Nightingale) API.

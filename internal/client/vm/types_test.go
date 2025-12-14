@@ -403,7 +403,7 @@ func TestGroupResultsByIdent(t *testing.T) {
 	results := []QueryResult{
 		{Ident: "server-1", Value: 75.5},
 		{Ident: "server-2", Value: 50.0},
-		{Ident: "", Value: 30.0}, // Should be skipped
+		{Ident: "", Value: 30.0},         // Should be skipped
 		{Ident: "server-1", Value: 80.0}, // Should override the first one
 	}
 

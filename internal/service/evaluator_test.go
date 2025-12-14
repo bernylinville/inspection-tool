@@ -25,7 +25,7 @@ func createTestThresholds() *config.ThresholdsConfig {
 			Critical: 90,
 		},
 		ZombieProcesses: config.ThresholdPair{
-			Warning:  1,  // > 0 means >= 1
+			Warning:  1, // > 0 means >= 1
 			Critical: 10,
 		},
 		LoadPerCore: config.ThresholdPair{
@@ -412,9 +412,9 @@ func TestEvaluator_ZombieProcesses_Thresholds(t *testing.T) {
 		expectedStatus model.HostStatus
 		alertCount     int
 	}{
-		{"NoZombies", 0.0, model.HostStatusNormal, 0},      // == 0, threshold is > 0
-		{"Warning", 5.0, model.HostStatusWarning, 1},       // > 0 warning, < 10 critical
-		{"Critical", 15.0, model.HostStatusCritical, 1},    // >= 10 critical
+		{"NoZombies", 0.0, model.HostStatusNormal, 0},   // == 0, threshold is > 0
+		{"Warning", 5.0, model.HostStatusWarning, 1},    // > 0 warning, < 10 critical
+		{"Critical", 15.0, model.HostStatusCritical, 1}, // >= 10 critical
 	}
 
 	for _, tt := range tests {
@@ -668,8 +668,8 @@ func TestEvaluator_ThresholdNotConfigured(t *testing.T) {
 	// Metric without configured threshold
 	metrics := model.NewHostMetrics("server-01")
 	metrics.SetMetric(&model.MetricValue{
-		Name:     "uptime",       // No threshold configured for uptime
-		RawValue: 86400.0,        // 1 day in seconds
+		Name:     "uptime", // No threshold configured for uptime
+		RawValue: 86400.0,  // 1 day in seconds
 	})
 
 	result := evaluator.EvaluateHost("server-01", metrics)
@@ -757,8 +757,8 @@ func TestEvaluator_getThreshold(t *testing.T) {
 		{"disk_usage_max", true},
 		{"processes_zombies", true},
 		{"load_per_core", true},
-		{"uptime", false},           // No threshold configured
-		{"unknown", false},          // Unknown metric
+		{"uptime", false},  // No threshold configured
+		{"unknown", false}, // Unknown metric
 	}
 
 	for _, tt := range tests {

@@ -12,16 +12,16 @@ const (
 
 // Alert represents a threshold violation alert for a host metric.
 type Alert struct {
-	Hostname          string            `json:"hostname"`                 // 主机名
-	MetricName        string            `json:"metric_name"`              // 指标名称
-	MetricDisplayName string            `json:"metric_display_name"`      // 指标中文显示名称
-	CurrentValue      float64           `json:"current_value"`            // 当前值
-	FormattedValue    string            `json:"formatted_value"`          // 格式化后的当前值
-	WarningThreshold  float64           `json:"warning_threshold"`        // 警告阈值
-	CriticalThreshold float64           `json:"critical_threshold"`       // 严重阈值
-	Level             AlertLevel        `json:"level"`                    // 告警级别
-	Message           string            `json:"message"`                  // 告警消息
-	Labels            map[string]string `json:"labels,omitempty"`         // 额外标签（如磁盘路径）
+	Hostname          string            `json:"hostname"`            // 主机名
+	MetricName        string            `json:"metric_name"`         // 指标名称
+	MetricDisplayName string            `json:"metric_display_name"` // 指标中文显示名称
+	CurrentValue      float64           `json:"current_value"`       // 当前值
+	FormattedValue    string            `json:"formatted_value"`     // 格式化后的当前值
+	WarningThreshold  float64           `json:"warning_threshold"`   // 警告阈值
+	CriticalThreshold float64           `json:"critical_threshold"`  // 严重阈值
+	Level             AlertLevel        `json:"level"`               // 告警级别
+	Message           string            `json:"message"`             // 告警消息
+	Labels            map[string]string `json:"labels,omitempty"`    // 额外标签（如磁盘路径）
 }
 
 // NewAlert creates a new Alert with the given parameters.

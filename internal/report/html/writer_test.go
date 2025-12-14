@@ -467,8 +467,8 @@ func createTestResult() *model.InspectionResult {
 				CPUCores:      4,
 				Status:        model.HostStatusNormal,
 				Metrics: map[string]*model.MetricValue{
-					"cpu_usage":     {Name: "cpu_usage", FormattedValue: "25.5%", Status: model.MetricStatusNormal},
-					"memory_usage":  {Name: "memory_usage", FormattedValue: "45.2%", Status: model.MetricStatusNormal},
+					"cpu_usage":      {Name: "cpu_usage", FormattedValue: "25.5%", Status: model.MetricStatusNormal},
+					"memory_usage":   {Name: "memory_usage", FormattedValue: "45.2%", Status: model.MetricStatusNormal},
 					"disk_usage_max": {Name: "disk_usage_max", FormattedValue: "60.1%", Status: model.MetricStatusNormal},
 				},
 			},
@@ -478,8 +478,8 @@ func createTestResult() *model.InspectionResult {
 				OS:       "Linux",
 				Status:   model.HostStatusWarning,
 				Metrics: map[string]*model.MetricValue{
-					"cpu_usage":     {Name: "cpu_usage", FormattedValue: "75.0%", Status: model.MetricStatusWarning},
-					"memory_usage":  {Name: "memory_usage", FormattedValue: "50.0%", Status: model.MetricStatusNormal},
+					"cpu_usage":      {Name: "cpu_usage", FormattedValue: "75.0%", Status: model.MetricStatusWarning},
+					"memory_usage":   {Name: "memory_usage", FormattedValue: "50.0%", Status: model.MetricStatusNormal},
 					"disk_usage_max": {Name: "disk_usage_max", FormattedValue: "45.0%", Status: model.MetricStatusNormal},
 				},
 			},

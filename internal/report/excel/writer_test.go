@@ -432,7 +432,7 @@ func createTestInspectionResult() *model.InspectionResult {
 			CriticalHosts: 1,
 			FailedHosts:   0,
 		},
-		Hosts: []*model.HostResult{host1, host2, host3},
+		Hosts:  []*model.HostResult{host1, host2, host3},
 		Alerts: allAlerts,
 		AlertSummary: &model.AlertSummary{
 			TotalAlerts:   3,

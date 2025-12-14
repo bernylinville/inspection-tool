@@ -57,12 +57,12 @@ type HostData struct {
 
 // MetricData represents metric data formatted for template rendering.
 type MetricData struct {
-	Name           string
-	DisplayName    string
-	Value          string
-	Status         string
-	StatusClass    string
-	IsNA           bool
+	Name        string
+	DisplayName string
+	Value       string
+	Status      string
+	StatusClass string
+	IsNA        bool
 }
 
 // AlertData represents alert data formatted for template rendering.

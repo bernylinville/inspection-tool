@@ -1076,10 +1076,10 @@ func TestCollector_ConcurrencyLimit(t *testing.T) {
 	defer n9eServer.Close()
 
 	var (
-		mu              sync.Mutex
-		currentActive   int
-		maxActive       int
-		totalRequests   int
+		mu            sync.Mutex
+		currentActive int
+		maxActive     int
+		totalRequests int
 	)
 
 	// Setup VM server that tracks concurrent requests

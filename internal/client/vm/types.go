@@ -9,11 +9,11 @@ import (
 // QueryResponse represents the API response from /api/v1/query endpoint.
 // This structure follows the Prometheus HTTP API specification.
 type QueryResponse struct {
-	Status    string     `json:"status"`    // 响应状态：success 或 error
-	Data      QueryData  `json:"data"`      // 查询数据
-	ErrorType string     `json:"errorType"` // 错误类型（仅在 status=error 时存在）
-	Error     string     `json:"error"`     // 错误信息（仅在 status=error 时存在）
-	Warnings  []string   `json:"warnings"`  // 警告信息列表
+	Status    string    `json:"status"`    // 响应状态：success 或 error
+	Data      QueryData `json:"data"`      // 查询数据
+	ErrorType string    `json:"errorType"` // 错误类型（仅在 status=error 时存在）
+	Error     string    `json:"error"`     // 错误信息（仅在 status=error 时存在）
+	Warnings  []string  `json:"warnings"`  // 警告信息列表
 }
 
 // IsSuccess returns true if the query was successful.

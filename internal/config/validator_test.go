@@ -300,10 +300,10 @@ func TestValidate_ValidTimezones(t *testing.T) {
 
 func TestValidate_MultipleErrors(t *testing.T) {
 	cfg := newValidConfig()
-	cfg.Datasources.N9E.Endpoint = ""        // Error 1
-	cfg.Datasources.N9E.Token = ""           // Error 2
-	cfg.Thresholds.CPUUsage.Warning = 90     // Error 3 (will be)
-	cfg.Thresholds.CPUUsage.Critical = 70    // Error 3
+	cfg.Datasources.N9E.Endpoint = ""     // Error 1
+	cfg.Datasources.N9E.Token = ""        // Error 2
+	cfg.Thresholds.CPUUsage.Warning = 90  // Error 3 (will be)
+	cfg.Thresholds.CPUUsage.Critical = 70 // Error 3
 
 	err := Validate(cfg)
 	if err == nil {

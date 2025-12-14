@@ -181,43 +181,43 @@ func TestFilesystemInfoGetSizeBytes(t *testing.T) {
 
 func TestFilesystemInfoIsPhysicalDisk(t *testing.T) {
 	tests := []struct {
-		name      string
-		fs        FilesystemInfo
+		name       string
+		fs         FilesystemInfo
 		isPhysical bool
 	}{
 		{
-			name:      "Physical disk /dev/sda1",
-			fs:        FilesystemInfo{Name: "/dev/sda1", MountedOn: "/"},
+			name:       "Physical disk /dev/sda1",
+			fs:         FilesystemInfo{Name: "/dev/sda1", MountedOn: "/"},
 			isPhysical: true,
 		},
 		{
-			name:      "tmpfs /dev/shm",
-			fs:        FilesystemInfo{Name: "tmpfs", MountedOn: "/dev/shm"},
+			name:       "tmpfs /dev/shm",
+			fs:         FilesystemInfo{Name: "tmpfs", MountedOn: "/dev/shm"},
 			isPhysical: false,
 		},
 		{
-			name:      "devtmpfs /dev",
-			fs:        FilesystemInfo{Name: "devtmpfs", MountedOn: "/dev"},
+			name:       "devtmpfs /dev",
+			fs:         FilesystemInfo{Name: "devtmpfs", MountedOn: "/dev"},
 			isPhysical: false,
 		},
 		{
-			name:      "overlay containerd",
-			fs:        FilesystemInfo{Name: "overlay", MountedOn: "/run/containerd/io.containerd.runtime.v2.task/k8s.io/abc123/rootfs"},
+			name:       "overlay containerd",
+			fs:         FilesystemInfo{Name: "overlay", MountedOn: "/run/containerd/io.containerd.runtime.v2.task/k8s.io/abc123/rootfs"},
 			isPhysical: false,
 		},
 		{
-			name:      "tmpfs kubelet pods",
-			fs:        FilesystemInfo{Name: "tmpfs", MountedOn: "/var/lib/kubelet/pods/uuid/volumes/kubernetes.io~projected/kube-api-access-xyz"},
+			name:       "tmpfs kubelet pods",
+			fs:         FilesystemInfo{Name: "tmpfs", MountedOn: "/var/lib/kubelet/pods/uuid/volumes/kubernetes.io~projected/kube-api-access-xyz"},
 			isPhysical: false,
 		},
 		{
-			name:      "shm",
-			fs:        FilesystemInfo{Name: "shm", MountedOn: "/run/containerd/io.containerd.grpc.v1.cri/sandboxes/abc/shm"},
+			name:       "shm",
+			fs:         FilesystemInfo{Name: "shm", MountedOn: "/run/containerd/io.containerd.grpc.v1.cri/sandboxes/abc/shm"},
 			isPhysical: false,
 		},
 		{
-			name:      "Physical disk /data",
-			fs:        FilesystemInfo{Name: "/dev/sdb1", MountedOn: "/data"},
+			name:       "Physical disk /data",
+			fs:         FilesystemInfo{Name: "/dev/sdb1", MountedOn: "/data"},
 			isPhysical: true,
 		},
 	}

@@ -54,24 +54,24 @@ type TargetData struct {
 
 // ExtendInfo contains detailed host information parsed from the extend_info JSON string.
 type ExtendInfo struct {
-	CPU        CPUInfo           `json:"cpu"`        // CPU 信息
-	Memory     MemoryInfo        `json:"memory"`     // 内存信息
-	Network    NetworkInfo       `json:"network"`    // 网络信息
-	Platform   PlatformInfo      `json:"platform"`   // 平台/系统信息
-	Filesystem []FilesystemInfo  `json:"filesystem"` // 文件系统信息
+	CPU        CPUInfo          `json:"cpu"`        // CPU 信息
+	Memory     MemoryInfo       `json:"memory"`     // 内存信息
+	Network    NetworkInfo      `json:"network"`    // 网络信息
+	Platform   PlatformInfo     `json:"platform"`   // 平台/系统信息
+	Filesystem []FilesystemInfo `json:"filesystem"` // 文件系统信息
 }
 
 // CPUInfo contains CPU hardware information.
 type CPUInfo struct {
-	CacheSize            string `json:"cache_size"`              // 缓存大小（如 "16384 KB"）
-	CPUCores             string `json:"cpu_cores"`               // CPU 物理核心数
-	CPULogicalProcessors string `json:"cpu_logical_processors"`  // CPU 逻辑处理器数
-	Family               string `json:"family"`                  // CPU 家族
-	MHz                  string `json:"mhz"`                     // CPU 频率（MHz）
-	Model                string `json:"model"`                   // CPU 型号代码
-	ModelName            string `json:"model_name"`              // CPU 型号名称
-	Stepping             string `json:"stepping"`                // CPU stepping
-	VendorID             string `json:"vendor_id"`               // CPU 厂商
+	CacheSize            string `json:"cache_size"`             // 缓存大小（如 "16384 KB"）
+	CPUCores             string `json:"cpu_cores"`              // CPU 物理核心数
+	CPULogicalProcessors string `json:"cpu_logical_processors"` // CPU 逻辑处理器数
+	Family               string `json:"family"`                 // CPU 家族
+	MHz                  string `json:"mhz"`                    // CPU 频率（MHz）
+	Model                string `json:"model"`                  // CPU 型号代码
+	ModelName            string `json:"model_name"`             // CPU 型号名称
+	Stepping             string `json:"stepping"`               // CPU stepping
+	VendorID             string `json:"vendor_id"`              // CPU 厂商
 }
 
 // GetCPUCores returns the number of CPU cores as an integer.
@@ -218,12 +218,12 @@ func (t *TargetData) ToHostMeta() (*model.HostMeta, error) {
 
 	// 基本信息直接从 API 响应获取
 	hostMeta := &model.HostMeta{
-		Ident:       t.Ident,
-		Hostname:    hostname,
-		IP:          t.HostIP,
-		OS:          t.OS,
-		CPUCores:    t.CPUNum,
-		DiskMounts:  []model.DiskMountInfo{},
+		Ident:      t.Ident,
+		Hostname:   hostname,
+		IP:         t.HostIP,
+		OS:         t.OS,
+		CPUCores:   t.CPUNum,
+		DiskMounts: []model.DiskMountInfo{},
 	}
 
 	// 如果有 ExtendInfo，尝试解析获取更详细的信息

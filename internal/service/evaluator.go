@@ -15,17 +15,17 @@ import (
 var metricThresholdMap = map[string]string{
 	"cpu_usage":         "cpu_usage",
 	"memory_usage":      "memory_usage",
-	"disk_usage_max":    "disk_usage",       // 磁盘使用聚合最大值用于告警判断
+	"disk_usage_max":    "disk_usage", // 磁盘使用聚合最大值用于告警判断
 	"processes_zombies": "zombie_processes",
 	"load_per_core":     "load_per_core",
 }
 
 // HostEvaluationResult contains the evaluation result for a single host.
 type HostEvaluationResult struct {
-	Hostname string                          `json:"hostname"`
-	Status   model.HostStatus                `json:"status"`
-	Metrics  map[string]*model.MetricValue   `json:"metrics"`
-	Alerts   []*model.Alert                  `json:"alerts"`
+	Hostname string                        `json:"hostname"`
+	Status   model.HostStatus              `json:"status"`
+	Metrics  map[string]*model.MetricValue `json:"metrics"`
+	Alerts   []*model.Alert                `json:"alerts"`
 }
 
 // EvaluationResult contains the complete evaluation results for all hosts.
@@ -37,9 +37,9 @@ type EvaluationResult struct {
 
 // Evaluator performs threshold evaluation on collected metrics.
 type Evaluator struct {
-	thresholds      *config.ThresholdsConfig
-	metricDefs      map[string]*model.MetricDefinition // 指标定义映射，用于获取显示名称
-	logger          zerolog.Logger
+	thresholds *config.ThresholdsConfig
+	metricDefs map[string]*model.MetricDefinition // 指标定义映射，用于获取显示名称
+	logger     zerolog.Logger
 }
 
 // NewEvaluator creates a new Evaluator with the given threshold configuration.
