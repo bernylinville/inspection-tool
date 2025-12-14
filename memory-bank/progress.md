@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段七 - CLI 命令实现（进行中）
-**进度**: 步骤 37/41 完成
+**阶段**: 阶段八 - 构建与测试（进行中）
+**进度**: 步骤 38/41 完成
 
 ---
 
@@ -2031,16 +2031,70 @@ OS/Arch: linux/amd64
 
 ---
 
+### 步骤 38：创建 Makefile ✅
+
+**完成日期**: 2025-12-14
+
+**执行内容**:
+1. 在项目根目录创建 `Makefile`
+2. 实现 `build` 目标：构建本地二进制，注入版本信息
+3. 实现 `build-all` 目标：交叉编译 4 个平台（linux/amd64、darwin/amd64、darwin/arm64、windows/amd64）
+4. 实现 `test` 目标：运行测试（带 `-race` 竞态检测）
+5. 实现 `lint` 目标：运行 golangci-lint 代码检查
+6. 实现 `clean` 目标：清理 bin 和 coverage 目录
+7. 实现 `coverage` 目标：生成 HTML 和文本格式覆盖率报告
+8. 实现 `help` 目标：显示帮助信息
+9. 修正 LDFLAGS 路径（使用 `inspection-tool/cmd/inspect/cmd` 包路径注入版本变量）
+
+**生成文件**:
+- `Makefile` - 构建脚本
+
+**Makefile 目标列表**:
+| 目标 | 功能 |
+|------|------|
+| `build` | 构建本地二进制到 `bin/inspect`，注入版本信息 |
+| `build-all` | 交叉编译 4 个平台二进制文件 |
+| `test` | 运行所有测试（带竞态检测） |
+| `lint` | 运行 golangci-lint 代码检查 |
+| `clean` | 清理 bin 和 coverage 目录 |
+| `coverage` | 生成覆盖率报告到 `coverage/` 目录 |
+| `help` | 显示帮助信息 |
+
+**版本信息注入**:
+```makefile
+CMD_PKG := inspection-tool/cmd/inspect/cmd
+LDFLAGS := -X $(CMD_PKG).Version=$(VERSION) -X $(CMD_PKG).BuildTime=$(BUILD_TIME) -X $(CMD_PKG).GitCommit=$(GIT_COMMIT)
+```
+
+**验证结果**:
+- [x] `make build` 成功生成二进制文件，版本信息正确注入
+- [x] `make test` 运行所有测试，全部通过
+- [x] `make clean` 清理 bin 和 coverage 目录
+- [x] `make coverage` 生成覆盖率报告（总覆盖率 71.8%）
+- [x] `make help` 显示帮助信息
+
+**覆盖率摘要**（2025-12-14）:
+| 模块 | 覆盖率 |
+|------|--------|
+| N9E 客户端 | 91.6% |
+| VM 客户端 | 94.0% |
+| Config | 89.8% |
+| Report 接口 | 100.0% |
+| Excel 报告 | 89.6% |
+| HTML 报告 | 90.4% |
+| Service 层 | 80.1% |
+| **总计** | **71.8%** |
+
+---
+
 ## 下一步骤
 
-**步骤 38**: 创建 Makefile
-- 创建 Makefile 包含以下目标：
-  - build：构建本地二进制
-  - build-all：交叉编译多平台
-  - test：运行测试
-  - lint：代码检查
-  - clean：清理构建产物
-  - coverage：生成测试覆盖率报告
+**步骤 39**: 端到端测试
+- 使用真实 API 进行完整巡检测试
+- 验证生成的 Excel 报告内容正确性
+- 验证生成的 HTML 报告内容正确性
+- 测试不同配置组合
+- 验证磁盘各挂载点显示正确
 
 ---
 
@@ -2085,3 +2139,4 @@ OS/Arch: linux/amd64
 | 2025-12-13 | 步骤 35 | 实现 validate 子命令 |
 | 2025-12-13 | 步骤 36 | 实现 run 子命令（完整巡检流程） |
 | 2025-12-13 | 步骤 37 | 实现日志输出（时区、格式配置、关键节点日志，阶段七完成） |
+| 2025-12-14 | 步骤 38 | 创建 Makefile（阶段八开始） |
