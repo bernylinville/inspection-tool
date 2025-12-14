@@ -28,6 +28,11 @@ datasources:
     token: "${N9E_TOKEN}"
     # 请求超时时间 (默认: 30s)
     timeout: 30s
+    # 主机过滤查询 (可选)
+    # 格式: "标签名=标签值"，支持 N9E 标签查询语法
+    # 示例: "items=短剧项目" 只查询标签 items 为"短剧项目"的主机
+    # 不配置则获取所有主机
+    # query: "items=短剧项目"
 
   # VictoriaMetrics 时序数据库配置
   # 用途: 查询监控指标数据（CPU、内存、磁盘等）

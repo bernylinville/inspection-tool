@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段八 - 构建与测试（进行中）
-**进度**: 步骤 38/41 完成
+**进度**: 步骤 39/41 完成（待用户验证）
 
 ---
 
@@ -2087,14 +2087,156 @@ LDFLAGS := -X $(CMD_PKG).Version=$(VERSION) -X $(CMD_PKG).BuildTime=$(BUILD_TIME
 
 ---
 
+### 步骤 39：端到端测试 ✅
+
+**完成日期**: 2025-12-14
+
+**执行内容**:
+1. 创建测试配置文件 `config.yaml`
+2. 使用 `validate` 命令验证配置
+3. 执行完整巡检流程 `run` 命令
+4. 发现并修复 PromQL 标签注入 Bug
+5. 更新受影响的单元测试
+6. 重新执行巡检测试
+7. 验证 Excel 和 HTML 报告
+8. **新增 N9E 主机过滤功能**：实现 N9E API 级别的主机筛选，支持按标签过滤主机
+
+**修复的关键 Bug**:
+
+**PromQL 标签注入问题**：
+- **问题**：`memory_usage` 查询 `100 - mem_available_percent` 失败，因为标签被错误注入到标量值 `100`
+- **原因**：正则表达式 `(\w+)` 匹配了纯数字
+- **修复**：将正则改为 `([a-zA-Z_][a-zA-Z0-9_]*)` 确保只匹配有效的 PromQL 指标名
+- **文件**：`internal/client/vm/client.go:injectMatchersToQuery()`
+
+**新增 N9E 主机过滤功能**：
+- **需求**：用户希望只巡检"短剧项目"的服务器（18台），而非全部监控服务器（776台）
+- **实现**：在 N9E API 调用时添加 `query` 参数支持
+- **修改文件**：
+  - `internal/config/config.go:27` - 添加 `Query` 字段到 N9EConfig
+  - `internal/client/n9e/client.go:23` - 添加 `query` 字段到 Client 结构体
+  - `internal/client/n9e/client.go:89-101` - GetTargets() 使用 query 参数过滤主机
+  - `configs/config.example.yaml:31-35` - 添加 query 配置文档
+- **配置示例**：
+  ```yaml
+  n9e:
+    endpoint: "http://120.26.87.44:17000"
+    token: "your-token"
+    query: "items=短剧项目"  # 只获取标签 items 为"短剧项目"的主机
+  ```
+
+**修改文件汇总**:
+- `internal/client/vm/client.go` - 修复 PromQL 标签注入正则表达式
+- `internal/client/vm/client_test.go` - 添加 5 个标量表达式测试用例
+- `internal/client/n9e/client_test.go` - 更新 N9E API 响应格式
+- `internal/client/n9e/types_test.go` - 更新测试数据
+- `internal/service/collector_test.go` - 更新 mock 响应格式
+- `internal/service/inspector_test.go` - 更新 mock 响应格式
+- `internal/config/config.go` - 添加 N9E Query 配置字段
+- `internal/client/n9e/client.go` - 实现 N9E 主机过滤功能
+- `configs/config.example.yaml` - 添加 query 配置文档
+- `internal/service/evaluator.go` - 添加指标值格式化功能
+
+**Bug 修复：指标格式化问题**：
+- **问题**：HTML 报告中所有指标值显示为空（如 `<span class="metric-normal"></span>`）
+- **原因**：`MetricValue.FormattedValue` 字段在数据采集时从未被设置
+- **修复**：在 `evaluator.go` 中添加 `formatMetricValue()` 方法，根据指标定义格式化数值
+  - 支持百分比格式（如 `83.1%`）
+  - 支持字节大小格式（如 `16.00 GB`）
+  - 支持运行时间格式（如 `416天19时22分`）
+  - 支持数值格式（如僵尸进程 `1`）
+- **文件**：`internal/service/evaluator.go:132`（调用）、`evaluator.go:318-398`（实现）
+
+**新增功能：磁盘路径过滤**：
+- **问题**：巡检报告中显示容器相关的磁盘路径（如 Kubernetes CSI/Longhorn 挂载）和 NFS 挂载，与 `lsblk` 看到的物理磁盘不匹配
+- **实现**：在 `collector.go` 中添加 `isPhysicalBlockDevice()` 函数，基于 `device` 和 `fstype` 标签过滤非物理磁盘
+- **过滤规则**：
+  - NFS 网络文件系统：`fstype` = nfs, nfs4, cifs, smbfs, glusterfs, ceph
+  - Longhorn PVC：`device` 以 `longhorn/` 开头
+  - overlay 文件系统：`fstype` = overlay, overlay2
+  - 临时文件系统：`fstype` = tmpfs, devtmpfs
+  - 只保留真正的块设备：sd*, vd*, nvme*, xvd*, hd*, dm-*, mapper/*
+- **结果**：报告现在只显示物理磁盘路径（如 `/`=sda1、`/data`=sdb1）
+- **文件**：`internal/service/collector.go:585-642`（`isPhysicalBlockDevice` 函数）
+
+**新增测试用例**:
+```go
+// 标量表达式测试
+"100 - mem_available_percent"              → "100 - mem_available_percent{env=\"prod\"}"
+"cpu_usage_active * 100"                    → "cpu_usage_active{env=\"prod\"} * 100"
+"mem_total / 1024 / 1024 / 1024"            → "mem_total{env=\"prod\"} / 1024 / 1024 / 1024"
+"100 - (mem_available / mem_total * 100)"   → 正确注入到 mem_available 和 mem_total
+"100"                                       → "100" (纯标量不变)
+```
+
+**E2E 测试结果（"短剧项目"筛选后）**:
+| 指标 | 数值 |
+|------|------|
+| 主机总数 | 18 台 |
+| 正常主机 | 9 台 |
+| 警告主机 | 8 台 |
+| 严重主机 | 1 台 |
+| 失败主机 | 0 台 |
+| 告警总数 | 9 条 |
+| 警告级别 | 8 条 |
+| 严重级别 | 1 条 |
+| Excel 报告大小 | 10 KB |
+| HTML 报告大小 | 48 KB |
+| 巡检耗时 | 690ms |
+
+**生成报告**:
+- `reports/inspection_report_2025-12-14.xlsx`
+- `reports/inspection_report_2025-12-14.html`
+
+**Excel 报告验证**:
+- [x] 文件可正常打开
+- [x] 包含 3 个工作表（巡检概览、详细数据、异常汇总）
+- [x] 巡检概览数据与控制台输出一致
+- [x] 详细数据表包含所有 18 台主机
+- [x] 磁盘挂载点分列显示（3 个物理磁盘路径：/、/data、/opt/context）
+- [x] 条件格式正确（警告黄色、严重红色）
+- [x] 时间显示为 Asia/Shanghai 时区
+
+**HTML 报告验证**:
+- [x] 浏览器正常打开，无 JS 错误
+- [x] 摘要卡片数据与控制台一致
+- [x] 主机详情表完整显示所有主机
+- [x] 磁盘挂载点分列显示（过滤后仅显示物理磁盘）
+- [x] 条件样式正确应用
+- [x] 点击表头可排序
+- [x] 默认按状态严重程度降序排列
+
+**单元测试结果**:
+- 执行 `go test ./...` 全部通过
+- 执行 `go test -race ./...` 无数据竞争
+
+**验证结果**:
+- [x] 完整巡检流程无错误
+- [x] Excel 报告数据与 API 返回一致
+- [x] Excel 条件格式正确应用
+- [x] HTML 报告在浏览器中正确显示
+- [x] HTML 排序功能正常
+- [x] 磁盘各挂载点数据正确
+- [x] N9E 主机过滤功能正常（18 台"短剧项目"服务器）
+- [x] 性能优秀（18 台主机约 0.7 秒完成）
+- [x] 磁盘路径过滤功能正常（过滤 K8s CSI/Longhorn/容器路径，仅显示物理磁盘）
+
+---
+
 ## 下一步骤
 
-**步骤 39**: 端到端测试
-- 使用真实 API 进行完整巡检测试
-- 验证生成的 Excel 报告内容正确性
-- 验证生成的 HTML 报告内容正确性
-- 测试不同配置组合
-- 验证磁盘各挂载点显示正确
+**步骤 40**: 编写 README.md
+- 项目简介和功能说明
+- 安装和配置指南
+- 使用示例
+- API 文档
+- 贡献指南
+
+**步骤 41**: 最终验收
+- 代码审查
+- 文档完整性检查
+- 性能测试
+- 发布准备
 
 ---
 
@@ -2140,3 +2282,4 @@ LDFLAGS := -X $(CMD_PKG).Version=$(VERSION) -X $(CMD_PKG).BuildTime=$(BUILD_TIME
 | 2025-12-13 | 步骤 36 | 实现 run 子命令（完整巡检流程） |
 | 2025-12-13 | 步骤 37 | 实现日志输出（时区、格式配置、关键节点日志，阶段七完成） |
 | 2025-12-14 | 步骤 38 | 创建 Makefile（阶段八开始） |
+| 2025-12-14 | 步骤 39 | 端到端测试完成（修复 PromQL Bug、新增 N9E 主机过滤、修复指标格式化 Bug、新增磁盘路径过滤功能、18 台服务器测试通过） |

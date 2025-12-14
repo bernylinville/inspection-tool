@@ -130,10 +130,13 @@ func TestGetTargets_Success(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "host1", "extend_info": "{}"},
-				{"ident": "host2", "extend_info": "{}"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "host1", "extend_info": "{}"},
+					{"ident": "host2", "extend_info": "{}"}
+				],
+				"total": 2
+			},
 			"err": ""
 		}`))
 	}
@@ -193,9 +196,12 @@ func TestGetHostMetas_Success(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "host1", "extend_info": "` + escapeJSON(testExtendInfo) + `"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "host1", "extend_info": "` + escapeJSON(testExtendInfo) + `"}
+				],
+				"total": 1
+			},
 			"err": ""
 		}`))
 	}
@@ -224,8 +230,9 @@ func TestGetHostMetaByIdent_Success(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		// Include both direct fields and extend_info to match real API
 		_, _ = w.Write([]byte(`{
-			"dat": {"ident": "test-host", "extend_info": "` + escapeJSON(testExtendInfo) + `"},
+			"dat": {"ident": "test-host", "host_ip": "192.168.1.100", "os": "centos9", "cpu_num": 4, "extend_info": "` + escapeJSON(testExtendInfo) + `"},
 			"err": ""
 		}`))
 	}
@@ -309,7 +316,7 @@ func TestGetTargets_APIError(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
-			"dat": [],
+			"dat": {"list": [], "total": 0},
 			"err": "internal server error: database connection failed"
 		}`))
 	}
@@ -430,7 +437,7 @@ func TestGetTargets_ServerError_Retry(t *testing.T) {
 		// Third request succeeds
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"dat": [{"ident": "host1", "extend_info": "{}"}], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [{"ident": "host1", "extend_info": "{}"}], "total": 1}, "err": ""}`))
 	}
 
 	server, client := setupTestServer(t, handler)
@@ -510,7 +517,7 @@ func TestGetTargets_EmptyList(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	}
 
 	server, client := setupTestServer(t, handler)
@@ -536,10 +543,13 @@ func TestGetHostMetas_PartialFailure(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		// First target has valid extend_info, second has invalid
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "host1", "extend_info": "` + escapeJSON(testExtendInfo) + `"},
-				{"ident": "host2", "extend_info": "invalid json"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "host1", "extend_info": "` + escapeJSON(testExtendInfo) + `"},
+					{"ident": "host2", "extend_info": "invalid json"}
+				],
+				"total": 2
+			},
 			"err": ""
 		}`))
 	}
@@ -550,16 +560,23 @@ func TestGetHostMetas_PartialFailure(t *testing.T) {
 	ctx := context.Background()
 	hosts, err := client.GetHostMetas(ctx)
 
-	// Should not return error, just skip failed conversions
+	// Should not return error
 	if err != nil {
 		t.Fatalf("GetHostMetas failed: %v", err)
 	}
-	// Should only have 1 successful conversion
-	if len(hosts) != 1 {
-		t.Errorf("Expected 1 host (partial success), got %d", len(hosts))
+	// With the new implementation, both hosts are converted successfully
+	// because ToHostMeta uses direct fields and only optionally uses ExtendInfo
+	// Invalid ExtendInfo is silently ignored
+	if len(hosts) != 2 {
+		t.Errorf("Expected 2 hosts (both convert), got %d", len(hosts))
 	}
-	if hosts[0].Hostname != "test-host" {
-		t.Errorf("Expected hostname 'test-host', got '%s'", hosts[0].Hostname)
+	// First host should have hostname from ExtendInfo
+	if len(hosts) > 0 && hosts[0].Hostname != "test-host" {
+		t.Errorf("Expected first hostname 'test-host', got '%s'", hosts[0].Hostname)
+	}
+	// Second host should have hostname cleaned from ident
+	if len(hosts) > 1 && hosts[1].Hostname != "host2" {
+		t.Errorf("Expected second hostname 'host2', got '%s'", hosts[1].Hostname)
 	}
 }
 
@@ -568,7 +585,7 @@ func TestGetTargets_ContextCanceled(t *testing.T) {
 		// Simulate slow response
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	}
 
 	server, client := setupTestServer(t, handler)

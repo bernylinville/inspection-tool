@@ -232,9 +232,13 @@ func TestFilesystemInfoIsPhysicalDisk(t *testing.T) {
 }
 
 func TestTargetDataToHostMeta(t *testing.T) {
-	// Create sample target data
+	// Create sample target data with both direct fields and ExtendInfo
+	// This matches the real N9E API response format
 	target := &TargetData{
 		Ident:      "sd-k8s-master-1",
+		HostIP:     "192.168.10.24",
+		OS:         "centos9",
+		CPUNum:     4,
 		ExtendInfo: sampleExtendInfo,
 	}
 
@@ -253,8 +257,9 @@ func TestTargetDataToHostMeta(t *testing.T) {
 	if hostMeta.IP != "192.168.10.24" {
 		t.Errorf("Expected IP '192.168.10.24', got '%s'", hostMeta.IP)
 	}
-	if hostMeta.OS != "GNU/Linux" {
-		t.Errorf("Expected OS 'GNU/Linux', got '%s'", hostMeta.OS)
+	// OS comes from direct field now (centos9), not from ExtendInfo (GNU/Linux)
+	if hostMeta.OS != "centos9" {
+		t.Errorf("Expected OS 'centos9', got '%s'", hostMeta.OS)
 	}
 	if hostMeta.KernelVersion != "5.14.0-503.38.1.el9_5.x86_64" {
 		t.Errorf("Expected kernel version '5.14.0-503.38.1.el9_5.x86_64', got '%s'", hostMeta.KernelVersion)
@@ -315,7 +320,7 @@ func TestTargetResponse(t *testing.T) {
 
 func TestTargetsResponse(t *testing.T) {
 	// Test parsing targets list response
-	jsonResponse := `{"dat":[{"ident":"host1","extend_info":"{}"},{"ident":"host2","extend_info":"{}"}],"err":""}`
+	jsonResponse := `{"dat":{"list":[{"ident":"host1","extend_info":"{}"},{"ident":"host2","extend_info":"{}"}],"total":2},"err":""}`
 
 	var resp TargetsResponse
 	if err := json.Unmarshal([]byte(jsonResponse), &resp); err != nil {
@@ -325,7 +330,10 @@ func TestTargetsResponse(t *testing.T) {
 	if resp.Err != "" {
 		t.Errorf("Expected empty error, got '%s'", resp.Err)
 	}
-	if len(resp.Dat) != 2 {
-		t.Errorf("Expected 2 targets, got %d", len(resp.Dat))
+	if len(resp.Dat.List) != 2 {
+		t.Errorf("Expected 2 targets, got %d", len(resp.Dat.List))
+	}
+	if resp.Dat.Total != 2 {
+		t.Errorf("Expected total 2, got %d", resp.Dat.Total)
 	}
 }

@@ -27,7 +27,7 @@ func TestNewInspector(t *testing.T) {
 	// Create mock servers
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"dat": []interface{}{},
+			"dat": map[string]interface{}{"list": []interface{}{}, "total": 0},
 			"err": "",
 		})
 	})
@@ -109,9 +109,12 @@ func TestInspector_Run_Success(t *testing.T) {
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "test-host-1", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\",\"model_name\":\"Intel Xeon\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.100\"},\"platform\":{\"hostname\":\"test-host-1\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "test-host-1", "host_ip": "192.168.1.100", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\",\"model_name\":\"Intel Xeon\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.100\"},\"platform\":{\"hostname\":\"test-host-1\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
+				],
+				"total": 1
+			},
 			"err": ""
 		}`))
 	})
@@ -222,7 +225,7 @@ func TestInspector_Run_NoHosts(t *testing.T) {
 	// Create N9E mock server returning empty list
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	})
 	defer n9eServer.Close()
 
@@ -279,9 +282,12 @@ func TestInspector_Run_WithWarning(t *testing.T) {
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "warning-host", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.101\"},\"platform\":{\"hostname\":\"warning-host\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "warning-host", "host_ip": "192.168.1.101", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.101\"},\"platform\":{\"hostname\":\"warning-host\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
+				],
+				"total": 1
+			},
 			"err": ""
 		}`))
 	})
@@ -367,9 +373,12 @@ func TestInspector_Run_WithCritical(t *testing.T) {
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "critical-host", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.102\"},\"platform\":{\"hostname\":\"critical-host\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "critical-host", "host_ip": "192.168.1.102", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.102\"},\"platform\":{\"hostname\":\"critical-host\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
+				],
+				"total": 1
+			},
 			"err": ""
 		}`))
 	})
@@ -452,11 +461,14 @@ func TestInspector_Run_MultipleHosts(t *testing.T) {
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "host-normal", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.10\"},\"platform\":{\"hostname\":\"host-normal\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"},
-				{"ident": "host-warning", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.11\"},\"platform\":{\"hostname\":\"host-warning\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"},
-				{"ident": "host-critical", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.12\"},\"platform\":{\"hostname\":\"host-critical\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "host-normal", "host_ip": "192.168.1.10", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.10\"},\"platform\":{\"hostname\":\"host-normal\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"},
+					{"ident": "host-warning", "host_ip": "192.168.1.11", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.11\"},\"platform\":{\"hostname\":\"host-warning\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"},
+					{"ident": "host-critical", "host_ip": "192.168.1.12", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.12\"},\"platform\":{\"hostname\":\"host-critical\",\"os\":\"Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
+				],
+				"total": 3
+			},
 			"err": ""
 		}`))
 	})
@@ -595,7 +607,7 @@ func TestInspector_Timezone(t *testing.T) {
 	// Create mock servers
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	})
 	defer n9eServer.Close()
 
@@ -647,7 +659,7 @@ func TestInspector_GetVersion(t *testing.T) {
 
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	})
 	defer n9eServer.Close()
 
@@ -686,7 +698,7 @@ func TestInspector_Run_ContextCanceled(t *testing.T) {
 	n9eServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(2 * time.Second)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	}))
 	defer n9eServer.Close()
 

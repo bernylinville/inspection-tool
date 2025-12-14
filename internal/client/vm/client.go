@@ -217,6 +217,8 @@ func (c *Client) injectLabelMatchers(query string, filter *HostFilter) string {
 
 // injectMatchersToQuery injects label matchers into a PromQL query.
 // It handles queries with existing label selectors by appending to them.
+// Only injects into valid metric names (must start with letter or underscore),
+// not into scalar values like numbers.
 func injectMatchersToQuery(query string, matchers []string) string {
 	if len(matchers) == 0 {
 		return query
@@ -225,8 +227,10 @@ func injectMatchersToQuery(query string, matchers []string) string {
 	matcherStr := strings.Join(matchers, ", ")
 
 	// Pattern to match metric name with optional label selector
-	// Examples: cpu_usage_active, cpu_usage_active{cpu="cpu-total"}
-	re := regexp.MustCompile(`(\w+)(\{[^}]*\})?`)
+	// Metric names must start with [a-zA-Z_] followed by [a-zA-Z0-9_]*
+	// This excludes pure numbers like 100 which are scalar values
+	// Examples: cpu_usage_active, cpu_usage_active{cpu="cpu-total"}, mem_available_percent
+	re := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)(\{[^}]*\})?`)
 
 	return re.ReplaceAllStringFunc(query, func(match string) string {
 		// Find if there's an existing label selector

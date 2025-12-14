@@ -15,15 +15,41 @@ type TargetResponse struct {
 }
 
 // TargetsResponse represents the API response from N9E /api/n9e/targets endpoint.
+// The dat field contains a list wrapper with pagination info.
 type TargetsResponse struct {
-	Dat []TargetData `json:"dat"` // 主机列表
-	Err string       `json:"err"` // 错误信息
+	Dat TargetListData `json:"dat"` // 主机列表数据
+	Err string         `json:"err"` // 错误信息
 }
 
-// TargetData contains basic target information.
+// TargetListData wraps the target list with pagination info.
+type TargetListData struct {
+	List  []TargetData `json:"list"`  // 主机列表
+	Total int          `json:"total"` // 总数
+}
+
+// TargetData contains target information from N9E API.
+// This structure matches the actual N9E API response format.
 type TargetData struct {
-	Ident      string `json:"ident"`       // 主机标识符（可能为 hostname 或 hostname@IP 格式）
-	ExtendInfo string `json:"extend_info"` // JSON 字符串，需要二次解析
+	ID           int64             `json:"id"`            // 主机 ID
+	Ident        string            `json:"ident"`         // 主机标识符（可能为 hostname 或 hostname@IP 格式）
+	Note         string            `json:"note"`          // 备注
+	Tags         []string          `json:"tags"`          // 标签列表
+	TagsMaps     map[string]string `json:"tags_maps"`     // 标签映射
+	HostIP       string            `json:"host_ip"`       // 主机 IP
+	AgentVersion string            `json:"agent_version"` // Agent 版本
+	EngineName   string            `json:"engine_name"`   // 引擎名称
+	OS           string            `json:"os"`            // 操作系统
+	HostTags     []string          `json:"host_tags"`     // 主机标签
+	Unixtime     int64             `json:"unixtime"`      // Unix 时间戳
+	TargetUp     int               `json:"target_up"`     // 目标状态
+	MemUtil      float64           `json:"mem_util"`      // 内存使用率
+	CPUNum       int               `json:"cpu_num"`       // CPU 数量
+	CPUUtil      float64           `json:"cpu_util"`      // CPU 使用率
+	Arch         string            `json:"arch"`          // 架构
+	RemoteAddr   string            `json:"remote_addr"`   // 远程地址
+	GroupIDs     []int64           `json:"group_ids"`     // 业务组 ID 列表
+	UpdateAt     int64             `json:"update_at"`     // 更新时间
+	ExtendInfo   string            `json:"extend_info"`   // 扩展信息（可选，部分 API 返回）
 }
 
 // ExtendInfo contains detailed host information parsed from the extend_info JSON string.
@@ -185,43 +211,58 @@ func ParseExtendInfo(extendInfoStr string) (*ExtendInfo, error) {
 }
 
 // ToHostMeta converts N9E target data to the internal HostMeta model.
-// This is a convenience method that combines TargetData and ExtendInfo.
+// This method uses direct fields from the API response, with fallback to ExtendInfo if available.
 func (t *TargetData) ToHostMeta() (*model.HostMeta, error) {
-	extInfo, err := ParseExtendInfo(t.ExtendInfo)
-	if err != nil {
-		return nil, err
-	}
-
 	// 清理 ident 获取主机名
 	hostname := model.CleanIdent(t.Ident)
 
-	// 如果 ExtendInfo 中有更准确的主机名，优先使用
-	if extInfo.Platform.Hostname != "" {
-		hostname = extInfo.Platform.Hostname
+	// 基本信息直接从 API 响应获取
+	hostMeta := &model.HostMeta{
+		Ident:       t.Ident,
+		Hostname:    hostname,
+		IP:          t.HostIP,
+		OS:          t.OS,
+		CPUCores:    t.CPUNum,
+		DiskMounts:  []model.DiskMountInfo{},
 	}
 
-	// 收集物理磁盘挂载点
-	var diskMounts []model.DiskMountInfo
-	for _, fs := range extInfo.Filesystem {
-		if fs.IsPhysicalDisk() {
-			diskMounts = append(diskMounts, model.DiskMountInfo{
-				Path:  fs.MountedOn,
-				Total: fs.GetSizeBytes(),
-				// Free 和 UsedPercent 将从 VictoriaMetrics 获取
-			})
+	// 如果有 ExtendInfo，尝试解析获取更详细的信息
+	if t.ExtendInfo != "" {
+		extInfo, err := ParseExtendInfo(t.ExtendInfo)
+		if err == nil {
+			// 从 ExtendInfo 获取更详细的信息
+			if extInfo.Platform.Hostname != "" {
+				hostMeta.Hostname = extInfo.Platform.Hostname
+			}
+			if extInfo.Platform.KernelRelease != "" {
+				hostMeta.KernelVersion = extInfo.Platform.KernelRelease
+			}
+			if extInfo.CPU.ModelName != "" {
+				hostMeta.CPUModel = extInfo.CPU.ModelName
+			}
+			if extInfo.Memory.GetTotal() > 0 {
+				hostMeta.MemoryTotal = extInfo.Memory.GetTotal()
+			}
+			if hostMeta.IP == "" && extInfo.Network.IPAddress != "" {
+				hostMeta.IP = extInfo.Network.IPAddress
+			}
+
+			// 收集物理磁盘挂载点
+			for _, fs := range extInfo.Filesystem {
+				if fs.IsPhysicalDisk() {
+					hostMeta.DiskMounts = append(hostMeta.DiskMounts, model.DiskMountInfo{
+						Path:  fs.MountedOn,
+						Total: fs.GetSizeBytes(),
+					})
+				}
+			}
 		}
 	}
 
-	return &model.HostMeta{
-		Ident:         t.Ident,
-		Hostname:      hostname,
-		IP:            extInfo.Network.IPAddress,
-		OS:            extInfo.Platform.OS,
-		OSVersion:     "", // N9E 元信息中没有直接的版本号，OS 字段已包含类型
-		KernelVersion: extInfo.Platform.KernelRelease,
-		CPUCores:      extInfo.CPU.GetCPUCores(),
-		CPUModel:      extInfo.CPU.ModelName,
-		MemoryTotal:   extInfo.Memory.GetTotal(),
-		DiskMounts:    diskMounts,
-	}, nil
+	// 如果没有从 ExtendInfo 获取到 IP，使用 RemoteAddr
+	if hostMeta.IP == "" && t.RemoteAddr != "" {
+		hostMeta.IP = t.RemoteAddr
+	}
+
+	return hostMeta, nil
 }

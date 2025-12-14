@@ -128,6 +128,9 @@ func (e *Evaluator) evaluateMetric(hostname, metricName string, value *model.Met
 		return nil
 	}
 
+	// Format the metric value for display
+	value.FormattedValue = e.formatMetricValue(metricName, value.RawValue)
+
 	// Skip expanded metrics (e.g., disk_usage:/home) - only evaluate aggregated metrics
 	if strings.Contains(metricName, ":") {
 		// Expanded metrics are for display only, don't trigger alerts
@@ -310,4 +313,86 @@ func (e *Evaluator) determineHostStatus(alerts []*model.Alert) model.HostStatus 
 		return model.HostStatusWarning
 	}
 	return model.HostStatusNormal
+}
+
+// formatMetricValue formats a raw metric value based on the metric definition.
+func (e *Evaluator) formatMetricValue(metricName string, value float64) string {
+	// Get base metric name (strip expanded suffix like ":/" or "_max")
+	baseName := metricName
+	if idx := strings.Index(metricName, ":"); idx > 0 {
+		baseName = metricName[:idx]
+	}
+	if strings.HasSuffix(baseName, "_max") {
+		baseName = strings.TrimSuffix(baseName, "_max")
+	}
+
+	// Get metric definition for format info
+	def, ok := e.metricDefs[baseName]
+	if !ok {
+		// Fallback to default number format
+		return fmt.Sprintf("%.2f", value)
+	}
+
+	// Format based on metric format type
+	switch def.Format {
+	case model.MetricFormatPercent:
+		return fmt.Sprintf("%.1f%%", value)
+	case model.MetricFormatSize:
+		return formatBytes(int64(value))
+	case model.MetricFormatDuration:
+		return formatUptime(value)
+	case model.MetricFormatNumber:
+		// For counts/integers, show as integer if no decimals
+		if value == float64(int64(value)) {
+			return fmt.Sprintf("%.0f", value)
+		}
+		return fmt.Sprintf("%.2f", value)
+	default:
+		// Default: use unit hint if available
+		if def.Unit == "%" {
+			return fmt.Sprintf("%.1f%%", value)
+		}
+		if def.Unit == "个" || def.Unit == "core" {
+			return fmt.Sprintf("%.0f", value)
+		}
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// formatBytes formats bytes to human-readable size.
+func formatBytes(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+		TB = GB * 1024
+	)
+
+	switch {
+	case bytes >= TB:
+		return fmt.Sprintf("%.2f TB", float64(bytes)/float64(TB))
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
+// formatUptime formats seconds to human-readable uptime.
+func formatUptime(seconds float64) string {
+	days := int(seconds / 86400)
+	hours := int((seconds - float64(days*86400)) / 3600)
+	minutes := int((seconds - float64(days*86400) - float64(hours*3600)) / 60)
+
+	if days > 0 {
+		return fmt.Sprintf("%d天%d时%d分", days, hours, minutes)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%d时%d分", hours, minutes)
+	}
+	return fmt.Sprintf("%d分钟", minutes)
 }

@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,6 +296,32 @@ func (c *Collector) collectExpandedMetric(
 			labelValue = "unknown"
 		}
 
+		// Filter out non-physical disk paths for disk metrics
+		if metric.ExpandByLabel == "path" {
+			device := result.Labels["device"]
+			fstype := result.Labels["fstype"]
+
+			// Use device/fstype based filtering (more accurate)
+			if device != "" && !isPhysicalBlockDevice(device, fstype) {
+				c.logger.Debug().
+					Str("hostname", hostname).
+					Str("path", labelValue).
+					Str("device", device).
+					Str("fstype", fstype).
+					Msg("skipping non-physical disk (device/fstype filter)")
+				continue
+			}
+
+			// Fallback: also filter by path patterns
+			if !isPhysicalDiskPath(labelValue) {
+				c.logger.Debug().
+					Str("hostname", hostname).
+					Str("path", labelValue).
+					Msg("skipping non-physical disk path")
+				continue
+			}
+		}
+
 		// Create expanded metric name (e.g., "disk_usage:/home")
 		expandedName := fmt.Sprintf("%s:%s", metric.Name, labelValue)
 
@@ -308,7 +335,7 @@ func (c *Collector) collectExpandedMetric(
 		// Track for this host
 		hostExpandedMetrics[hostname] = append(hostExpandedMetrics[hostname], mv)
 
-		// Track max value for aggregation
+		// Track max value for aggregation (only for physical disks)
 		if current, exists := hostMaxValues[hostname]; !exists || result.Value > current {
 			hostMaxValues[hostname] = result.Value
 		}
@@ -445,6 +472,32 @@ func (c *Collector) collectExpandedMetricConcurrent(
 			labelValue = "unknown"
 		}
 
+		// Filter out non-physical disk paths for disk metrics
+		if metric.ExpandByLabel == "path" {
+			device := result.Labels["device"]
+			fstype := result.Labels["fstype"]
+
+			// Use device/fstype based filtering (more accurate)
+			if device != "" && !isPhysicalBlockDevice(device, fstype) {
+				c.logger.Debug().
+					Str("hostname", hostname).
+					Str("path", labelValue).
+					Str("device", device).
+					Str("fstype", fstype).
+					Msg("skipping non-physical disk (device/fstype filter, concurrent)")
+				continue
+			}
+
+			// Fallback: also filter by path patterns
+			if !isPhysicalDiskPath(labelValue) {
+				c.logger.Debug().
+					Str("hostname", hostname).
+					Str("path", labelValue).
+					Msg("skipping non-physical disk path (concurrent)")
+				continue
+			}
+		}
+
 		// Create expanded metric name (e.g., "disk_usage:/home")
 		expandedName := fmt.Sprintf("%s:%s", metric.Name, labelValue)
 
@@ -496,4 +549,129 @@ func (c *Collector) collectExpandedMetricConcurrent(
 		Msg("expanded metric collected (concurrent)")
 
 	return nil
+}
+
+// isPhysicalDiskPath checks if a disk path represents a physical disk mount point.
+// It filters out container-related, virtual, and temporary filesystem paths.
+// This helps match the output of commands like `lsblk` or `df -h` on physical disks.
+func isPhysicalDiskPath(path string) bool {
+	// Skip empty paths
+	if path == "" || path == "unknown" {
+		return false
+	}
+
+	// Skip Kubernetes CSI mounts (Longhorn, etc.)
+	if strings.Contains(path, "/var/lib/kubelet/plugins/kubernetes.io/csi/") {
+		return false
+	}
+
+	// Skip Kubernetes pod volume mounts
+	if strings.Contains(path, "/var/lib/kubelet/pods/") {
+		return false
+	}
+
+	// Skip containerd runtime paths
+	if strings.Contains(path, "/run/containerd/") {
+		return false
+	}
+
+	// Skip Docker storage paths
+	if strings.Contains(path, "/var/lib/docker/") {
+		return false
+	}
+
+	// Skip overlay filesystem paths (Docker/containerd layers)
+	if strings.Contains(path, "/overlay/") || strings.Contains(path, "/overlay2/") {
+		return false
+	}
+
+	// Skip NFS mounts if they look like container storage
+	if strings.Contains(path, "/nfs/") && strings.Contains(path, "kubelet") {
+		return false
+	}
+
+	// Skip snap package mounts
+	if strings.HasPrefix(path, "/snap/") {
+		return false
+	}
+
+	// Skip system virtual filesystems
+	virtualPaths := []string{
+		"/dev",
+		"/dev/shm",
+		"/proc",
+		"/sys",
+		"/run",
+		"/run/lock",
+		"/run/user",
+	}
+	for _, vp := range virtualPaths {
+		if path == vp || strings.HasPrefix(path, vp+"/") {
+			return false
+		}
+	}
+
+	// Physical disk paths typically start with / and are short
+	// Common patterns: /, /home, /data, /var, /opt, /usr, /boot, /tmp
+	return true
+}
+
+// isPhysicalBlockDevice checks if a disk is a real physical block device based on
+// the device name and filesystem type from monitoring metrics.
+// This filters out NFS mounts, Longhorn PVC, and other non-local storage.
+func isPhysicalBlockDevice(device, fstype string) bool {
+	// Skip empty values
+	if device == "" {
+		return false
+	}
+
+	// Skip NFS and network filesystems
+	networkFsTypes := []string{"nfs", "nfs4", "cifs", "smbfs", "glusterfs", "ceph"}
+	for _, nfs := range networkFsTypes {
+		if strings.EqualFold(fstype, nfs) {
+			return false
+		}
+	}
+
+	// Skip Longhorn PVC devices
+	if strings.HasPrefix(device, "longhorn/") {
+		return false
+	}
+
+	// Skip overlay filesystems
+	if fstype == "overlay" || fstype == "overlay2" {
+		return false
+	}
+
+	// Skip tmpfs and devtmpfs
+	if fstype == "tmpfs" || fstype == "devtmpfs" {
+		return false
+	}
+
+	// Accept common block device patterns:
+	// - sdX, sdXN (SATA/SAS disks)
+	// - vdX, vdXN (virtio disks)
+	// - nvmeXnYpZ (NVMe disks)
+	// - xvdX (Xen virtual disks)
+	// - hdX (IDE disks)
+	// - /dev/sdX, /dev/vdX, etc.
+	deviceLower := strings.ToLower(device)
+	deviceLower = strings.TrimPrefix(deviceLower, "/dev/")
+
+	blockDevicePatterns := []string{
+		"sd", "vd", "nvme", "xvd", "hd", "mmcblk",
+	}
+
+	for _, pattern := range blockDevicePatterns {
+		if strings.HasPrefix(deviceLower, pattern) {
+			return true
+		}
+	}
+
+	// Also accept device mapper (dm-X) and LVM devices
+	if strings.HasPrefix(deviceLower, "dm-") || strings.Contains(device, "mapper/") {
+		return true
+	}
+
+	return false
 }

@@ -440,6 +440,36 @@ func TestInjectMatchersToQuery(t *testing.T) {
 			matchers: []string{},
 			expected: "cpu_usage_active",
 		},
+		{
+			name:     "expression_with_scalar_subtraction",
+			query:    "100 - mem_available_percent",
+			matchers: []string{`env="prod"`},
+			expected: `100 - mem_available_percent{env="prod"}`,
+		},
+		{
+			name:     "expression_with_scalar_multiplication",
+			query:    "cpu_usage_active * 100",
+			matchers: []string{`env="prod"`},
+			expected: `cpu_usage_active{env="prod"} * 100`,
+		},
+		{
+			name:     "expression_with_scalar_division",
+			query:    "mem_total / 1024 / 1024 / 1024",
+			matchers: []string{`env="prod"`},
+			expected: `mem_total{env="prod"} / 1024 / 1024 / 1024`,
+		},
+		{
+			name:     "complex_expression_with_scalars",
+			query:    "100 - (mem_available / mem_total * 100)",
+			matchers: []string{`busigroup=~"prod"`, `env="prod"`},
+			expected: `100 - (mem_available{busigroup=~"prod", env="prod"} / mem_total{busigroup=~"prod", env="prod"} * 100)`,
+		},
+		{
+			name:     "pure_scalar_unchanged",
+			query:    "100",
+			matchers: []string{`env="prod"`},
+			expected: "100",
+		},
 	}
 
 	for _, tt := range tests {

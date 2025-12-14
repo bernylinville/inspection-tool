@@ -214,12 +214,15 @@ func TestCollector_CollectHostMetas_Success(t *testing.T) {
 		if r.URL.Path == "/api/n9e/targets" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			// Note: extend_info must be a JSON string (escaped)
+			// Note: extend_info must be a JSON string (escaped), include direct fields
 			_, _ = w.Write([]byte(`{
-				"dat": [
-					{"ident": "test-host-1", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\",\"model_name\":\"Intel Xeon\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.100\"},\"platform\":{\"hostname\":\"test-host-1\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[{\"kb_size\":\"103084600\",\"mounted_on\":\"/\",\"name\":\"/dev/sda1\"}]}"},
-					{"ident": "test-host-2", "extend_info": "{\"cpu\":{\"cpu_cores\":\"8\",\"model_name\":\"AMD EPYC\"},\"memory\":{\"total\":\"32993869824\"},\"network\":{\"ipaddress\":\"192.168.1.101\"},\"platform\":{\"hostname\":\"test-host-2\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.15.0\"},\"filesystem\":[{\"kb_size\":\"206169200\",\"mounted_on\":\"/\",\"name\":\"/dev/sda1\"}]}"}
-				],
+				"dat": {
+					"list": [
+						{"ident": "test-host-1", "host_ip": "192.168.1.100", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\",\"model_name\":\"Intel Xeon\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.100\"},\"platform\":{\"hostname\":\"test-host-1\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[{\"kb_size\":\"103084600\",\"mounted_on\":\"/\",\"name\":\"/dev/sda1\"}]}"},
+						{"ident": "test-host-2", "host_ip": "192.168.1.101", "os": "centos9", "cpu_num": 8, "extend_info": "{\"cpu\":{\"cpu_cores\":\"8\",\"model_name\":\"AMD EPYC\"},\"memory\":{\"total\":\"32993869824\"},\"network\":{\"ipaddress\":\"192.168.1.101\"},\"platform\":{\"hostname\":\"test-host-2\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.15.0\"},\"filesystem\":[{\"kb_size\":\"206169200\",\"mounted_on\":\"/\",\"name\":\"/dev/sda1\"}]}"}
+					],
+					"total": 2
+				},
 				"err": ""
 			}`))
 		}
@@ -288,7 +291,7 @@ func TestCollector_CollectHostMetas_EmptyList(t *testing.T) {
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	})
 	defer n9eServer.Close()
 
@@ -577,9 +580,12 @@ func TestCollector_CollectAll_Success(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{
-			"dat": [
-				{"ident": "test-host-1", "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.100\"},\"platform\":{\"hostname\":\"test-host-1\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
-			],
+			"dat": {
+				"list": [
+					{"ident": "test-host-1", "host_ip": "192.168.1.100", "os": "centos9", "cpu_num": 4, "extend_info": "{\"cpu\":{\"cpu_cores\":\"4\"},\"memory\":{\"total\":\"16496934912\"},\"network\":{\"ipaddress\":\"192.168.1.100\"},\"platform\":{\"hostname\":\"test-host-1\",\"os\":\"GNU/Linux\",\"kernel_release\":\"5.14.0\"},\"filesystem\":[]}"}
+				],
+				"total": 1
+			},
 			"err": ""
 		}`))
 	})
@@ -647,7 +653,7 @@ func TestCollector_CollectAll_NoHosts(t *testing.T) {
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"dat": [], "err": ""}`))
+		_, _ = w.Write([]byte(`{"dat": {"list": [], "total": 0}, "err": ""}`))
 	})
 	defer n9eServer.Close()
 

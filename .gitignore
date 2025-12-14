@@ -1,2 +1,4 @@
 bin/
 inspect
+config.yaml
+reports/

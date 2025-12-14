@@ -24,6 +24,7 @@ type N9EConfig struct {
 	Endpoint string        `mapstructure:"endpoint" validate:"required,url"`
 	Token    string        `mapstructure:"token" validate:"required"`
 	Timeout  time.Duration `mapstructure:"timeout"`
+	Query    string        `mapstructure:"query"` // Host filter query (e.g., "items=短剧项目")
 }
 
 // VictoriaMetricsConfig contains configuration for VictoriaMetrics API.

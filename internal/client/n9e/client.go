@@ -20,6 +20,7 @@ type Client struct {
 	token      string             // Authentication token
 	timeout    time.Duration      // Request timeout
 	retry      config.RetryConfig // Retry configuration
+	query      string             // Host filter query (e.g., "items=短剧项目")
 	httpClient *resty.Client      // HTTP client
 	logger     zerolog.Logger     // Logger
 }
@@ -57,6 +58,7 @@ func NewClient(cfg *config.N9EConfig, retryCfg *config.RetryConfig, logger zerol
 		token:      cfg.Token,
 		timeout:    timeout,
 		retry:      retry,
+		query:      cfg.Query,
 		httpClient: httpClient,
 		logger:     logger.With().Str("component", "n9e-client").Logger(),
 	}
@@ -81,14 +83,27 @@ func retryCondition(resp *resty.Response, err error) bool {
 }
 
 // GetTargets retrieves all target hosts from the N9E API.
+// It fetches all targets with a large limit to get all hosts in one request.
+// If a query filter is configured, it will be applied to filter hosts.
 func (c *Client) GetTargets(ctx context.Context) ([]TargetData, error) {
-	c.logger.Debug().Msg("fetching all targets from N9E")
+	c.logger.Debug().Str("query", c.query).Msg("fetching targets from N9E")
 
 	var result TargetsResponse
+
+	queryParams := map[string]string{
+		"limit": "10000", // Large limit to get all hosts
+		"p":     "1",
+	}
+
+	// Add query filter if configured
+	if c.query != "" {
+		queryParams["query"] = c.query
+	}
 
 	resp, err := c.httpClient.R().
 		SetContext(ctx).
 		SetResult(&result).
+		SetQueryParams(queryParams).
 		Get("/api/n9e/targets")
 
 	if err != nil {
@@ -111,8 +126,8 @@ func (c *Client) GetTargets(ctx context.Context) ([]TargetData, error) {
 		return nil, fmt.Errorf("N9E API error: %s", result.Err)
 	}
 
-	c.logger.Info().Int("count", len(result.Dat)).Msg("fetched targets successfully")
-	return result.Dat, nil
+	c.logger.Info().Int("count", len(result.Dat.List)).Int("total", result.Dat.Total).Msg("fetched targets successfully")
+	return result.Dat.List, nil
 }
 
 // GetTarget retrieves a single target host by its ident from the N9E API.
