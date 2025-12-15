@@ -22,7 +22,7 @@ datasources:
   # 用途: 获取主机元信息（系统类型、版本、内核、IP 等）
   n9e:
     # API 地址 (必填)
-    endpoint: "http://120.26.87.44:17000"
+    endpoint: "http://${nightingale_api_address}:17000"
     # 认证 Token (必填)
     # 建议使用环境变量: export INSPECT_DATASOURCES_N9E_TOKEN="your-token"
     token: "${N9E_TOKEN}"
@@ -38,7 +38,7 @@ datasources:
   # 用途: 查询监控指标数据（CPU、内存、磁盘等）
   victoriametrics:
     # API 地址 (必填)
-    endpoint: "http://120.26.87.44:8428"
+    endpoint: "http://${victoriametrics_api_address}:8428"
     # 请求超时时间 (默认: 30s)
     timeout: 30s
 
@@ -80,30 +80,30 @@ inspection:
 thresholds:
   # CPU 利用率阈值 (单位: %)
   cpu_usage:
-    warning: 70     # CPU > 70% 触发警告
-    critical: 90    # CPU > 90% 触发严重告警
+    warning: 70 # CPU > 70% 触发警告
+    critical: 90 # CPU > 90% 触发严重告警
 
   # 内存利用率阈值 (单位: %)
   memory_usage:
-    warning: 70     # 内存 > 70% 触发警告
-    critical: 90    # 内存 > 90% 触发严重告警
+    warning: 70 # 内存 > 70% 触发警告
+    critical: 90 # 内存 > 90% 触发严重告警
 
   # 磁盘利用率阈值 (单位: %)
   # 注意: 多磁盘时取最大值进行判断
   disk_usage:
-    warning: 70     # 磁盘 > 70% 触发警告
-    critical: 90    # 磁盘 > 90% 触发严重告警
+    warning: 70 # 磁盘 > 70% 触发警告
+    critical: 90 # 磁盘 > 90% 触发严重告警
 
   # 僵尸进程数阈值 (单位: 个)
   zombie_processes:
-    warning: 1      # 僵尸进程 > 0 触发警告
-    critical: 10    # 僵尸进程 > 10 触发严重告警
+    warning: 1 # 僵尸进程 > 0 触发警告
+    critical: 10 # 僵尸进程 > 10 触发严重告警
 
   # 单核负载阈值 (无单位)
   # 计算方式: 系统负载 / CPU 核心数
   load_per_core:
-    warning: 0.7    # 单核负载 > 0.7 触发警告
-    critical: 1.0   # 单核负载 > 1.0 触发严重告警
+    warning: 0.7 # 单核负载 > 0.7 触发警告
+    critical: 1.0 # 单核负载 > 1.0 触发严重告警
 
 # -----------------------------------------------------------------------------
 # 报告配置

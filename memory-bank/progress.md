@@ -2120,7 +2120,7 @@ LDFLAGS := -X $(CMD_PKG).Version=$(VERSION) -X $(CMD_PKG).BuildTime=$(BUILD_TIME
 - **配置示例**：
   ```yaml
   n9e:
-    endpoint: "http://120.26.87.44:17000"
+    endpoint: "http://${nightingale_api_address}:17000"
     token: "your-token"
     query: "items=短剧项目"  # 只获取标签 items 为"短剧项目"的主机
   ```
