@@ -42,7 +42,8 @@ inspection-tool/
 │   │   └── config.go          # 配置结构体定义（已实现）
 │   ├── model/                  # 数据模型
 │   │   ├── host.go             # 主机模型（已实现）
-│   │   └── metric.go           # 指标模型（已实现）
+│   │   ├── metric.go           # 指标模型（已实现）
+│   │   └── mysql.go            # MySQL 实例模型（已实现）
 │   ├── report/
 │   │   ├── writer.go          # ReportWriter 接口定义（已实现）
 │   │   ├── excel/              # Excel 报告生成
@@ -240,6 +241,7 @@ func (c *Client) QueryByIdent(ctx context.Context, query string) (map[string]Que
 | `metric.go` | 指标模型（MetricDefinition、MetricValue、HostMetrics） | ✅ 已实现 |
 | `alert.go` | 告警模型（AlertLevel、Alert、AlertSummary） | ✅ 已实现 |
 | `inspection.go` | 巡检结果模型（InspectionSummary、HostResult、InspectionResult） | ✅ 已实现 |
+| `mysql.go` | MySQL 实例模型（MySQLInstance、MySQLInstanceStatus、MySQLClusterMode） | ✅ 已实现 |
 
 **主机模型结构**：
 ```go
@@ -313,6 +315,51 @@ type AlertSummary struct {
     WarningCount  int `json:"warning_count"`  // 警告级别数量
     CriticalCount int `json:"critical_count"` // 严重级别数量
 }
+```
+
+**MySQL 实例模型结构**（MySQL 巡检功能）：
+```go
+// MySQL 实例状态枚举
+type MySQLInstanceStatus string
+const (
+    MySQLStatusNormal   MySQLInstanceStatus = "normal"   // 正常
+    MySQLStatusWarning  MySQLInstanceStatus = "warning"  // 警告
+    MySQLStatusCritical MySQLInstanceStatus = "critical" // 严重
+    MySQLStatusFailed   MySQLInstanceStatus = "failed"   // 采集失败
+)
+
+// MySQL 集群模式枚举
+type MySQLClusterMode string
+const (
+    ClusterModeMGR         MySQLClusterMode = "mgr"          // MySQL 8.0 MGR 模式
+    ClusterModeDualMaster  MySQLClusterMode = "dual-master"  // 双主模式
+    ClusterModeMasterSlave MySQLClusterMode = "master-slave" // 主从模式
+)
+
+// MySQL MGR 角色枚举
+type MySQLMGRRole string
+const (
+    MGRRolePrimary   MySQLMGRRole = "PRIMARY"   // 主节点
+    MGRRoleSecondary MySQLMGRRole = "SECONDARY" // 从节点
+    MGRRoleUnknown   MySQLMGRRole = "UNKNOWN"   // 未知
+)
+
+// MySQL 实例元信息
+type MySQLInstance struct {
+    Address       string           `json:"address"`        // 实例地址 (IP:Port)
+    IP            string           `json:"ip"`             // IP 地址
+    Port          int              `json:"port"`           // 端口号
+    DatabaseType  string           `json:"database_type"`  // 数据库类型，固定为 "MySQL"
+    Version       string           `json:"version"`        // 数据库版本 (如 8.0.39)
+    InnoDBVersion string           `json:"innodb_version"` // InnoDB 版本
+    ServerID      string           `json:"server_id"`      // Server ID
+    ClusterMode   MySQLClusterMode `json:"cluster_mode"`   // 集群模式
+}
+
+// 辅助函数
+func ParseAddress(address string) (ip string, port int, err error)  // 解析 IP:Port
+func NewMySQLInstance(address string) *MySQLInstance                 // 创建实例
+func NewMySQLInstanceWithClusterMode(address string, mode MySQLClusterMode) *MySQLInstance
 ```
 
 **巡检结果模型结构**：
@@ -748,3 +795,4 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 23（并发采集 + 测试），添加 errgroup 并发逻辑，覆盖率 80.1% |
 | 2025-12-13 | 完成步骤 24（报告写入器接口），添加 writer.go，阶段六开始 |
 | 2025-12-13 | 完成步骤 25（Excel 报告生成器），添加 excel/writer.go 和测试，覆盖率 89.6% |
+| 2025-12-15 | **MySQL 功能步骤 1**：添加 mysql.go（MySQL 实例模型），阶段一开始 |

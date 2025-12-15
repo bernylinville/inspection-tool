@@ -1,6 +1,6 @@
 # MySQL 数据库巡检功能 - 开发实施计划
 
-> 本计划聚焦于 MySQL 8.0 MGR 集群巡检功能的 MVP 实现，后续扩展支持 5.7 双主/主从模式。
+> 本计划聚焦于 MySQL 8.0 MGR 集群巡检功能的 MVP 实现。
 
 ---
 
@@ -8,23 +8,23 @@
 
 基于 Categraf 采集的 MySQL 监控数据，实现 MySQL 数据库巡检功能。巡检项包括：
 
-| 巡检项              | 说明                | 数据来源                                                                      |
-| ------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| 巡检时间            | 巡检执行时间        | 系统时间                                                                      |
-| IP 地址             | 数据库实例 IP       | `address` 标签                                                                |
-| 数据库类型          | MySQL               | 固定值                                                                        |
-| 数据库端口          | 实例端口            | `address` 标签解析                                                            |
-| 数据库版本          | MySQL 版本号        | `mysql_version_info` 指标 `version` 标签                                      |
-| Server ID           | MGR 成员 ID         | `mysql_innodb_cluster_mgr_role_primary` 指标 `member_id` 标签                 |
-| 是否普通用户启动    | 非 root 用户启动    | 待定（需扩展采集）                                                            |
-| Slave 是否启动      | 从库复制线程状态    | 5.7: `mysql_slave_status_*`; 8.0 MGR: 不适用                                  |
-| 同步状态是否正常    | 复制/MGR 同步状态   | 8.0 MGR: `mysql_innodb_cluster_mgr_state_online`; 5.7: `mysql_slave_status_*` |
-| 是否开启慢查询日志  | slow_query_log 状态 | 待定（需扩展采集 `slow_query_log` 变量）                                      |
-| 日志路径            | 慢查询日志路径      | 待定（需扩展采集）                                                            |
-| 最大连接数          | max_connections     | `mysql_global_variables_max_connections`                                      |
-| Binlog 配置是否正常 | binlog 开启状态     | `mysql_binlog_file_count` > 0                                                 |
-| Binlog 保留时长     | binlog 过期配置     | 待定（需扩展采集 `binlog_expire_logs_seconds`）                               |
-| MySQL 连接权限      | 监控用户权限检查    | `mysql_up` = 1 表示连接正常                                                   |
+| 巡检项              | 说明                | 数据来源                                                      | MVP 状态     |
+| ------------------- | ------------------- | ------------------------------------------------------------- | ------------ |
+| 巡检时间            | 巡检执行时间        | 系统时间                                                      | ✅ 已实现    |
+| IP 地址             | 数据库实例 IP       | `address` 标签                                                | ✅ 已实现    |
+| 数据库类型          | MySQL               | 固定值                                                        | ✅ 已实现    |
+| 数据库端口          | 实例端口            | `address` 标签解析                                            | ✅ 已实现    |
+| 数据库版本          | MySQL 版本号        | `mysql_version_info` 指标 `version` 标签                      | ✅ 已实现    |
+| Server ID           | MGR 成员 ID         | `mysql_innodb_cluster_mgr_role_primary` 指标 `member_id` 标签 | ✅ 已实现    |
+| 是否普通用户启动    | 非 root 用户启动    | -                                                             | ⏳ 显示 N/A |
+| Slave 是否启动      | 从库复制线程状态    | 8.0 MGR: 不适用                                               | ⏳ 显示 N/A |
+| 同步状态是否正常    | MGR 同步状态        | `mysql_innodb_cluster_mgr_state_online`                       | ✅ 已实现    |
+| 是否开启慢查询日志  | slow_query_log 状态 | `mysql_variables_slow_query_log`                              | ✅ 已实现    |
+| 日志路径            | 慢查询日志路径      | `slow_query_log_file` 标签                                    | ✅ 已实现    |
+| 最大连接数          | max_connections     | `mysql_global_variables_max_connections`                      | ✅ 已实现    |
+| Binlog 配置是否正常 | binlog 开启状态     | `mysql_binlog_file_count` > 0                                 | ✅ 已实现    |
+| Binlog 保留时长     | binlog 过期配置     | `mysql_variables_binlog_expire_logs_seconds`                  | ✅ 已实现    |
+| MySQL 连接权限      | 监控用户权限检查    | `mysql_up` = 1 表示连接正常                                   | ✅ 已实现    |
 
 ---
 
@@ -32,17 +32,19 @@
 
 ### 1. MySQL 集群模式支持策略
 
-| 版本 | 集群模式        | 优先级      | 同步状态判断方式                                  |
-| ---- | --------------- | ----------- | ------------------------------------------------- |
-| 8.0  | MGR (1 主 2 从) | P0 首先实现 | `mgr_state_online=1` 且 `mgr_member_count=3`      |
-| 5.7  | 双主            | P1 后续扩展 | `Slave_IO_Running=Yes` 且 `Slave_SQL_Running=Yes` |
-| 5.7  | 主从            | P1 后续扩展 | 同上                                              |
+**MVP 仅支持 MySQL 8.0 MGR 模式**，生产环境不会出现不同架构的 MySQL 集群混用情况。
+
+| 版本 | 集群模式        | 优先级      | 同步状态判断方式                             |
+| ---- | --------------- | ----------- | -------------------------------------------- |
+| 8.0  | MGR (1 主 N 从) | P0 MVP 实现 | `mgr_state_online=1` 且成员数达到预期        |
+| 5.7  | 双主/主从       | P1 后续扩展 | `Slave_IO_Running` 且 `Slave_SQL_Running`    |
 
 ### 2. 实例标识方式
 
 - **主要标识**：`address` 标签（格式：`IP:Port`）
 - **示例**：`172.18.182.130:33306`
 - **解析**：分割冒号获取 IP 和端口
+- **约束**：同一服务器不会运行多个 MySQL 实例（无需处理多实例场景）
 
 ### 3. 监控指标映射（基于 mysql.txt 分析）
 
@@ -62,9 +64,9 @@ mysql_innodb_cluster_mgr_role_primary       # 是否为 PRIMARY 节点
 mysql_innodb_cluster_mgr_state_online       # 节点是否 ONLINE
 ```
 
-### 4. 扩展采集项（已配置）
+### 4. 扩展采集项（已部署）
 
-以下巡检项已通过扩展 Categraf mysql.toml 配置实现采集：
+以下 Categraf mysql.toml 配置**已部署到陕西营销活动生产环境**，用于开发验证：
 
 ```toml
 # 自定义查询: MySQL 变量
@@ -84,22 +86,44 @@ label_fields = ["slow_query_log_file"]
 
 **实际采集的指标名称**（Categraf 命名规则：`mysql_{measurement}_{field}`）：
 
-| 巡检项          | 指标名称                                     | 示例值                                     |
-| --------------- | -------------------------------------------- | ------------------------------------------ |
-| 慢查询日志状态  | `mysql_variables_slow_query_log`             | 1 (开启)                                   |
-| 慢查询日志路径  | `slow_query_log_file` 标签                   | `/data/logs/mysql-33306/mysql-slow.log` ✅ |
-| Binlog 保留时长 | `mysql_variables_binlog_expire_logs_seconds` | 604800 (7 天)                              |
-| Server ID       | `mysql_variables_server_id`                  | 130                                        |
+| 巡检项          | 指标名称                                     | 示例值                                   |
+| --------------- | -------------------------------------------- | ---------------------------------------- |
+| 慢查询日志状态  | `mysql_variables_slow_query_log`             | 1 (开启)                                 |
+| 慢查询日志路径  | `slow_query_log_file` 标签                   | `/data/logs/mysql-33306/mysql-slow.log`  |
+| Binlog 保留时长 | `mysql_variables_binlog_expire_logs_seconds` | 604800 (7 天)                            |
+| Server ID       | `mysql_variables_server_id`                  | 130                                      |
 
 ### 5. 巡检状态判断规则
 
-| 巡检项          | 正常条件              | 警告条件             | 严重条件              |
-| --------------- | --------------------- | -------------------- | --------------------- |
-| 连接权限        | `mysql_up=1`          | -                    | `mysql_up=0`          |
-| 同步状态（MGR） | `mgr_state_online=1`  | -                    | `mgr_state_online=0`  |
-| MGR 成员数      | `mgr_member_count>=3` | `mgr_member_count=2` | `mgr_member_count<2`  |
-| 连接使用率      | `<70%`                | `70%-90%`            | `>90%`                |
-| Binlog 配置     | `binlog_file_count>0` | -                    | `binlog_file_count=0` |
+| 巡检项          | 正常条件                         | 警告条件                         | 严重条件                         |
+| --------------- | -------------------------------- | -------------------------------- | -------------------------------- |
+| 连接权限        | `mysql_up=1`                     | -                                | `mysql_up=0`                     |
+| 同步状态（MGR） | `mgr_state_online=1`             | -                                | `mgr_state_online=0`             |
+| MGR 成员数      | `count >= expected`              | `count = expected - 1`           | `count < expected - 1`           |
+| 连接使用率      | `<70%`                           | `70%-90%`                        | `>90%`                           |
+| Binlog 配置     | `binlog_file_count>0`            | -                                | `binlog_file_count=0`            |
+
+**MGR 成员数阈值说明**：
+- 默认期望成员数为 3（1 主 2 从架构）
+- 该值在 `config.yaml` 中可配置，支持 5、7、9 节点扩展
+- 成员数 = 期望值时为正常
+- 成员数 = 期望值 - 1 时为警告（掉 1 个节点）
+- 成员数 < 期望值 - 1 时为严重（掉 2 个及以上节点）
+
+### 6. 集群模式配置
+
+**不支持自动检测**，需在 `config.yaml` 中手动指定集群模式：
+
+```yaml
+mysql:
+  cluster_mode: "mgr"  # 可选值: mgr, dual-master, master-slave
+```
+
+### 7. 验证环境
+
+**开发和功能验证使用陕西营销活动环境**（而非短剧项目环境）：
+- N9E API 和 VictoriaMetrics 指向陕西营销活动监控系统
+- Host 巡检也使用该环境验证
 
 ---
 
@@ -118,7 +142,7 @@ label_fields = ["slow_query_log_file"]
   - Version (string): 数据库版本
   - InnoDBVersion (string): InnoDB 版本
   - ServerID (string): Server ID
-  - ClusterMode (string): 集群模式 (MGR/双主/主从/单机)
+  - ClusterMode (string): 集群模式 (MGR/双主/主从)
 - 定义 `MySQLInstanceStatus` 枚举（normal/warning/critical/failed）
 
 **验证**：
@@ -136,7 +160,7 @@ label_fields = ["slow_query_log_file"]
   - `MySQLInspectionResult`: 单个实例的巡检结果
     - Instance (\*MySQLInstance): 实例元信息
     - ConnectionStatus (bool): 连接状态
-    - SlaveRunning (bool): Slave 是否运行
+    - SlaveRunning (bool): Slave 是否运行（MGR 模式显示 N/A）
     - SyncStatus (bool): 同步状态
     - SlowQueryLogEnabled (bool): 慢查询日志状态
     - SlowQueryLogPath (string): 日志路径
@@ -147,7 +171,7 @@ label_fields = ["slow_query_log_file"]
     - MGRMemberCount (int): MGR 成员数（仅 MGR 模式）
     - MGRRole (string): MGR 角色 (PRIMARY/SECONDARY)
     - MGRStateOnline (bool): MGR 节点是否在线
-    - NonRootUser (bool): 是否普通用户启动
+    - NonRootUser (string): 是否普通用户启动（MVP 阶段固定为 "N/A"）
     - Status (MySQLInstanceStatus): 整体状态
     - Alerts ([]MySQLAlert): 告警列表
   - `MySQLAlert`: 告警详情
@@ -168,7 +192,7 @@ label_fields = ["slow_query_log_file"]
   ```go
   type MySQLInspectionConfig struct {
       Enabled           bool              `mapstructure:"enabled"`
-      ClusterMode       string            `mapstructure:"cluster_mode"` // "mgr", "dual-master", "master-slave", "auto"
+      ClusterMode       string            `mapstructure:"cluster_mode"` // "mgr", "dual-master", "master-slave"
       InstanceFilter    MySQLFilter       `mapstructure:"instance_filter"`
       Thresholds        MySQLThresholds   `mapstructure:"thresholds"`
   }
@@ -182,12 +206,18 @@ label_fields = ["slow_query_log_file"]
   type MySQLThresholds struct {
       ConnectionUsageWarning  float64 `mapstructure:"connection_usage_warning"`  // 默认 70
       ConnectionUsageCritical float64 `mapstructure:"connection_usage_critical"` // 默认 90
-      MGRMemberCountWarning   int     `mapstructure:"mgr_member_count_warning"`  // 默认 2
-      MGRMemberCountCritical  int     `mapstructure:"mgr_member_count_critical"` // 默认 1
+      MGRMemberCountExpected  int     `mapstructure:"mgr_member_count_expected"` // 默认 3，可配置为 5/7/9
   }
   ```
 
 - 在主配置结构体 `Config` 中添加 `MySQL MySQLInspectionConfig` 字段
+
+**说明**：
+
+- `cluster_mode` 不支持 `auto`，必须手动指定
+- `mgr_member_count_expected` 用于定义期望的 MGR 节点数，告警阈值基于此值计算：
+  - 警告阈值 = expected - 1
+  - 严重阈值 = expected - 2
 
 **验证**：
 
@@ -203,7 +233,6 @@ label_fields = ["slow_query_log_file"]
 - 在 `configs/` 目录下创建 `mysql-metrics.yaml` 文件
 - 定义所有 MySQL 巡检指标的 PromQL 查询表达式
 - 使用与 `metrics.yaml` 相同的格式
-- 区分 8.0 MGR 和 5.7 主从的指标
 
 **指标定义内容**：
 
@@ -303,27 +332,20 @@ mysql_metrics:
     category: info
     note: "MySQL 实例的 server_id"
 
+  # 待定项 - MVP 阶段显示 N/A
   - name: non_root_user
     display_name: "非 root 用户启动"
     query: ""
     category: security
     status: pending
-    note: "需要通过其他方式检测进程运行用户"
+    note: "MVP 阶段显示 N/A，后续扩展实现"
 
-  # 5.7 主从相关（后续扩展）
-  - name: slave_io_running
-    display_name: "Slave IO 线程"
-    query: "mysql_slave_status_slave_io_running"
+  - name: slave_running
+    display_name: "Slave 是否启动"
+    query: ""
     category: replication
-    cluster_mode: master-slave
     status: pending
-
-  - name: slave_sql_running
-    display_name: "Slave SQL 线程"
-    query: "mysql_slave_status_slave_sql_running"
-    category: replication
-    cluster_mode: master-slave
-    status: pending
+    note: "8.0 MGR 模式不适用，显示 N/A"
 ```
 
 **验证**：
@@ -398,14 +420,13 @@ func (c *MySQLCollector) DiscoverInstances(ctx context.Context) ([]*model.MySQLI
 
 - 从 `mysql_version_info` 指标的 `version` 标签提取版本号
 - 从 `mysql_innodb_cluster_mgr_role_primary` 的 `member_id` 标签提取 Server ID
-- 判断集群模式：存在 `mgr_member_count` 指标则为 MGR，否则检查 slave 状态
+- 集群模式从配置读取（不自动检测）
 
 **验证**：
 
 - [ ] 能够采集所有 MySQL 指标
 - [ ] 版本号正确提取
 - [ ] Server ID 正确提取
-- [ ] 集群模式判断正确
 - [ ] 执行 `go test ./internal/service/ -run TestMySQLCollectMetrics` 通过
 
 ---
@@ -419,9 +440,8 @@ func (c *MySQLCollector) DiscoverInstances(ctx context.Context) ([]*model.MySQLI
 - 测试用例覆盖：
   - 正常发现 MySQL 实例
   - 正常采集所有指标
-  - 地址解析（多种格式）
+  - 地址解析（IP:Port 格式）
   - 版本标签提取
-  - MGR 模式判断
   - 实例过滤
 
 **验证**：
@@ -458,15 +478,20 @@ func (e *MySQLEvaluator) evaluateConnectionUsage(current, max int) AlertLevel {
     return AlertLevelNormal
 }
 
-func (e *MySQLEvaluator) evaluateMGRStatus(result *MySQLInspectionResult) AlertLevel {
-    if !result.MGRStateOnline {
-        return AlertLevelCritical
+func (e *MySQLEvaluator) evaluateMGRMemberCount(count int) AlertLevel {
+    expected := e.thresholds.MGRMemberCountExpected
+    if count < expected - 1 {
+        return AlertLevelCritical  // 掉 2 个及以上节点
     }
-    if result.MGRMemberCount < e.thresholds.MGRMemberCountCritical {
-        return AlertLevelCritical
+    if count < expected {
+        return AlertLevelWarning   // 掉 1 个节点
     }
-    if result.MGRMemberCount < e.thresholds.MGRMemberCountWarning {
-        return AlertLevelWarning
+    return AlertLevelNormal        // 成员数达到或超过期望值
+}
+
+func (e *MySQLEvaluator) evaluateMGRStateOnline(online bool) AlertLevel {
+    if !online {
+        return AlertLevelCritical
     }
     return AlertLevelNormal
 }
@@ -476,7 +501,8 @@ func (e *MySQLEvaluator) evaluateMGRStatus(result *MySQLInspectionResult) AlertL
 
 - [ ] 连接使用率 75% 被判定为警告
 - [ ] 连接使用率 95% 被判定为严重
-- [ ] MGR 成员数 2 被判定为警告
+- [ ] MGR 成员数 = expected - 1 被判定为警告
+- [ ] MGR 成员数 < expected - 1 被判定为严重
 - [ ] MGR 节点离线被判定为严重
 - [ ] 执行 `go test ./internal/service/ -run TestMySQLEvaluator` 通过
 
@@ -509,8 +535,9 @@ func (e *MySQLEvaluator) evaluateMGRStatus(result *MySQLInspectionResult) AlertL
 
 - 在 `internal/service/mysql_inspector_test.go` 中编写集成测试
 - 模拟完整的巡检场景：
-  - 正常 MGR 集群（1 主 2 从）
-  - MGR 节点离线场景
+  - 正常 MGR 集群（3 节点全部在线）
+  - MGR 节点离线场景（1 节点掉线 → 警告）
+  - MGR 多节点离线场景（2 节点掉线 → 严重）
   - 连接数过高场景
   - 多实例巡检
 
@@ -528,7 +555,7 @@ func (e *MySQLEvaluator) evaluateMGRStatus(result *MySQLInspectionResult) AlertL
 **操作**：
 
 - 在 `internal/report/excel/writer.go` 中添加 MySQL 报告功能
-- 创建 "MySQL 巡检" 工作表
+- 创建 "MySQL 巡检" 工作表（独立于 Host 巡检工作表）
 - 表头：巡检时间、IP 地址、端口、数据库版本、Server ID、集群模式、同步状态、最大连接数、当前连接数、Binlog 状态、整体状态
 - 应用条件格式（与主机巡检一致）
 
@@ -545,7 +572,7 @@ func (e *MySQLEvaluator) evaluateMGRStatus(result *MySQLInspectionResult) AlertL
 
 **操作**：
 
-- 在 MySQL 工作表后添加 "MySQL 异常" 工作表
+- 新增 "MySQL 异常" 工作表（独立于 Host 异常汇总）
 - 仅包含有告警的 MySQL 实例记录
 - 显示告警类型、当前值、阈值
 
@@ -560,7 +587,7 @@ func (e *MySQLEvaluator) evaluateMGRStatus(result *MySQLInspectionResult) AlertL
 
 **操作**：
 
-- 在 HTML 模板中添加 MySQL 巡检区域
+- 在 HTML 模板中添加 MySQL 巡检区域（独立区域，位于 Host 巡检区域之后）
 - 使用与主机巡检一致的卡片和表格样式
 - 添加 MySQL 统计摘要卡片
 - 实现表格排序功能
@@ -586,17 +613,31 @@ func (e *MySQLEvaluator) evaluateMGRStatus(result *MySQLInspectionResult) AlertL
 # MySQL 数据库巡检配置
 mysql:
   enabled: true
-  cluster_mode: "mgr" # mgr, dual-master, master-slave, auto
+  # 集群模式（必须手动指定，不支持自动检测）
+  # 可选值: mgr, dual-master, master-slave
+  cluster_mode: "mgr"
+
+  # 实例筛选（可选）
   instance_filter:
     address_patterns:
       - "172.18.182.*"
     business_groups:
       - "生产MySQL"
+    tags:
+      env: "prod"
+
+  # 阈值配置
   thresholds:
-    connection_usage_warning: 70
-    connection_usage_critical: 90
-    mgr_member_count_warning: 2
-    mgr_member_count_critical: 1
+    # 连接使用率阈值
+    connection_usage_warning: 70   # 警告阈值 (%)
+    connection_usage_critical: 90  # 严重阈值 (%)
+
+    # MGR 期望成员数（默认 3，可配置为 5/7/9 等奇数）
+    # 告警规则：
+    #   - 成员数 = expected: 正常
+    #   - 成员数 = expected - 1: 警告
+    #   - 成员数 < expected - 1: 严重
+    mgr_member_count_expected: 3
 ```
 
 **验证**：
@@ -612,7 +653,7 @@ mysql:
 
 **操作**：
 
-- 在 `cmd/inspect/run.go` 中集成 MySQL 巡检
+- 在 `cmd/inspect/cmd/run.go` 中集成 MySQL 巡检
 - 添加 `--mysql-only` 标志（仅执行 MySQL 巡检）
 - 添加 `--skip-mysql` 标志（跳过 MySQL 巡检）
 - 在巡检流程中加入 MySQL 巡检步骤
@@ -629,6 +670,7 @@ mysql:
 
 **操作**：
 
+- 使用**陕西营销活动环境**进行验证测试
 - 配置真实 VictoriaMetrics 地址进行测试
 - 验证 Excel 报告中 MySQL 数据正确性
 - 验证 HTML 报告中 MySQL 区域显示正确
@@ -678,7 +720,7 @@ go test ./internal/service/ -coverprofile=coverage.out
 go tool cover -func=coverage.out | grep mysql
 ```
 
-### 手动验证
+### 手动验证（使用陕西营销活动环境）
 
 1. **配置验证**：
 
@@ -711,12 +753,10 @@ go tool cover -func=coverage.out | grep mysql
 
 以下巡检项在 MVP 阶段显示 "N/A"，后续通过扩展 Categraf 采集配置实现：
 
-| 巡检项             | 需要采集的变量/指标        | 扩展方式                   |
-| ------------------ | -------------------------- | -------------------------- |
-| 是否普通用户启动   | 进程运行用户               | 扩展 mysql.toml 自定义查询 |
-| 是否开启慢查询日志 | slow_query_log             | 采集全局变量               |
-| 日志路径           | slow_query_log_file        | 采集全局变量               |
-| Binlog 保留时长    | binlog_expire_logs_seconds | 采集全局变量               |
+| 巡检项           | MVP 处理                         | 后续实现方式               |
+| ---------------- | -------------------------------- | -------------------------- |
+| 是否普通用户启动 | 显示 N/A                         | 扩展 Categraf 自定义脚本   |
+| Slave 是否启动   | MGR 模式显示 N/A（不适用）       | 5.7 主从模式扩展时实现     |
 
 ---
 
@@ -739,6 +779,7 @@ go tool cover -func=coverage.out | grep mysql
 
 ## 版本记录
 
-| 版本 | 日期       | 说明                              |
-| ---- | ---------- | --------------------------------- |
-| v1.0 | 2025-12-15 | 初始版本，聚焦 MySQL 8.0 MGR 巡检 |
+| 版本 | 日期       | 说明                                                                 |
+| ---- | ---------- | -------------------------------------------------------------------- |
+| v1.0 | 2025-12-15 | 初始版本，聚焦 MySQL 8.0 MGR 巡检                                    |
+| v1.1 | 2025-12-15 | 根据澄清问题更新：明确 N/A 项、MGR 阈值变量化、移除 auto 模式、指定验证环境 |
