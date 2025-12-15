@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段一 - 数据模型与配置扩展（已完成）
-**进度**: 步骤 4/18 完成，阶段一全部完成
+**阶段**: 阶段二 - MySQL 数据采集服务（进行中）
+**进度**: 步骤 5/18 完成
 
 ---
 
@@ -292,16 +292,93 @@ mysql_metrics:
 
 ---
 
+### 步骤 5：创建 MySQL 采集器接口 ✅
+
+**完成日期**: 2025-12-15
+
+**执行内容**:
+1. 在 `internal/model/mysql.go` 中添加 `MySQLMetricDefinition` 结构体
+2. 在 `internal/service/` 目录下创建 `mysql_collector.go` 文件
+3. 定义 `MySQLCollector` 结构体
+4. 定义 `MySQLInstanceFilter` 结构体
+5. 实现构造函数 `NewMySQLCollector`
+6. 实现辅助方法
+
+**新增代码 - internal/model/mysql.go**:
+
+```go
+// MySQLMetricDefinition defines a MySQL metric to be collected.
+type MySQLMetricDefinition struct {
+    Name         string `yaml:"name"`          // 指标唯一标识
+    DisplayName  string `yaml:"display_name"`  // 中文显示名称
+    Query        string `yaml:"query"`         // PromQL 查询表达式
+    Category     string `yaml:"category"`      // 分类
+    ClusterMode  string `yaml:"cluster_mode"`  // 适用的集群模式（可选）
+    LabelExtract string `yaml:"label_extract"` // 从指标标签提取值（可选）
+    Format       string `yaml:"format"`        // 格式化类型（可选）
+    Status       string `yaml:"status"`        // 状态（pending=待实现）
+    Note         string `yaml:"note"`          // 备注说明
+}
+
+// 辅助方法
+func (m *MySQLMetricDefinition) IsPending() bool
+func (m *MySQLMetricDefinition) HasLabelExtract() bool
+func (m *MySQLMetricDefinition) IsForClusterMode(mode MySQLClusterMode) bool
+func (m *MySQLMetricDefinition) GetDisplayName() string
+```
+
+**新增文件 - internal/service/mysql_collector.go**:
+
+```go
+// MySQLCollector is the data collection service for MySQL instances.
+type MySQLCollector struct {
+    vmClient       *vm.Client
+    config         *config.MySQLInspectionConfig
+    metrics        []*model.MySQLMetricDefinition
+    instanceFilter *MySQLInstanceFilter
+    logger         zerolog.Logger
+}
+
+// MySQLInstanceFilter defines filtering criteria for MySQL instances.
+type MySQLInstanceFilter struct {
+    AddressPatterns []string          // Address patterns (e.g., "172.18.182.*")
+    BusinessGroups  []string          // Business groups (OR relation)
+    Tags            map[string]string // Tags (AND relation)
+}
+
+// 构造函数和辅助方法
+func NewMySQLCollector(cfg, vmClient, metrics, logger) *MySQLCollector
+func (c *MySQLCollector) buildInstanceFilter() *MySQLInstanceFilter
+func (c *MySQLCollector) GetConfig() *config.MySQLInspectionConfig
+func (c *MySQLCollector) GetMetrics() []*model.MySQLMetricDefinition
+func (c *MySQLCollector) GetInstanceFilter() *MySQLInstanceFilter
+func (f *MySQLInstanceFilter) IsEmpty() bool
+func (f *MySQLInstanceFilter) ToVMHostFilter() *vm.HostFilter
+```
+
+**生成文件**:
+- `internal/service/mysql_collector.go` - MySQL 采集器结构体和构造函数
+
+**验证结果**:
+- [x] 执行 `go build ./internal/model/` 无编译错误
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 代码风格与现有 Collector 一致
+
+---
+
 ## 下一步骤
 
-**步骤 5：创建 MySQL 采集器接口**（阶段二开始）
+**步骤 6：实现 MySQL 实例发现**（等待用户验证步骤 5）
 
 待实现内容：
-- 在 `internal/service/` 目录下创建 `mysql_collector.go` 文件
-- 定义 `MySQLCollector` 结构体
-- 实现构造函数 `NewMySQLCollector`
+- 在 `MySQLCollector` 中实现 `DiscoverInstances` 方法
+- 查询 `mysql_up` 指标获取所有 MySQL 实例的 `address` 标签
+- 解析 `address` 标签提取 IP 和端口
+- 根据配置的 `InstanceFilter` 过滤实例
+- 返回 `[]*model.MySQLInstance` 列表
 
-⚠️ **注意**：用户要求在验证测试步骤 4 之前不要开始步骤 5
+⚠️ **注意**：等待用户验证测试步骤 5 后再开始步骤 6
 
 ---
 
@@ -313,3 +390,4 @@ mysql_metrics:
 | 2025-12-15 | 步骤 2 | 定义 MySQL 巡检结果模型完成 |
 | 2025-12-15 | 步骤 3 | 扩展配置结构体完成 |
 | 2025-12-15 | 步骤 4 | 创建 MySQL 指标定义文件完成，阶段一全部完成 |
+| 2025-12-15 | 步骤 5 | 创建 MySQL 采集器接口完成，阶段二开始 |

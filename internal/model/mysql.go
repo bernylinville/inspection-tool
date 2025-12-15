@@ -489,3 +489,50 @@ func (r *MySQLInspectionResults) HasWarning() bool {
 func (r *MySQLInspectionResults) HasAlerts() bool {
 	return len(r.Alerts) > 0
 }
+
+// =============================================================================
+// MySQL 指标定义结构体
+// =============================================================================
+
+// MySQLMetricDefinition defines a MySQL metric to be collected.
+// This struct maps to the YAML configuration in configs/mysql-metrics.yaml.
+type MySQLMetricDefinition struct {
+	Name         string `yaml:"name"`          // 指标唯一标识
+	DisplayName  string `yaml:"display_name"`  // 中文显示名称
+	Query        string `yaml:"query"`         // PromQL 查询表达式
+	Category     string `yaml:"category"`      // 分类 (connection, info, mgr, binlog, log, status, replication, security)
+	ClusterMode  string `yaml:"cluster_mode"`  // 适用的集群模式（可选：mgr, dual-master, master-slave）
+	LabelExtract string `yaml:"label_extract"` // 从指标标签提取值（可选，如 version, member_id）
+	Format       string `yaml:"format"`        // 格式化类型（可选：size, duration, percent）
+	Status       string `yaml:"status"`        // 状态（pending=待实现）
+	Note         string `yaml:"note"`          // 备注说明
+}
+
+// IsPending returns true if this metric is not yet implemented.
+// A metric is considered pending if its status is "pending" or if it has no query.
+func (m *MySQLMetricDefinition) IsPending() bool {
+	return m.Status == "pending" || m.Query == ""
+}
+
+// HasLabelExtract returns true if this metric extracts value from a label.
+func (m *MySQLMetricDefinition) HasLabelExtract() bool {
+	return m.LabelExtract != ""
+}
+
+// IsForClusterMode checks if this metric is applicable for the given cluster mode.
+// Returns true if the metric has no cluster mode restriction (applies to all modes),
+// or if the metric's cluster mode matches the given mode.
+func (m *MySQLMetricDefinition) IsForClusterMode(mode MySQLClusterMode) bool {
+	if m.ClusterMode == "" {
+		return true // Applies to all cluster modes
+	}
+	return m.ClusterMode == string(mode)
+}
+
+// GetDisplayName returns the display name, or the name if display name is empty.
+func (m *MySQLMetricDefinition) GetDisplayName() string {
+	if m.DisplayName != "" {
+		return m.DisplayName
+	}
+	return m.Name
+}

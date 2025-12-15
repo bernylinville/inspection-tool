@@ -472,6 +472,7 @@ type InspectionResult struct {
 | `evaluator_test.go` | 评估服务单元测试（30+ 个测试，覆盖率 94.0%） | ✅ 已实现 |
 | `inspector.go` | 巡检编排服务（核心流程） | ✅ 已实现 |
 | `inspector_test.go` | 编排服务单元测试（10 个测试，覆盖率 93.4%） | ✅ 已实现 |
+| `mysql_collector.go` | MySQL 数据采集服务（结构体和构造函数） | ✅ 已实现 |
 
 **Collector 数据采集器**：
 ```go
@@ -858,3 +859,5 @@ type Evaluator interface {
 | 2025-12-15 | **MySQL 功能步骤 1**：添加 mysql.go（MySQL 实例模型），阶段一开始 |
 | 2025-12-15 | **MySQL 功能步骤 2**：添加 MySQL 巡检结果模型（MySQLAlert、MySQLInspectionResult、MySQLInspectionSummary、MySQLInspectionResults） |
 | 2025-12-15 | **MySQL 功能步骤 3**：扩展配置结构体（MySQLInspectionConfig、MySQLFilter、MySQLThresholds） |
+| 2025-12-15 | **MySQL 功能步骤 4**：创建 MySQL 指标定义文件（configs/mysql-metrics.yaml，16 个指标） |
+| 2025-12-15 | **MySQL 功能步骤 5**：创建 MySQL 采集器接口（mysql_collector.go、MySQLMetricDefinition），阶段二开始 |
