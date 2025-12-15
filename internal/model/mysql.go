@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // =============================================================================
@@ -182,4 +183,309 @@ func (m *MySQLInstance) String() string {
 	}
 	return fmt.Sprintf("MySQL[%s] v%s (ServerID: %s, Mode: %s)",
 		m.Address, m.Version, m.ServerID, m.ClusterMode)
+}
+
+// =============================================================================
+// MySQL 告警结构体
+// =============================================================================
+
+// MySQLAlert represents a threshold violation alert for a MySQL instance.
+type MySQLAlert struct {
+	Address           string     `json:"address"`             // 实例地址 (IP:Port)
+	MetricName        string     `json:"metric_name"`         // 指标名称
+	MetricDisplayName string     `json:"metric_display_name"` // 指标中文显示名称
+	CurrentValue      float64    `json:"current_value"`       // 当前值
+	FormattedValue    string     `json:"formatted_value"`     // 格式化后的当前值
+	WarningThreshold  float64    `json:"warning_threshold"`   // 警告阈值
+	CriticalThreshold float64    `json:"critical_threshold"`  // 严重阈值
+	Level             AlertLevel `json:"level"`               // 告警级别 (复用 alert.go 的 AlertLevel)
+	Message           string     `json:"message"`             // 告警消息
+}
+
+// NewMySQLAlert creates a new MySQLAlert with the given parameters.
+func NewMySQLAlert(address, metricName string, currentValue float64, level AlertLevel) *MySQLAlert {
+	return &MySQLAlert{
+		Address:      address,
+		MetricName:   metricName,
+		CurrentValue: currentValue,
+		Level:        level,
+	}
+}
+
+// IsWarning returns true if this alert is at warning level.
+func (a *MySQLAlert) IsWarning() bool {
+	return a.Level == AlertLevelWarning
+}
+
+// IsCritical returns true if this alert is at critical level.
+func (a *MySQLAlert) IsCritical() bool {
+	return a.Level == AlertLevelCritical
+}
+
+// =============================================================================
+// MySQL 巡检结果结构体
+// =============================================================================
+
+// MySQLInspectionResult represents the inspection result for a single MySQL instance.
+type MySQLInspectionResult struct {
+	// 实例元信息
+	Instance *MySQLInstance `json:"instance"`
+
+	// 连接状态
+	ConnectionStatus bool `json:"connection_status"` // mysql_up = 1
+
+	// 复制相关 (MGR 模式 SlaveRunning 显示 N/A)
+	SlaveRunning bool `json:"slave_running"` // Slave 线程状态
+	SyncStatus   bool `json:"sync_status"`   // 同步是否正常
+
+	// 慢查询日志
+	SlowQueryLogEnabled bool   `json:"slow_query_log_enabled"`
+	SlowQueryLogPath    string `json:"slow_query_log_path"`
+
+	// 连接数
+	MaxConnections     int `json:"max_connections"`
+	CurrentConnections int `json:"current_connections"`
+
+	// Binlog 配置
+	BinlogEnabled       bool `json:"binlog_enabled"`
+	BinlogExpireSeconds int  `json:"binlog_expire_seconds"`
+
+	// MGR 专属字段 (仅 MGR 模式有效)
+	MGRMemberCount int          `json:"mgr_member_count"`
+	MGRRole        MySQLMGRRole `json:"mgr_role"`
+	MGRStateOnline bool         `json:"mgr_state_online"`
+
+	// 待实现项 (MVP 阶段显示 N/A)
+	NonRootUser string `json:"non_root_user"`
+
+	// 运行时间
+	Uptime int64 `json:"uptime"` // 秒
+
+	// 整体状态和告警
+	Status MySQLInstanceStatus `json:"status"`
+	Alerts []*MySQLAlert       `json:"alerts,omitempty"`
+
+	// 采集时间
+	CollectedAt time.Time `json:"collected_at"`
+
+	// 错误信息
+	Error string `json:"error,omitempty"`
+}
+
+// NewMySQLInspectionResult creates a new MySQLInspectionResult from a MySQLInstance.
+func NewMySQLInspectionResult(instance *MySQLInstance) *MySQLInspectionResult {
+	if instance == nil {
+		return &MySQLInspectionResult{
+			Status:      MySQLStatusFailed,
+			NonRootUser: "N/A",
+			Alerts:      make([]*MySQLAlert, 0),
+		}
+	}
+	return &MySQLInspectionResult{
+		Instance:    instance,
+		Status:      MySQLStatusNormal,
+		NonRootUser: "N/A", // MVP 阶段固定为 N/A
+		Alerts:      make([]*MySQLAlert, 0),
+	}
+}
+
+// AddAlert adds an alert to this instance and updates the status accordingly.
+func (r *MySQLInspectionResult) AddAlert(alert *MySQLAlert) {
+	if alert == nil {
+		return
+	}
+	r.Alerts = append(r.Alerts, alert)
+	// Update instance status to the most severe alert level
+	if alert.Level == AlertLevelCritical {
+		r.Status = MySQLStatusCritical
+	} else if alert.Level == AlertLevelWarning && r.Status != MySQLStatusCritical {
+		r.Status = MySQLStatusWarning
+	}
+}
+
+// HasAlerts returns true if this instance has any alerts.
+func (r *MySQLInspectionResult) HasAlerts() bool {
+	return len(r.Alerts) > 0
+}
+
+// GetConnectionUsagePercent calculates the connection usage percentage.
+// Returns 0 if MaxConnections is 0 to avoid division by zero.
+func (r *MySQLInspectionResult) GetConnectionUsagePercent() float64 {
+	if r.MaxConnections == 0 {
+		return 0
+	}
+	return float64(r.CurrentConnections) / float64(r.MaxConnections) * 100
+}
+
+// GetAddress returns the instance address, or empty string if instance is nil.
+func (r *MySQLInspectionResult) GetAddress() string {
+	if r.Instance == nil {
+		return ""
+	}
+	return r.Instance.Address
+}
+
+// =============================================================================
+// MySQL 巡检摘要与结果集合
+// =============================================================================
+
+// MySQLInspectionSummary provides aggregated statistics about the MySQL inspection.
+type MySQLInspectionSummary struct {
+	TotalInstances    int `json:"total_instances"`    // 实例总数
+	NormalInstances   int `json:"normal_instances"`   // 正常实例数
+	WarningInstances  int `json:"warning_instances"`  // 警告实例数
+	CriticalInstances int `json:"critical_instances"` // 严重实例数
+	FailedInstances   int `json:"failed_instances"`   // 采集失败实例数
+}
+
+// NewMySQLInspectionSummary creates a new MySQLInspectionSummary from inspection results.
+func NewMySQLInspectionSummary(results []*MySQLInspectionResult) *MySQLInspectionSummary {
+	summary := &MySQLInspectionSummary{}
+	for _, result := range results {
+		if result == nil {
+			continue
+		}
+		summary.TotalInstances++
+		switch result.Status {
+		case MySQLStatusNormal:
+			summary.NormalInstances++
+		case MySQLStatusWarning:
+			summary.WarningInstances++
+		case MySQLStatusCritical:
+			summary.CriticalInstances++
+		case MySQLStatusFailed:
+			summary.FailedInstances++
+		}
+	}
+	return summary
+}
+
+// MySQLAlertSummary provides aggregated alert statistics for MySQL inspection.
+type MySQLAlertSummary struct {
+	TotalAlerts   int `json:"total_alerts"`   // 告警总数
+	WarningCount  int `json:"warning_count"`  // 警告级别数量
+	CriticalCount int `json:"critical_count"` // 严重级别数量
+}
+
+// NewMySQLAlertSummary creates a new MySQLAlertSummary from a list of alerts.
+func NewMySQLAlertSummary(alerts []*MySQLAlert) *MySQLAlertSummary {
+	summary := &MySQLAlertSummary{}
+	for _, alert := range alerts {
+		if alert == nil {
+			continue
+		}
+		summary.TotalAlerts++
+		switch alert.Level {
+		case AlertLevelWarning:
+			summary.WarningCount++
+		case AlertLevelCritical:
+			summary.CriticalCount++
+		}
+	}
+	return summary
+}
+
+// MySQLInspectionResults represents the complete result of MySQL inspection.
+type MySQLInspectionResults struct {
+	// 巡检时间信息
+	InspectionTime time.Time     `json:"inspection_time"` // 巡检开始时间（Asia/Shanghai）
+	Duration       time.Duration `json:"duration"`        // 巡检耗时
+
+	// 巡检摘要
+	Summary *MySQLInspectionSummary `json:"summary"` // 摘要统计
+
+	// 实例结果
+	Results []*MySQLInspectionResult `json:"results"` // 实例巡检结果列表
+
+	// 告警汇总
+	Alerts       []*MySQLAlert      `json:"alerts"`        // 所有告警列表
+	AlertSummary *MySQLAlertSummary `json:"alert_summary"` // 告警摘要统计
+
+	// 元数据
+	Version string `json:"version,omitempty"` // 工具版本号
+}
+
+// NewMySQLInspectionResults creates a new MySQLInspectionResults with the given inspection time.
+func NewMySQLInspectionResults(inspectionTime time.Time) *MySQLInspectionResults {
+	return &MySQLInspectionResults{
+		InspectionTime: inspectionTime,
+		Results:        make([]*MySQLInspectionResult, 0),
+		Alerts:         make([]*MySQLAlert, 0),
+	}
+}
+
+// AddResult adds an instance result to the inspection.
+func (r *MySQLInspectionResults) AddResult(result *MySQLInspectionResult) {
+	if result == nil {
+		return
+	}
+	r.Results = append(r.Results, result)
+	// Collect all alerts from this instance
+	r.Alerts = append(r.Alerts, result.Alerts...)
+}
+
+// Finalize calculates summaries after all instances have been added.
+// This should be called after all instances are processed.
+func (r *MySQLInspectionResults) Finalize(endTime time.Time) {
+	r.Duration = endTime.Sub(r.InspectionTime)
+	r.Summary = NewMySQLInspectionSummary(r.Results)
+	r.AlertSummary = NewMySQLAlertSummary(r.Alerts)
+}
+
+// GetResultByAddress finds an instance result by address.
+func (r *MySQLInspectionResults) GetResultByAddress(address string) *MySQLInspectionResult {
+	for _, result := range r.Results {
+		if result != nil && result.GetAddress() == address {
+			return result
+		}
+	}
+	return nil
+}
+
+// GetCriticalResults returns all instances with critical status.
+func (r *MySQLInspectionResults) GetCriticalResults() []*MySQLInspectionResult {
+	var critical []*MySQLInspectionResult
+	for _, result := range r.Results {
+		if result != nil && result.Status == MySQLStatusCritical {
+			critical = append(critical, result)
+		}
+	}
+	return critical
+}
+
+// GetWarningResults returns all instances with warning status.
+func (r *MySQLInspectionResults) GetWarningResults() []*MySQLInspectionResult {
+	var warning []*MySQLInspectionResult
+	for _, result := range r.Results {
+		if result != nil && result.Status == MySQLStatusWarning {
+			warning = append(warning, result)
+		}
+	}
+	return warning
+}
+
+// GetFailedResults returns all instances that failed collection.
+func (r *MySQLInspectionResults) GetFailedResults() []*MySQLInspectionResult {
+	var failed []*MySQLInspectionResult
+	for _, result := range r.Results {
+		if result != nil && result.Status == MySQLStatusFailed {
+			failed = append(failed, result)
+		}
+	}
+	return failed
+}
+
+// HasCritical returns true if any instance has critical status.
+func (r *MySQLInspectionResults) HasCritical() bool {
+	return r.Summary != nil && r.Summary.CriticalInstances > 0
+}
+
+// HasWarning returns true if any instance has warning status.
+func (r *MySQLInspectionResults) HasWarning() bool {
+	return r.Summary != nil && r.Summary.WarningInstances > 0
+}
+
+// HasAlerts returns true if there are any alerts.
+func (r *MySQLInspectionResults) HasAlerts() bool {
+	return len(r.Alerts) > 0
 }

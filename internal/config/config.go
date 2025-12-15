@@ -5,12 +5,13 @@ import "time"
 
 // Config is the root configuration structure for the inspection tool.
 type Config struct {
-	Datasources DatasourcesConfig `mapstructure:"datasources" validate:"required"`
-	Inspection  InspectionConfig  `mapstructure:"inspection"`
-	Thresholds  ThresholdsConfig  `mapstructure:"thresholds"`
-	Report      ReportConfig      `mapstructure:"report"`
-	Logging     LoggingConfig     `mapstructure:"logging"`
-	HTTP        HTTPConfig        `mapstructure:"http"`
+	Datasources DatasourcesConfig     `mapstructure:"datasources" validate:"required"`
+	Inspection  InspectionConfig      `mapstructure:"inspection"`
+	Thresholds  ThresholdsConfig      `mapstructure:"thresholds"`
+	Report      ReportConfig          `mapstructure:"report"`
+	Logging     LoggingConfig         `mapstructure:"logging"`
+	HTTP        HTTPConfig            `mapstructure:"http"`
+	MySQL       MySQLInspectionConfig `mapstructure:"mysql"`
 }
 
 // DatasourcesConfig contains configurations for data sources.
@@ -86,4 +87,30 @@ type HTTPConfig struct {
 type RetryConfig struct {
 	MaxRetries int           `mapstructure:"max_retries" validate:"gte=0,lte=10"`
 	BaseDelay  time.Duration `mapstructure:"base_delay"`
+}
+
+// =============================================================================
+// MySQL Inspection Configuration
+// =============================================================================
+
+// MySQLInspectionConfig contains configurations for MySQL inspection.
+type MySQLInspectionConfig struct {
+	Enabled        bool            `mapstructure:"enabled"`
+	ClusterMode    string          `mapstructure:"cluster_mode" validate:"omitempty,oneof=mgr dual-master master-slave"`
+	InstanceFilter MySQLFilter     `mapstructure:"instance_filter"`
+	Thresholds     MySQLThresholds `mapstructure:"thresholds"`
+}
+
+// MySQLFilter defines MySQL instance filtering criteria.
+type MySQLFilter struct {
+	AddressPatterns []string          `mapstructure:"address_patterns"` // Address matching patterns (e.g., "172.18.182.*")
+	BusinessGroups  []string          `mapstructure:"business_groups"`  // Business groups (OR relation)
+	Tags            map[string]string `mapstructure:"tags"`             // Tags (AND relation)
+}
+
+// MySQLThresholds contains threshold configurations for MySQL alerts.
+type MySQLThresholds struct {
+	ConnectionUsageWarning  float64 `mapstructure:"connection_usage_warning" validate:"gte=0,lte=100"`  // Default: 70
+	ConnectionUsageCritical float64 `mapstructure:"connection_usage_critical" validate:"gte=0,lte=100"` // Default: 90
+	MGRMemberCountExpected  int     `mapstructure:"mgr_member_count_expected" validate:"gte=1"`         // Default: 3
 }

@@ -1,0 +1,151 @@
+# =============================================================================
+# MySQL 数据库巡检工具 - 指标定义文件
+# =============================================================================
+#
+# 本文件定义了所有 MySQL 巡检指标的 PromQL 查询表达式和元数据。
+# 基于 Categraf 采集的 MySQL 监控数据，支持 MySQL 8.0 MGR 集群模式。
+#
+# 指标字段说明:
+#   name:           指标唯一标识符（用于代码引用）
+#   display_name:   中文显示名称（用于报告展示）
+#   query:          PromQL 查询表达式（待定项为空字符串）
+#   category:       分类（connection、info、mgr、binlog、log、status、replication、security）
+#   cluster_mode:   适用的集群模式（可选：mgr、dual-master、master-slave）
+#   label_extract:  从指标标签提取值（可选）
+#   format:         格式化类型（可选：size、duration、percent）
+#   status:         状态（可选：pending 表示待实现）
+#   note:           备注说明
+#
+# =============================================================================
+
+mysql_metrics:
+  # ---------------------------------------------------------------------------
+  # 基础指标
+  # ---------------------------------------------------------------------------
+  - name: mysql_up
+    display_name: "连接状态"
+    query: "mysql_up"
+    category: connection
+    note: "1=正常, 0=连接失败"
+
+  - name: mysql_version
+    display_name: "数据库版本"
+    query: "mysql_version_info"
+    category: info
+    label_extract: version
+    note: "从 version 标签提取版本号，如 8.0.39"
+
+  # ---------------------------------------------------------------------------
+  # MGR 相关指标 (MySQL 8.0 InnoDB Cluster)
+  # ---------------------------------------------------------------------------
+  - name: mgr_member_count
+    display_name: "MGR 成员数"
+    query: "mysql_innodb_cluster_mgr_member_count"
+    category: mgr
+    cluster_mode: mgr
+    note: "MGR 集群在线成员数量，默认期望值为 3"
+
+  - name: mgr_role_primary
+    display_name: "MGR 主节点"
+    query: "mysql_innodb_cluster_mgr_role_primary"
+    category: mgr
+    cluster_mode: mgr
+    label_extract: member_id
+    note: "1=PRIMARY 主节点, 0=SECONDARY 从节点；从 member_id 标签提取 Server ID"
+
+  - name: mgr_state_online
+    display_name: "MGR 在线状态"
+    query: "mysql_innodb_cluster_mgr_state_online"
+    category: mgr
+    cluster_mode: mgr
+    note: "1=ONLINE 在线, 0=OFFLINE/RECOVERING 离线或恢复中"
+
+  # ---------------------------------------------------------------------------
+  # 连接相关
+  # ---------------------------------------------------------------------------
+  - name: max_connections
+    display_name: "最大连接数"
+    query: "mysql_global_variables_max_connections"
+    category: connection
+    note: "MySQL 配置的最大连接数限制"
+
+  - name: current_connections
+    display_name: "当前连接数"
+    query: "mysql_global_status_threads_connected"
+    category: connection
+    note: "当前活跃的客户端连接数"
+
+  # ---------------------------------------------------------------------------
+  # Binlog 相关
+  # ---------------------------------------------------------------------------
+  - name: binlog_file_count
+    display_name: "Binlog 文件数"
+    query: "mysql_binlog_file_count"
+    category: binlog
+    note: "当前 binlog 文件数量，>0 表示 binlog 已启用"
+
+  - name: binlog_size
+    display_name: "Binlog 总大小"
+    query: "mysql_binlog_size_bytes"
+    category: binlog
+    format: size
+    note: "所有 binlog 文件的总大小（字节）"
+
+  - name: binlog_expire_seconds
+    display_name: "Binlog 保留时长"
+    query: "mysql_variables_binlog_expire_logs_seconds"
+    category: binlog
+    format: duration
+    note: "Binlog 自动过期清理时间，单位：秒，默认 604800 (7天)"
+
+  # ---------------------------------------------------------------------------
+  # 运行状态
+  # ---------------------------------------------------------------------------
+  - name: uptime
+    display_name: "运行时间"
+    query: "mysql_global_status_uptime"
+    category: status
+    format: duration
+    note: "MySQL 实例启动后运行的时长（秒）"
+
+  # ---------------------------------------------------------------------------
+  # 慢查询日志（已通过 Categraf 自定义查询采集）
+  # ---------------------------------------------------------------------------
+  - name: slow_query_log
+    display_name: "慢查询日志"
+    query: "mysql_variables_slow_query_log"
+    category: log
+    note: "1=开启, 0=关闭"
+
+  - name: slow_query_log_file
+    display_name: "慢查询日志路径"
+    query: "mysql_variables_slow_query_log"
+    category: log
+    label_extract: slow_query_log_file
+    note: "从 slow_query_log_file 标签提取日志文件路径"
+
+  - name: server_id
+    display_name: "Server ID"
+    query: "mysql_variables_server_id"
+    category: info
+    note: "MySQL 实例的 server_id 配置，用于复制标识"
+
+  # ---------------------------------------------------------------------------
+  # 待定项 - MVP 阶段显示 N/A
+  # ---------------------------------------------------------------------------
+  # 以下指标当前监控数据不包含，在报告中显示 "N/A"
+  # 后续可通过扩展 Categraf 插件或其他方式实现
+
+  - name: non_root_user
+    display_name: "非 root 用户启动"
+    query: ""
+    category: security
+    status: pending
+    note: "检查 MySQL 是否由非 root 用户启动，MVP 阶段显示 N/A，后续扩展 Categraf 自定义脚本实现"
+
+  - name: slave_running
+    display_name: "Slave 是否启动"
+    query: ""
+    category: replication
+    status: pending
+    note: "检查 Slave_IO_Running 和 Slave_SQL_Running，8.0 MGR 模式不适用，显示 N/A"

@@ -356,10 +356,70 @@ type MySQLInstance struct {
     ClusterMode   MySQLClusterMode `json:"cluster_mode"`   // 集群模式
 }
 
+// MySQL 告警结构体
+type MySQLAlert struct {
+    Address           string     `json:"address"`             // 实例地址
+    MetricName        string     `json:"metric_name"`         // 指标名称
+    MetricDisplayName string     `json:"metric_display_name"` // 指标中文显示名称
+    CurrentValue      float64    `json:"current_value"`       // 当前值
+    FormattedValue    string     `json:"formatted_value"`     // 格式化后的当前值
+    WarningThreshold  float64    `json:"warning_threshold"`   // 警告阈值
+    CriticalThreshold float64    `json:"critical_threshold"`  // 严重阈值
+    Level             AlertLevel `json:"level"`               // 复用 alert.go 的 AlertLevel
+    Message           string     `json:"message"`             // 告警消息
+}
+
+// MySQL 单实例巡检结果
+type MySQLInspectionResult struct {
+    Instance            *MySQLInstance      `json:"instance"`
+    ConnectionStatus    bool                `json:"connection_status"`    // mysql_up = 1
+    SlaveRunning        bool                `json:"slave_running"`        // MGR 显示 N/A
+    SyncStatus          bool                `json:"sync_status"`          // 同步是否正常
+    SlowQueryLogEnabled bool                `json:"slow_query_log_enabled"`
+    SlowQueryLogPath    string              `json:"slow_query_log_path"`
+    MaxConnections      int                 `json:"max_connections"`
+    CurrentConnections  int                 `json:"current_connections"`
+    BinlogEnabled       bool                `json:"binlog_enabled"`
+    BinlogExpireSeconds int                 `json:"binlog_expire_seconds"`
+    MGRMemberCount      int                 `json:"mgr_member_count"`     // 仅 MGR 模式
+    MGRRole             MySQLMGRRole        `json:"mgr_role"`
+    MGRStateOnline      bool                `json:"mgr_state_online"`
+    NonRootUser         string              `json:"non_root_user"`        // MVP 固定 "N/A"
+    Uptime              int64               `json:"uptime"`
+    Status              MySQLInstanceStatus `json:"status"`
+    Alerts              []*MySQLAlert       `json:"alerts,omitempty"`
+    CollectedAt         time.Time           `json:"collected_at"`
+    Error               string              `json:"error,omitempty"`
+}
+
+// MySQL 巡检摘要统计
+type MySQLInspectionSummary struct {
+    TotalInstances    int `json:"total_instances"`
+    NormalInstances   int `json:"normal_instances"`
+    WarningInstances  int `json:"warning_instances"`
+    CriticalInstances int `json:"critical_instances"`
+    FailedInstances   int `json:"failed_instances"`
+}
+
+// MySQL 巡检结果集合
+type MySQLInspectionResults struct {
+    InspectionTime time.Time                  `json:"inspection_time"`
+    Duration       time.Duration              `json:"duration"`
+    Summary        *MySQLInspectionSummary    `json:"summary"`
+    Results        []*MySQLInspectionResult   `json:"results"`
+    Alerts         []*MySQLAlert              `json:"alerts"`
+    AlertSummary   *MySQLAlertSummary         `json:"alert_summary"`
+    Version        string                     `json:"version,omitempty"`
+}
+
 // 辅助函数
 func ParseAddress(address string) (ip string, port int, err error)  // 解析 IP:Port
 func NewMySQLInstance(address string) *MySQLInstance                 // 创建实例
 func NewMySQLInstanceWithClusterMode(address string, mode MySQLClusterMode) *MySQLInstance
+func NewMySQLAlert(address, metricName string, currentValue float64, level AlertLevel) *MySQLAlert
+func NewMySQLInspectionResult(instance *MySQLInstance) *MySQLInspectionResult
+func NewMySQLInspectionSummary(results []*MySQLInspectionResult) *MySQLInspectionSummary
+func NewMySQLInspectionResults(inspectionTime time.Time) *MySQLInspectionResults
 ```
 
 **巡检结果模型结构**：
@@ -796,3 +856,5 @@ type Evaluator interface {
 | 2025-12-13 | 完成步骤 24（报告写入器接口），添加 writer.go，阶段六开始 |
 | 2025-12-13 | 完成步骤 25（Excel 报告生成器），添加 excel/writer.go 和测试，覆盖率 89.6% |
 | 2025-12-15 | **MySQL 功能步骤 1**：添加 mysql.go（MySQL 实例模型），阶段一开始 |
+| 2025-12-15 | **MySQL 功能步骤 2**：添加 MySQL 巡检结果模型（MySQLAlert、MySQLInspectionResult、MySQLInspectionSummary、MySQLInspectionResults） |
+| 2025-12-15 | **MySQL 功能步骤 3**：扩展配置结构体（MySQLInspectionConfig、MySQLFilter、MySQLThresholds） |
