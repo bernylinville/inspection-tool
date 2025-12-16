@@ -367,18 +367,115 @@ func (f *MySQLInstanceFilter) ToVMHostFilter() *vm.HostFilter
 
 ---
 
+### 步骤 6：实现 MySQL 实例发现 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `MySQLCollector` 中实现 `DiscoverInstances` 方法
+2. 实现 `extractAddress` 辅助方法（标签优先级：address > instance > server）
+3. 实现 `matchesAddressPatterns` 和 `matchAddressPattern` 方法（支持通配符 *）
+4. 实现 `mysql_up == 1` 查询过滤（仅在线实例）
+5. 实现地址去重逻辑
+6. 集成 BusinessGroups 和 Tags 过滤（通过 VM HostFilter）
+7. 实现地址模式后置过滤（AddressPatterns）
+8. 编写 11 个单元测试覆盖所有场景
+
+**新增方法**:
+- `DiscoverInstances(ctx context.Context) ([]*model.MySQLInstance, error)` - 发现实例
+- `extractAddress(labels map[string]string) string` - 提取地址
+- `matchesAddressPatterns(address string) bool` - 地址过滤
+- `matchAddressPattern(address, pattern string) bool` - 通配符匹配（包级函数）
+
+**生成文件**:
+- `internal/service/mysql_collector.go` - 添加 4 个新方法（~120 行代码）
+- `internal/service/mysql_collector_test.go` - 单元测试文件（~530 行代码，11 个测试）
+
+**验证结果**:
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test ./internal/service/ -run 'Test(DiscoverInstances|MatchAddressPattern|ExtractAddress)'` 全部通过（11 个测试）
+- [x] 核心方法测试覆盖率达到 90% 以上：
+  - DiscoverInstances: 100%
+  - extractAddress: 100%
+  - matchesAddressPatterns: 100%
+  - matchAddressPattern: 90.9%
+- [x] 执行 `go vet ./internal/service/...` 无警告
+- [x] 能够正确发现所有 MySQL 实例
+- [x] IP 和端口解析正确（通过 model.ParseAddress）
+- [x] 过滤规则正确应用（地址模式、业务组、标签）
+- [x] 地址去重正确工作
+- [x] 通配符匹配符合预期（支持 * 通配符）
+
+**代码结构概览**:
+```go
+// 核心发现流程
+func (c *MySQLCollector) DiscoverInstances(ctx) ([]*model.MySQLInstance, error) {
+    // 1. 查询 mysql_up == 1（带 BusinessGroups + Tags 筛选）
+    query := "mysql_up == 1"
+    results, err := c.vmClient.QueryResultsWithFilter(ctx, query, vmFilter)
+
+    // 2. 提取地址标签（优先级：address > instance > server）
+    address := c.extractAddress(result.Labels)
+
+    // 3. 地址去重
+    if seenAddresses[address] { continue }
+
+    // 4. 应用地址模式过滤（后置过滤，支持通配符）
+    if !c.matchesAddressPatterns(address) { continue }
+
+    // 5. 创建 MySQLInstance 对象
+    instance := model.NewMySQLInstanceWithClusterMode(address, clusterMode)
+}
+
+// 通配符匹配算法
+func matchAddressPattern(address, pattern string) bool {
+    // 精确匹配优化 → 无通配符检查 → 正则转换 → 匹配
+    // 支持: "172.18.182.*", "*:3306", "*" 等模式
+}
+```
+
+**测试用例覆盖**:
+1. TestDiscoverInstances_Success - 正常发现多个实例 ✅
+2. TestDiscoverInstances_WithAddressPatternFilter - 地址模式过滤 ✅
+3. TestDiscoverInstances_WithBusinessGroupFilter - 业务组过滤 ✅
+4. TestDiscoverInstances_EmptyResults - 无结果场景 ✅
+5. TestDiscoverInstances_QueryError - VM 查询错误 ✅
+6. TestDiscoverInstances_MissingAddressLabel - 缺失地址标签 ✅
+7. TestDiscoverInstances_DuplicateAddresses - 地址去重 ✅
+8. TestDiscoverInstances_InvalidAddress - 地址解析失败 ✅
+9. TestMatchAddressPattern_Wildcard - 通配符匹配（11 个子测试） ✅
+10. TestMatchAddressPattern_EdgeCases - 边界情况（7 个子测试） ✅
+11. TestExtractAddress_Priority - 标签优先级（9 个子测试） ✅
+
+**关键设计决策**:
+1. **查询策略**: 使用 `mysql_up == 1` 仅查询在线实例（连接正常）
+2. **标签优先级**: address > instance > server（参考 Categraf 采集规范）
+3. **过滤分离**: BusinessGroups/Tags 通过 VM HostFilter，AddressPatterns 后置过滤
+4. **通配符实现**: 使用正则表达式，支持 `*` 匹配任意字符序列
+5. **错误处理**: 单个实例失败记录日志并跳过，不中止整体发现
+6. **日志级别**: Info (开始/完成), Debug (详细数据), Warn (缺失标签), Error (查询失败)
+
+---
+
 ## 下一步骤
 
-**步骤 6：实现 MySQL 实例发现**（等待用户验证步骤 5）
+**步骤 7：实现 MySQL 指标采集**（等待用户验证步骤 6）
 
 待实现内容：
-- 在 `MySQLCollector` 中实现 `DiscoverInstances` 方法
-- 查询 `mysql_up` 指标获取所有 MySQL 实例的 `address` 标签
-- 解析 `address` 标签提取 IP 和端口
-- 根据配置的 `InstanceFilter` 过滤实例
-- 返回 `[]*model.MySQLInstance` 列表
+- 在 `MySQLCollector` 中实现 `CollectMetrics` 方法
+- 按实例 `address` 标签进行过滤查询
+- 采集所有配置的 MySQL 指标
+- 处理标签提取（如从 `mysql_version_info` 提取 `version` 标签值）
+- 返回 `map[string]*model.MySQLMetrics` (key 为 address)
 
-⚠️ **注意**：等待用户验证测试步骤 5 后再开始步骤 6
+关键处理：
+- 从 `mysql_version_info` 指标的 `version` 标签提取版本号
+- 从 `mysql_innodb_cluster_mgr_role_primary` 的 `member_id` 标签提取 Server ID
+- 集群模式从配置读取（不自动检测）
+- 按 `cluster_mode` 筛选指标（如 MGR 专属指标）
+
+⚠️ **注意**：等待用户验证测试步骤 6 后再开始步骤 7
 
 ---
 
@@ -391,3 +488,4 @@ func (f *MySQLInstanceFilter) ToVMHostFilter() *vm.HostFilter
 | 2025-12-15 | 步骤 3 | 扩展配置结构体完成 |
 | 2025-12-15 | 步骤 4 | 创建 MySQL 指标定义文件完成，阶段一全部完成 |
 | 2025-12-15 | 步骤 5 | 创建 MySQL 采集器接口完成，阶段二开始 |
+| 2025-12-16 | 步骤 6 | 实现 MySQL 实例发现完成，测试覆盖率 90%+ |
