@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段三 - MySQL 评估与编排（已完成）
-**进度**: 步骤 10/18 完成
+**进度**: 步骤 11/18 完成
 
 ---
 
@@ -1022,9 +1022,103 @@ func (i *MySQLInspector) Inspect(ctx context.Context) (*model.MySQLInspectionRes
 
 ---
 
+### 步骤 11：编写 MySQL 巡检服务集成测试 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `internal/service/mysql_inspector_test.go` 中编写集成测试
+2. 模拟完整的巡检场景：
+   - 正常 MGR 集群（3 节点全部在线）
+   - MGR 节点离线场景（1 节点掉线 → 警告）
+   - MGR 多节点离线场景（2 节点掉线 → 严重）
+   - MGR 节点状态离线（mgr_state_online=0 → 严重）
+   - 连接数过高场景（已由现有测试覆盖）
+   - 多实例巡检（已由现有测试覆盖）
+
+**新增测试用例（4 个）**:
+
+```go
+// 测试用例 11: 正常 MGR 集群（3 节点全部在线）
+func TestMySQLInspector_Inspect_MGRNormalCluster(t *testing.T)
+// 测试数据：
+// - 3 个 MySQL 实例
+// - mysql_up = 1, max_connections = 1000, current_connections = 100
+// - mgr_member_count = 3 (期望值)
+// - mgr_state_online = 1 (全部在线)
+// 预期结果：3 个正常实例，0 告警
+
+// 测试用例 12: MGR 1 节点掉线（警告）
+func TestMySQLInspector_Inspect_MGROneNodeOffline(t *testing.T)
+// 测试数据：
+// - 2 个 MySQL 实例（模拟 1 节点已掉线）
+// - mgr_member_count = 2 (期望 3，少 1 个 → 警告)
+// 预期结果：2 个警告实例，至少 2 个警告告警
+
+// 测试用例 13: MGR 2+ 节点掉线（严重）
+func TestMySQLInspector_Inspect_MGRTwoNodesOffline(t *testing.T)
+// 测试数据：
+// - 1 个 MySQL 实例（模拟 2 节点已掉线）
+// - mgr_member_count = 1 (期望 3，少 2 个 → 严重)
+// 预期结果：1 个严重实例，至少 1 个严重告警
+
+// 测试用例 14: MGR 节点状态离线（严重）
+func TestMySQLInspector_Inspect_MGRNodeStateOffline(t *testing.T)
+// 测试数据：
+// - 1 个 MySQL 实例
+// - mgr_member_count = 3 (正常)
+// - mgr_state_online = 0 (节点离线 → 严重)
+// 预期结果：1 个严重实例，至少 1 个严重告警
+```
+
+**生成文件**:
+- `internal/service/mysql_inspector_test.go` - 新增 4 个测试函数（~380 行代码）
+
+**验证结果**:
+- [x] 执行 `go test ./internal/service/ -run TestMySQLInspector` 全部通过（14 个测试）
+  - TestNewMySQLInspector (3 子测试) ✅
+  - TestMySQLInspector_Inspect_Success ✅
+  - TestMySQLInspector_Inspect_NoInstances ✅
+  - TestMySQLInspector_Inspect_WithWarning ✅
+  - TestMySQLInspector_Inspect_WithCritical ✅
+  - TestMySQLInspector_Inspect_MultipleInstances ✅
+  - TestMySQLInspector_Inspect_DiscoveryError ✅
+  - TestMySQLInspector_Inspect_ContextCanceled ✅
+  - **TestMySQLInspector_Inspect_MGRNormalCluster** ✅ (新增)
+  - **TestMySQLInspector_Inspect_MGROneNodeOffline** ✅ (新增)
+  - **TestMySQLInspector_Inspect_MGRTwoNodesOffline** ✅ (新增)
+  - **TestMySQLInspector_Inspect_MGRNodeStateOffline** ✅ (新增)
+- [x] 各场景告警逻辑正确
+- [x] 测试覆盖率达到目标（>80%）：
+  - NewMySQLInspector: 81.2%
+  - WithMySQLVersion: 100.0%
+  - GetTimezone: 100.0%
+  - GetVersion: 100.0%
+  - Inspect: 88.6%
+  - buildInspectionResults: 83.3%
+
+**测试用例统计**:
+| 类别 | 测试数量 | 说明 |
+|------|---------|------|
+| 构造函数测试 | 3 个 | basic_construction, with_version_option, invalid_timezone |
+| Inspect 流程测试（现有） | 7 个 | Success, NoInstances, WithWarning, WithCritical, MultipleInstances, DiscoveryError, ContextCanceled |
+| MGR 场景测试（新增） | 4 个 | MGRNormalCluster, MGROneNodeOffline, MGRTwoNodesOffline, MGRNodeStateOffline |
+| **总计** | **14 个测试** | 全部通过 ✅ |
+
+**关键设计决策**:
+1. **MGR 成员数告警规则验证**：
+   - count = expected (3) → 正常
+   - count = expected - 1 (2) → 警告
+   - count < expected - 1 (1) → 严重
+2. **MGR 状态离线告警规则验证**：mgr_state_online = 0 → 严重
+3. **Mock 策略**：使用 httptest 模拟 VictoriaMetrics API，根据 query 参数返回测试数据
+4. **测试隔离**：每个测试使用独立的 Mock 服务器和配置
+
+---
+
 ## 下一步骤
 
-**步骤 11：实现 MySQL 巡检 CLI 命令**（等待用户验证步骤 10）
+**步骤 12：扩展 Excel 报告 - MySQL 工作表**（等待用户验证步骤 11）
 
 ---
 
@@ -1042,3 +1136,4 @@ func (i *MySQLInspector) Inspect(ctx context.Context) (*model.MySQLInspectionRes
 | 2025-12-16 | 步骤 8 | 编写 MySQL 采集器单元测试完成，新增 4 个测试，覆盖率 85%+ |
 | 2025-12-16 | 步骤 9 | 实现 MySQL 阈值评估完成，测试覆盖率 95.9%，阶段三开始 |
 | 2025-12-16 | 步骤 10 | 实现 MySQL 巡检编排服务完成，测试覆盖率 >80%（核心方法 88.6%），阶段三完成 |
+| 2025-12-16 | 步骤 11 | 编写 MySQL 巡检服务集成测试完成，新增 4 个 MGR 场景测试，总计 14 个测试全部通过 |

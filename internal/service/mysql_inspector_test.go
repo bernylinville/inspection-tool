@@ -675,3 +675,386 @@ func TestMySQLInspector_Inspect_ContextCanceled(t *testing.T) {
 		t.Error("expected nil result on context cancel")
 	}
 }
+
+// =============================================================================
+// 步骤 11：MySQL 巡检服务集成测试
+// =============================================================================
+
+// 测试用例 11: 正常 MGR 集群（3 节点全部在线）
+func TestMySQLInspector_Inspect_MGRNormalCluster(t *testing.T) {
+	logger := zerolog.Nop()
+	metrics := createMySQLTestMetrics()
+
+	vmServer := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		query := r.URL.Query().Get("query")
+		var result []map[string]interface{}
+
+		// 3 个 MySQL 实例，全部正常
+		addresses := []string{
+			"172.18.182.91:3306",
+			"172.18.182.92:3306",
+			"172.18.182.93:3306",
+		}
+
+		if contains(query, "mysql_up") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"},
+				})
+			}
+		} else if contains(query, "mysql_global_variables_max_connections") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "1000"},
+				})
+			}
+		} else if contains(query, "mysql_global_status_threads_connected") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "100"}, // 10% usage - normal
+				})
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_member_count") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "3"}, // Expected: 3
+				})
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_state_online") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"}, // All online
+				})
+			}
+		} else {
+			result = []map[string]interface{}{}
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result":     result,
+			},
+		})
+	})
+	defer vmServer.Close()
+
+	cfg := createMySQLTestConfig()
+	cfg.Datasources.VictoriaMetrics.Endpoint = vmServer.URL
+
+	vmClient := vm.NewClient(&cfg.Datasources.VictoriaMetrics, &cfg.HTTP.Retry, logger)
+	collector := NewMySQLCollector(&cfg.MySQL, vmClient, metrics, logger)
+	evaluator := NewMySQLEvaluator(&cfg.MySQL.Thresholds, metrics, logger)
+
+	inspector, err := NewMySQLInspector(cfg, collector, evaluator, logger)
+	if err != nil {
+		t.Fatalf("NewMySQLInspector failed: %v", err)
+	}
+
+	result, err := inspector.Inspect(context.Background())
+	if err != nil {
+		t.Fatalf("Inspect failed: %v", err)
+	}
+
+	// Verify: 3 normal instances, no alerts
+	if result.Summary.TotalInstances != 3 {
+		t.Errorf("expected 3 total instances, got %d", result.Summary.TotalInstances)
+	}
+	if result.Summary.NormalInstances != 3 {
+		t.Errorf("expected 3 normal instances, got %d", result.Summary.NormalInstances)
+	}
+	if result.Summary.WarningInstances != 0 {
+		t.Errorf("expected 0 warning instances, got %d", result.Summary.WarningInstances)
+	}
+	if result.Summary.CriticalInstances != 0 {
+		t.Errorf("expected 0 critical instances, got %d", result.Summary.CriticalInstances)
+	}
+	if result.AlertSummary.TotalAlerts != 0 {
+		t.Errorf("expected 0 total alerts, got %d", result.AlertSummary.TotalAlerts)
+	}
+}
+
+// 测试用例 12: MGR 1 节点掉线（警告）
+func TestMySQLInspector_Inspect_MGROneNodeOffline(t *testing.T) {
+	logger := zerolog.Nop()
+	metrics := createMySQLTestMetrics()
+
+	vmServer := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		query := r.URL.Query().Get("query")
+		var result []map[string]interface{}
+
+		// 2 个 MySQL 实例（模拟 1 节点已掉线）
+		addresses := []string{
+			"172.18.182.91:3306",
+			"172.18.182.92:3306",
+		}
+
+		if contains(query, "mysql_up") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"},
+				})
+			}
+		} else if contains(query, "mysql_global_variables_max_connections") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "1000"},
+				})
+			}
+		} else if contains(query, "mysql_global_status_threads_connected") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "100"}, // Normal
+				})
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_member_count") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "2"}, // Expected 3, got 2 → Warning
+				})
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_state_online") {
+			for _, addr := range addresses {
+				result = append(result, map[string]interface{}{
+					"metric": map[string]string{"address": addr},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"}, // Online
+				})
+			}
+		} else {
+			result = []map[string]interface{}{}
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result":     result,
+			},
+		})
+	})
+	defer vmServer.Close()
+
+	cfg := createMySQLTestConfig()
+	cfg.Datasources.VictoriaMetrics.Endpoint = vmServer.URL
+
+	vmClient := vm.NewClient(&cfg.Datasources.VictoriaMetrics, &cfg.HTTP.Retry, logger)
+	collector := NewMySQLCollector(&cfg.MySQL, vmClient, metrics, logger)
+	evaluator := NewMySQLEvaluator(&cfg.MySQL.Thresholds, metrics, logger)
+
+	inspector, err := NewMySQLInspector(cfg, collector, evaluator, logger)
+	if err != nil {
+		t.Fatalf("NewMySQLInspector failed: %v", err)
+	}
+
+	result, err := inspector.Inspect(context.Background())
+	if err != nil {
+		t.Fatalf("Inspect failed: %v", err)
+	}
+
+	// Verify: 2 warning instances (MGR member count = 2, expected 3)
+	if result.Summary.TotalInstances != 2 {
+		t.Errorf("expected 2 total instances, got %d", result.Summary.TotalInstances)
+	}
+	if result.Summary.WarningInstances != 2 {
+		t.Errorf("expected 2 warning instances, got %d", result.Summary.WarningInstances)
+	}
+	if result.AlertSummary.WarningCount < 2 {
+		t.Errorf("expected at least 2 warning alerts, got %d", result.AlertSummary.WarningCount)
+	}
+	if result.Summary.CriticalInstances != 0 {
+		t.Errorf("expected 0 critical instances, got %d", result.Summary.CriticalInstances)
+	}
+}
+
+// 测试用例 13: MGR 2+ 节点掉线（严重）
+func TestMySQLInspector_Inspect_MGRTwoNodesOffline(t *testing.T) {
+	logger := zerolog.Nop()
+	metrics := createMySQLTestMetrics()
+
+	vmServer := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		query := r.URL.Query().Get("query")
+		var result []map[string]interface{}
+
+		// 1 个 MySQL 实例（模拟 2 节点已掉线）
+		address := "172.18.182.91:3306"
+
+		if contains(query, "mysql_up") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"},
+				},
+			}
+		} else if contains(query, "mysql_global_variables_max_connections") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "1000"},
+				},
+			}
+		} else if contains(query, "mysql_global_status_threads_connected") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "100"}, // Normal
+				},
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_member_count") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"}, // Expected 3, got 1 → Critical
+				},
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_state_online") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"}, // Online
+				},
+			}
+		} else {
+			result = []map[string]interface{}{}
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result":     result,
+			},
+		})
+	})
+	defer vmServer.Close()
+
+	cfg := createMySQLTestConfig()
+	cfg.Datasources.VictoriaMetrics.Endpoint = vmServer.URL
+
+	vmClient := vm.NewClient(&cfg.Datasources.VictoriaMetrics, &cfg.HTTP.Retry, logger)
+	collector := NewMySQLCollector(&cfg.MySQL, vmClient, metrics, logger)
+	evaluator := NewMySQLEvaluator(&cfg.MySQL.Thresholds, metrics, logger)
+
+	inspector, err := NewMySQLInspector(cfg, collector, evaluator, logger)
+	if err != nil {
+		t.Fatalf("NewMySQLInspector failed: %v", err)
+	}
+
+	result, err := inspector.Inspect(context.Background())
+	if err != nil {
+		t.Fatalf("Inspect failed: %v", err)
+	}
+
+	// Verify: 1 critical instance (MGR member count = 1, expected 3)
+	if result.Summary.TotalInstances != 1 {
+		t.Errorf("expected 1 total instance, got %d", result.Summary.TotalInstances)
+	}
+	if result.Summary.CriticalInstances != 1 {
+		t.Errorf("expected 1 critical instance, got %d", result.Summary.CriticalInstances)
+	}
+	if result.AlertSummary.CriticalCount < 1 {
+		t.Errorf("expected at least 1 critical alert, got %d", result.AlertSummary.CriticalCount)
+	}
+}
+
+// 测试用例 14: MGR 节点状态离线（严重）
+func TestMySQLInspector_Inspect_MGRNodeStateOffline(t *testing.T) {
+	logger := zerolog.Nop()
+	metrics := createMySQLTestMetrics()
+
+	vmServer := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		query := r.URL.Query().Get("query")
+		var result []map[string]interface{}
+
+		address := "172.18.182.91:3306"
+
+		if contains(query, "mysql_up") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "1"},
+				},
+			}
+		} else if contains(query, "mysql_global_variables_max_connections") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "1000"},
+				},
+			}
+		} else if contains(query, "mysql_global_status_threads_connected") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "100"}, // Normal
+				},
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_member_count") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "3"}, // Normal
+				},
+			}
+		} else if contains(query, "mysql_innodb_cluster_mgr_state_online") {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"address": address},
+					"value":  []interface{}{float64(time.Now().Unix()), "0"}, // Offline → Critical
+				},
+			}
+		} else {
+			result = []map[string]interface{}{}
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result":     result,
+			},
+		})
+	})
+	defer vmServer.Close()
+
+	cfg := createMySQLTestConfig()
+	cfg.Datasources.VictoriaMetrics.Endpoint = vmServer.URL
+
+	vmClient := vm.NewClient(&cfg.Datasources.VictoriaMetrics, &cfg.HTTP.Retry, logger)
+	collector := NewMySQLCollector(&cfg.MySQL, vmClient, metrics, logger)
+	evaluator := NewMySQLEvaluator(&cfg.MySQL.Thresholds, metrics, logger)
+
+	inspector, err := NewMySQLInspector(cfg, collector, evaluator, logger)
+	if err != nil {
+		t.Fatalf("NewMySQLInspector failed: %v", err)
+	}
+
+	result, err := inspector.Inspect(context.Background())
+	if err != nil {
+		t.Fatalf("Inspect failed: %v", err)
+	}
+
+	// Verify: 1 critical instance (MGR state offline)
+	if result.Summary.TotalInstances != 1 {
+		t.Errorf("expected 1 total instance, got %d", result.Summary.TotalInstances)
+	}
+	if result.Summary.CriticalInstances != 1 {
+		t.Errorf("expected 1 critical instance, got %d", result.Summary.CriticalInstances)
+	}
+	if result.AlertSummary.CriticalCount < 1 {
+		t.Errorf("expected at least 1 critical alert, got %d", result.AlertSummary.CriticalCount)
+	}
+}
