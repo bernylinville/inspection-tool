@@ -719,25 +719,162 @@ func TestCollectMetrics_ClusterModeFiltering(t *testing.T) {
 
 ---
 
+### 步骤 9：实现 MySQL 阈值评估 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `internal/service/` 目录下创建 `mysql_evaluator.go` 文件
+2. 定义 `MySQLEvaluator` 结构体，包含：
+   - thresholds (*config.MySQLThresholds): 阈值配置
+   - metricDefs (map[string]*model.MySQLMetricDefinition): 指标定义映射
+   - logger (zerolog.Logger): 日志器
+3. 定义 `MySQLEvaluationResult` 结构体：
+   - Address (string): 实例地址
+   - Status (model.MySQLInstanceStatus): 实例整体状态
+   - Alerts ([]*model.MySQLAlert): 告警列表
+4. 实现构造函数 `NewMySQLEvaluator`
+5. 实现批量评估方法 `EvaluateAll`
+6. 实现单实例评估方法 `Evaluate`
+7. 实现三个具体评估规则方法：
+   - `evaluateConnectionUsage`: 连接使用率评估
+   - `evaluateMGRMemberCount`: MGR 成员数评估
+   - `evaluateMGRStateOnline`: MGR 在线状态评估
+8. 实现状态聚合方法 `determineInstanceStatus`
+9. 实现辅助方法：
+   - `createAlert`: 创建告警对象
+   - `formatValue`: 格式化指标值
+   - `generateAlertMessage`: 生成告警消息
+   - `getThresholds`: 获取阈值配置
+
+**生成文件**:
+- `internal/service/mysql_evaluator.go` - MySQL 评估器实现（~310 行代码）
+- `internal/service/mysql_evaluator_test.go` - 单元测试（~520 行代码，8 个主测试）
+
+**代码结构概览**:
+```go
+// 核心评估流程
+func (e *MySQLEvaluator) Evaluate(result *model.MySQLInspectionResult) *MySQLEvaluationResult {
+    // 1. 跳过采集失败的实例
+    if result.Error != "" {
+        return &MySQLEvaluationResult{Status: MySQLStatusFailed}
+    }
+
+    // 2. 评估连接使用率（必评）
+    if alert := e.evaluateConnectionUsage(result); alert != nil {
+        alerts = append(alerts, alert)
+    }
+
+    // 3. 如果是 MGR 模式，评估 MGR 指标
+    if result.Instance.ClusterMode.IsMGR() {
+        // MGR 成员数评估
+        // MGR 在线状态评估
+    }
+
+    // 4. 聚合状态（Critical > Warning > Normal）
+    status := e.determineInstanceStatus(alerts)
+
+    // 5. 更新原始结果
+    result.Status = status
+    result.Alerts = alerts
+}
+
+// 评估规则实现
+func (e *MySQLEvaluator) evaluateConnectionUsage(result) *MySQLAlert {
+    usage := result.GetConnectionUsagePercent()
+    if usage >= e.thresholds.ConnectionUsageCritical { return alert(Critical) }
+    if usage >= e.thresholds.ConnectionUsageWarning { return alert(Warning) }
+    return nil
+}
+
+func (e *MySQLEvaluator) evaluateMGRMemberCount(result) *MySQLAlert {
+    count := result.MGRMemberCount
+    expected := e.thresholds.MGRMemberCountExpected
+    if count < expected - 1 { return alert(Critical) }  // 掉 2+ 节点
+    if count < expected { return alert(Warning) }       // 掉 1 节点
+    return nil
+}
+
+func (e *MySQLEvaluator) evaluateMGRStateOnline(result) *MySQLAlert {
+    if !result.MGRStateOnline { return alert(Critical) }
+    return nil
+}
+```
+
+**验证结果**:
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go vet ./internal/service/...` 无警告
+- [x] 执行单元测试全部通过（27 个测试）
+  - TestNewMySQLEvaluator (1 test) ✅
+  - TestEvaluateConnectionUsage (5 sub-tests) ✅
+    - 75% → Warning ✅
+    - 95% → Critical ✅
+    - 50% → Normal ✅
+    - Exactly 70% → Warning ✅
+    - Exactly 90% → Critical ✅
+  - TestEvaluateMGRMemberCount (5 sub-tests) ✅
+    - count = expected - 1 → Warning ✅
+    - count < expected - 1 → Critical ✅
+    - count = expected → Normal ✅
+    - count > expected → Normal ✅
+    - count = 0 → Critical ✅
+  - TestEvaluateMGRStateOnline (2 sub-tests) ✅
+    - offline → Critical ✅
+    - online → Normal ✅
+  - TestEvaluate (5 sub-tests) ✅
+    - Normal instance (no alerts) ✅
+    - Connection usage warning ✅
+    - Multiple alerts (connection + MGR) ✅
+    - Failed instance (skip evaluation) ✅
+    - Non-MGR instance (skip MGR evaluation) ✅
+  - TestEvaluateAll (1 test) ✅
+  - TestDetermineInstanceStatus (4 sub-tests) ✅
+  - TestFormatValue (4 sub-tests) ✅
+- [x] 测试覆盖率达到 95.9%（远超 85% 要求）：
+  - NewMySQLEvaluator: 100.0%
+  - EvaluateAll: 100.0%
+  - Evaluate: 94.1%
+  - evaluateConnectionUsage: 100.0%
+  - evaluateMGRMemberCount: 100.0%
+  - evaluateMGRStateOnline: 100.0%
+  - determineInstanceStatus: 100.0%
+  - createAlert: 100.0%
+  - formatValue: 85.7%
+  - generateAlertMessage: 92.3%
+  - getThresholds: 83.3%
+
+**关键设计决策**:
+1. **评估器结构**：参考 `Evaluator` 设计模式，保持一致性
+2. **评估流程**：采集失败跳过 → 连接使用率必评 → MGR 模式评估 MGR 指标 → 状态聚合
+3. **阈值映射**：
+   - 连接使用率：70% 警告，90% 严重
+   - MGR 成员数：expected-1 警告，<expected-1 严重
+   - MGR 在线状态：离线即严重
+4. **状态聚合优先级**：Critical > Warning > Normal
+5. **告警消息生成**：根据指标类型生成中文友好消息
+6. **格式化支持**：百分比、整数、在线/离线状态等
+7. **错误处理**：采集失败实例跳过评估，保持 Failed 状态
+8. **集群模式过滤**：仅 MGR 模式评估 MGR 指标
+
+---
+
 ## 下一步骤
 
-**步骤 9：实现 MySQL 阈值评估**（等待用户验证步骤 8）
+**步骤 10：实现 MySQL 巡检编排服务**（等待用户验证步骤 9）
 
 待实现内容：
-- 创建 `MySQLEvaluator` 结构体
-- 实现 `Evaluate` 方法评估单个实例
-- 实现 `EvaluateAll` 方法批量评估
-- 支持连接使用率、MGR 成员数等阈值
-- 生成 MySQLAlert 告警
-- 更新 MySQLInspectionResult 状态
+- 创建 `MySQLInspector` 结构体
+- 整合 `MySQLCollector` 和 `MySQLEvaluator`
+- 实现 `Inspect` 方法协调完整巡检流程：
+  1. 发现实例
+  2. 采集指标
+  3. 评估状态
+  4. 汇总结果
+- 单实例失败不影响其他实例
+- 巡检摘要统计正确
 
-关键处理：
-- 连接使用率评估：`current_connections / max_connections * 100`
-- MGR 成员数评估：与期望值比对
-- 告警级别判定：warning / critical
-- 实例状态聚合：normal / warning / critical / failed
-
-⚠️ **注意**：等待用户验证测试步骤 8 后再开始步骤 9
+⚠️ **注意**：等待用户验证步骤 9 后再开始步骤 10
 
 ---
 
@@ -753,3 +890,4 @@ func TestCollectMetrics_ClusterModeFiltering(t *testing.T) {
 | 2025-12-16 | 步骤 6 | 实现 MySQL 实例发现完成，测试覆盖率 90%+ |
 | 2025-12-16 | 步骤 7 | 实现 MySQL 指标采集完成，5 个方法，测试覆盖率 93.5% |
 | 2025-12-16 | 步骤 8 | 编写 MySQL 采集器单元测试完成，新增 4 个测试，覆盖率 85%+ |
+| 2025-12-16 | 步骤 9 | 实现 MySQL 阈值评估完成，测试覆盖率 95.9%，阶段三开始 |
