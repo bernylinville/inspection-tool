@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段四 - 报告生成扩展（进行中）
-**进度**: 步骤 13/18 完成
+**进度**: 步骤 14/18 完成
 
 ---
 
@@ -1295,9 +1295,179 @@ func formatMySQLThreshold(value float64, metricName string) string {
 
 ---
 
+### 步骤 14：扩展 HTML 报告 - MySQL 区域 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `internal/report/html/writer.go` 中添加 MySQL 报告功能
+2. 新增 MySQL 模板数据结构：
+   - `MySQLTemplateData` - MySQL 模板数据
+   - `MySQLInstanceData` - MySQL 实例数据（模板渲染用）
+   - `MySQLAlertData` - MySQL 告警数据（模板渲染用）
+3. 实现 6 个辅助函数：
+   - `mysqlStatusText()` - MySQL 实例状态转中文
+   - `mysqlStatusClass()` - MySQL 状态转 CSS 类
+   - `mysqlClusterModeText()` - 集群模式转中文
+   - `getMySQLSyncStatus()` - 根据集群模式获取同步状态文本
+   - `boolToText()` - 布尔值转中文（启用/禁用）
+   - `formatMySQLThreshold()` - MySQL 阈值格式化
+4. 实现 4 个数据转换方法：
+   - `WriteMySQLInspection()` - 主方法，生成 MySQL HTML 报告
+   - `loadMySQLTemplate()` - 加载 MySQL HTML 模板
+   - `prepareMySQLTemplateData()` - 准备模板数据
+   - `convertMySQLInstanceData()` - 转换实例数据
+   - `convertMySQLAlerts()` - 转换并排序告警数据
+5. 创建 `internal/report/html/templates/mysql.html` MySQL 专用模板
+6. 编写 14 个单元测试用例
+
+**新增模板数据结构 - internal/report/html/writer.go**:
+
+```go
+// MySQLTemplateData holds MySQL inspection data for template rendering.
+type MySQLTemplateData struct {
+    Title          string
+    InspectionTime string
+    Duration       string
+    Summary        *model.MySQLInspectionSummary
+    AlertSummary   *model.MySQLAlertSummary
+    Instances      []*MySQLInstanceData
+    Alerts         []*MySQLAlertData
+    Version        string
+    GeneratedAt    string
+}
+
+// MySQLInstanceData represents MySQL instance data formatted for template.
+type MySQLInstanceData struct {
+    Address            string
+    IP                 string
+    Port               int
+    Version            string
+    ServerID           string
+    ClusterMode        string
+    SyncStatus         string
+    MaxConnections     int
+    CurrentConnections int
+    BinlogEnabled      string
+    Status             string
+    StatusClass        string
+    AlertCount         int
+}
+
+// MySQLAlertData represents MySQL alert data formatted for template.
+type MySQLAlertData struct {
+    Address           string
+    MetricName        string
+    MetricDisplayName string
+    CurrentValue      string
+    WarningThreshold  string
+    CriticalThreshold string
+    Level             string
+    LevelClass        string
+    Message           string
+}
+```
+
+**MySQL HTML 模板特性**（mysql.html）:
+
+| 特性 | 说明 |
+|------|------|
+| 颜色主题 | 青绿色（#00758f），区别于主机巡检的蓝色 |
+| 响应式布局 | CSS Grid/Flexbox，支持移动端和打印 |
+| 摘要卡片 | 6 个统计卡片：实例总数、正常、警告、严重、失败、告警总数 |
+| 实例详情表 | 10 列：IP、端口、版本、Server ID、集群模式、同步状态、连接数、Binlog、状态 |
+| 异常汇总表 | 7 列：实例地址、告警级别、指标名称、当前值、阈值、消息 |
+| 排序功能 | JavaScript 客户端排序，支持状态/数字/字符串类型 |
+| 条件样式 | 与 Excel 一致的颜色方案（绿/黄/红/灰） |
+
+**MySQL 实例表格列定义**（10 列）:
+
+| 列 | 表头名称 | 数据来源 | 排序类型 |
+|----|----------|----------|----------|
+| 1 | IP地址 | r.Instance.IP | string |
+| 2 | 端口 | r.Instance.Port | number |
+| 3 | 数据库版本 | r.Instance.Version | - |
+| 4 | Server ID | r.Instance.ServerID | - |
+| 5 | 集群模式 | mysqlClusterModeText() | - |
+| 6 | 同步状态 | getMySQLSyncStatus() | - |
+| 7 | 最大连接数 | r.MaxConnections | number |
+| 8 | 当前连接数 | r.CurrentConnections | number |
+| 9 | Binlog状态 | boolToText() | - |
+| 10 | 整体状态 | mysqlStatusText() | status |
+
+**MySQL 异常表格列定义**（7 列）:
+
+| 列 | 表头名称 | 数据来源 |
+|----|----------|----------|
+| 1 | 实例地址 | alert.Address |
+| 2 | 告警级别 | alertLevelText(alert.Level) |
+| 3 | 指标名称 | alert.MetricDisplayName |
+| 4 | 当前值 | alert.FormattedValue |
+| 5 | 警告阈值 | formatMySQLThreshold() |
+| 6 | 严重阈值 | formatMySQLThreshold() |
+| 7 | 告警消息 | alert.Message |
+
+**生成文件**:
+- `internal/report/html/writer.go` - 新增 3 个数据结构 + 6 个辅助函数 + 5 个方法（~270 行代码）
+- `internal/report/html/templates/mysql.html` - MySQL HTML 模板（~515 行代码）
+- `internal/report/html/writer_test.go` - 新增 14 个测试 + 2 个辅助函数（~500 行代码）
+
+**验证结果**:
+- [x] 执行 `go build ./internal/report/html/` 无编译错误
+- [x] 执行 `go test -v ./internal/report/html/ -run "MySQL"` 全部通过（14 个测试）
+  - TestWriter_WriteMySQLInspection_NilResult ✅
+  - TestWriter_WriteMySQLInspection_Success ✅
+  - TestWriter_WriteMySQLInspection_AddsHtmlExtension ✅
+  - TestWriter_WriteMySQLInspection_WithAlerts ✅
+  - TestWriter_WriteMySQLInspection_EmptyResult ✅
+  - TestPrepareMySQLTemplateData ✅
+  - TestConvertMySQLInstanceData ✅
+  - TestConvertMySQLAlerts ✅
+  - TestMySQLStatusText (5 子测试) ✅
+  - TestMySQLStatusClass (4 子测试) ✅
+  - TestMySQLClusterModeText (4 子测试) ✅
+  - TestGetMySQLSyncStatus (4 子测试) ✅
+  - TestHTMLBoolToText ✅
+  - TestFormatMySQLThreshold (5 子测试) ✅
+- [x] 测试覆盖率达到目标（90.8%，远超 85% 要求）
+- [x] 执行 `go vet ./internal/report/html/...` 无警告
+- [x] HTML 报告正确显示 MySQL 巡检区域
+- [x] 样式与 Excel 报告颜色编码一致
+- [x] 排序功能正常工作（按状态默认降序）
+- [x] 响应式设计正常（移动端、打印）
+
+**测试用例统计**:
+| 测试函数 | 验证内容 |
+|---------|---------|
+| TestWriter_WriteMySQLInspection_NilResult | nil 输入返回错误 |
+| TestWriter_WriteMySQLInspection_Success | 正常写入流程、文件存在、关键内容验证 |
+| TestWriter_WriteMySQLInspection_AddsHtmlExtension | 自动补全 .html 扩展名 |
+| TestWriter_WriteMySQLInspection_WithAlerts | 验证告警区域渲染正确 |
+| TestWriter_WriteMySQLInspection_EmptyResult | 空结果仍包含基本结构 |
+| TestPrepareMySQLTemplateData | 验证数据转换、告警排序（严重优先） |
+| TestConvertMySQLInstanceData | 验证实例字段映射正确 |
+| TestConvertMySQLAlerts | 验证告警排序和字段转换 |
+| TestMySQLStatusText | 5 个子测试：normal/warning/critical/failed/unknown |
+| TestMySQLStatusClass | 4 个子测试：各状态对应 CSS 类 |
+| TestMySQLClusterModeText | 4 个子测试：mgr/dual-master/master-slave/unknown |
+| TestGetMySQLSyncStatus | 4 个子测试：MGR 在线/离线、主从正常/异常 |
+| TestHTMLBoolToText | 启用/禁用转换 |
+| TestFormatMySQLThreshold | 5 个子测试：百分比、整数、在线/离线、默认格式 |
+
+**关键设计决策**:
+1. **独立方法**：采用 `WriteMySQLInspection()` 独立方法，与 Excel Writer 和主机 HTML 报告保持一致
+2. **独立模板**：创建 `mysql.html` 独立模板，使用青绿色主题区别于主机巡检
+3. **样式复用**：复用现有的 CSS 类名（status-*, alert-*, badge-*, card 等）
+4. **排序功能**：复用现有的 JavaScript 排序逻辑，默认按状态列降序
+5. **数据格式化**：在数据准备阶段完成格式化，模板只负责渲染
+6. **嵌入式模板**：使用 `//go:embed` 嵌入模板，无需外部文件依赖
+7. **告警排序**：按严重级别排序（Critical > Warning），同级别按地址排序
+
+---
+
 ## 下一步骤
 
-**步骤 14：扩展 HTML 报告 - MySQL 区域**（等待用户验证步骤 13）
+**步骤 15：CLI 命令扩展**（等待用户验证步骤 14）
 
 ---
 
@@ -1318,3 +1488,4 @@ func formatMySQLThreshold(value float64, metricName string) string {
 | 2025-12-16 | 步骤 11 | 编写 MySQL 巡检服务集成测试完成，新增 4 个 MGR 场景测试，总计 14 个测试全部通过 |
 | 2025-12-16 | 步骤 12 | 扩展 Excel 报告 - MySQL 工作表完成，测试覆盖率 85%+，阶段四开始 |
 | 2025-12-16 | 步骤 13 | 扩展 Excel 报告 - MySQL 异常汇总完成，测试覆盖率 89.9% |
+| 2025-12-16 | 步骤 14 | 扩展 HTML 报告 - MySQL 区域完成，测试覆盖率 90.8%，阶段四完成 |
