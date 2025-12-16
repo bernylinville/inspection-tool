@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段一 - 数据模型
-**进度**: 步骤 1/18 完成
+**进度**: 步骤 2/18 完成
 
 ---
 
@@ -43,12 +43,58 @@
 
 ---
 
+### 步骤 2：定义 Redis 巡检结果模型（完成日期：2025-12-16）
+
+**操作**：
+- ✅ 在 `internal/model/redis.go` 中添加以下结构体
+- ✅ 定义 `RedisAlert` 结构体（9 个字段）
+- ✅ 定义 `RedisMetricValue` 结构体（7 个字段）
+- ✅ 定义 `RedisInspectionResult` 结构体（17 个字段）
+- ✅ 定义 `RedisInspectionSummary` 结构体（5 个字段）
+- ✅ 定义 `RedisAlertSummary` 结构体（3 个字段）
+- ✅ 定义 `RedisInspectionResults` 结构体（6 个字段）
+
+**验证**：
+- ✅ 执行 `go build ./internal/model/` 无编译错误
+- ✅ 结构体字段能承载所有巡检数据
+- ✅ 代码风格与 MySQL 模型完全一致
+- ✅ 所有导出类型和函数都有英文注释
+
+**代码结构**：
+- 文件总行数：501 行（新增 336 行）
+- 新增结构体：6 个
+  - RedisAlert：告警详情
+  - RedisMetricValue：指标值
+  - RedisInspectionResult：单实例巡检结果
+  - RedisInspectionSummary：巡检摘要
+  - RedisAlertSummary：告警摘要
+  - RedisInspectionResults：完整结果集合
+- 新增构造函数：5 个
+  - NewRedisAlert
+  - NewRedisInspectionResult
+  - NewRedisInspectionSummary
+  - NewRedisAlertSummary
+  - NewRedisInspectionResults
+- 新增辅助方法：17 个
+  - RedisAlert: IsWarning(), IsCritical()
+  - RedisInspectionResult: AddAlert(), HasAlerts(), GetConnectionUsagePercent(), GetAddress(), SetMetric(), GetMetric()
+  - RedisInspectionResults: AddResult(), Finalize(), GetResultByAddress(), GetCriticalResults(), GetWarningResults(), GetFailedResults(), HasCritical(), HasWarning(), HasAlerts()
+
+**关键设计决策**：
+- 参考 `mysql.go` 保持一致的代码风格和命名规范
+- `RedisInspectionResult` 字段严格按照 `redis-feature-implementation.md` 步骤 2 的要求定义
+- `NonRootUser` 字段在 MVP 阶段固定为 "N/A"
+- 复用 `alert.go` 中的 `AlertLevel` 枚举
+- `AddAlert()` 方法自动更新实例状态为最严重级别
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
 
 - [x] 步骤 1：定义 Redis 实例模型（已完成）
-- [ ] 步骤 2：定义 Redis 巡检结果模型
+- [x] 步骤 2：定义 Redis 巡检结果模型（已完成）
 - [ ] 步骤 3：扩展配置结构体
 - [ ] 步骤 4：创建 Redis 指标定义文件
 
@@ -85,3 +131,4 @@
 | 日期 | 步骤 | 说明 |
 |------|------|------|
 | 2025-12-16 | 步骤 1 | 定义 Redis 实例模型完成，阶段一开始 |
+| 2025-12-16 | 步骤 2 | 定义 Redis 巡检结果模型完成（6 个结构体、5 个构造函数、17 个辅助方法） |
