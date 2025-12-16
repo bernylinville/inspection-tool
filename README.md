@@ -9,6 +9,7 @@
 - **专业报告**：生成 Excel（3 工作表 + 条件格式）和 HTML（响应式 + 排序）报告
 - **灵活配置**：支持自定义阈值、主机筛选、报告格式
 - **易于部署**：单二进制文件，零依赖，支持 Linux/macOS/Windows
+- **MySQL 支持**：支持 MySQL 8.0 MGR 集群巡检，自动发现实例、采集指标、评估告警
 
 ## 系统架构
 
@@ -16,21 +17,30 @@
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │    Categraf     │────▶│   夜莺 (N9E)    │────▶│ VictoriaMetrics │
 │   (数据采集)     │     │   (监控平台)     │     │   (时序数据库)   │
+│  Host + MySQL   │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │                        │
                                │ 元信息查询              │ 指标数据查询
+                               │ (Host)                 │ (Host + MySQL)
                                ▼                        ▼
                         ┌─────────────────────────────────────┐
-                        │         系统巡检工具                  │
-                        │  ┌─────────┐  ┌─────────┐           │
-                        │  │ 数据采集 │  │ 报告生成 │           │
-                        │  └─────────┘  └─────────┘           │
+                        │           系统巡检工具                │
+                        │  ┌──────────┐    ┌──────────┐       │
+                        │  │Host 采集 │    │MySQL 采集│       │
+                        │  │  评估    │    │  评估    │       │
+                        │  └──────────┘    └──────────┘       │
+                        │           ↓              ↓          │
+                        │       ┌───────────────────┐         │
+                        │       │    报告生成器      │         │
+                        │       └───────────────────┘         │
                         └─────────────────────────────────────┘
                                         │
                         ┌───────────────┴───────────────┐
                         ▼                               ▼
                  ┌─────────────┐                ┌─────────────┐
                  │  Excel 报告  │                │  HTML 报告   │
+                 │ (Host+MySQL │                │ (Host+MySQL │
+                 │   合并)     │                │   合并)     │
                  └─────────────┘                └─────────────┘
 ```
 
@@ -102,6 +112,11 @@ make build-all
 # 查看帮助
 ./bin/inspect --help
 ./bin/inspect run --help
+
+# MySQL 巡检相关
+./bin/inspect run -c config.yaml --mysql-only          # 仅执行 MySQL 巡检
+./bin/inspect run -c config.yaml --skip-mysql          # 跳过 MySQL 巡检
+./bin/inspect run -c config.yaml --mysql-metrics custom-mysql-metrics.yaml  # 自定义 MySQL 指标文件
 ```
 
 ### 命令行参数
@@ -113,6 +128,9 @@ make build-all
 | `--output` | `-o` | 输出目录 | 从配置文件读取 |
 | `--metrics` | `-m` | 指标定义文件 | `configs/metrics.yaml` |
 | `--log-level` | - | 日志级别 | `info` |
+| `--mysql-only` | - | 仅执行 MySQL 巡检（跳过 Host 巡检） | `false` |
+| `--skip-mysql` | - | 跳过 MySQL 巡检（仅执行 Host 巡检） | `false` |
+| `--mysql-metrics` | - | MySQL 指标定义文件路径 | `configs/mysql-metrics.yaml` |
 
 ### 退出码
 
@@ -182,6 +200,43 @@ thresholds:
     critical: 1.0
 ```
 
+### MySQL 巡检配置
+
+```yaml
+mysql:
+  # 启用 MySQL 巡检（需要 mysql.enabled=true 才会执行）
+  enabled: true
+
+  # 集群模式（必须手动指定，不支持自动检测）
+  # 可选值: mgr, dual-master, master-slave
+  cluster_mode: "mgr"
+
+  # 实例筛选（可选）
+  instance_filter:
+    # 地址匹配模式（支持通配符 *）
+    address_patterns:
+      - "172.18.182.*"    # 只巡检 172.18.182.* 网段的实例
+    # 业务组筛选（OR 关系）
+    business_groups:
+      - "生产MySQL"
+    # 标签筛选（AND 关系）
+    tags:
+      env: "prod"
+
+  # MySQL 告警阈值
+  thresholds:
+    # 连接使用率阈值（当前连接数/最大连接数）
+    connection_usage_warning: 70    # > 70% 警告
+    connection_usage_critical: 90   # > 90% 严重
+
+    # MGR 期望成员数（默认 3，可配置为 5/7/9 等奇数）
+    # 告警规则：
+    #   - 成员数 = expected: 正常
+    #   - 成员数 = expected - 1: 警告（掉 1 个节点）
+    #   - 成员数 < expected - 1: 严重（掉 2 个及以上节点）
+    mgr_member_count_expected: 3
+```
+
 ### 报告配置
 
 ```yaml
@@ -220,13 +275,17 @@ export INSPECT_LOGGING_LEVEL="debug"
 
 ### Excel 报告
 
-生成包含 3 个工作表的 Excel 文件：
+生成包含 5 个工作表的 Excel 文件（Host + MySQL 合并报告）：
 
 | 工作表 | 内容 |
 |--------|------|
 | 巡检概览 | 巡检时间、耗时、主机统计、告警统计、工具版本 |
 | 详细数据 | 所有主机的完整指标数据，磁盘按挂载点分列 |
-| 异常汇总 | 告警列表，按严重程度排序 |
+| 异常汇总 | Host 告警列表，按严重程度排序 |
+| MySQL 巡检 | MySQL 实例的完整巡检数据（IP、端口、版本、连接数等） |
+| MySQL 异常 | MySQL 告警列表，按严重程度排序 |
+
+**注意**：如果使用 `--skip-mysql` 或 MySQL 未启用，则不生成 MySQL 相关工作表。
 
 **条件格式**：
 - 警告级别：黄色背景 (`#FFEB9C`)
@@ -235,11 +294,19 @@ export INSPECT_LOGGING_LEVEL="debug"
 
 ### HTML 报告
 
-响应式单页报告，特性包括：
+响应式单页报告，支持 Host 和 MySQL 合并展示：
 
+**Host 巡检区域（蓝色主题）**：
 - **摘要卡片**：主机统计、告警统计，颜色编码
 - **主机详情表**：完整指标数据，支持点击表头排序
 - **异常汇总表**：按严重程度排序
+
+**MySQL 巡检区域（青绿色主题）**：
+- **摘要卡片**：MySQL 实例统计（总数/正常/警告/严重/失败）
+- **实例详情表**：IP、端口、版本、Server ID、集群模式、同步状态、连接数、Binlog 状态
+- **异常汇总表**：MySQL 告警列表，按严重程度排序
+
+**通用特性**：
 - **条件样式**：与 Excel 一致的颜色方案
 - **打印优化**：专用打印样式
 - **移动端适配**：响应式布局
@@ -248,7 +315,7 @@ export INSPECT_LOGGING_LEVEL="debug"
 
 ## 巡检指标
 
-### 已实现指标
+### Host 巡检指标
 
 | 分类 | 指标 | 说明 |
 |------|------|------|
@@ -266,7 +333,33 @@ export INSPECT_LOGGING_LEVEL="debug"
 | 进程 | processes_total | 总进程数 |
 | 进程 | processes_zombies | 僵尸进程数 |
 
-### 待实现指标
+### MySQL 巡检指标
+
+**已实现指标**：
+
+| 分类 | 指标 | 说明 |
+|------|------|------|
+| 连接 | mysql_up | 连接状态 (1=正常, 0=连接失败) |
+| 连接 | max_connections | 最大连接数 |
+| 连接 | current_connections | 当前连接数 |
+| 信息 | mysql_version | 数据库版本（从 mysql_version_info 标签提取） |
+| 信息 | server_id | Server ID（从 MGR 指标或变量提取） |
+| MGR | mgr_member_count | MGR 在线成员数（仅 MGR 模式） |
+| MGR | mgr_role_primary | MGR 主节点标识 (1=PRIMARY, 0=SECONDARY) |
+| MGR | mgr_state_online | MGR 节点在线状态 (1=ONLINE, 0=OFFLINE) |
+| Binlog | binlog_file_count | Binlog 文件数量 |
+| Binlog | binlog_expire_seconds | Binlog 保留时长（秒） |
+| 日志 | slow_query_log | 慢查询日志状态 (1=开启, 0=关闭) |
+| 运行 | uptime | MySQL 运行时间（秒） |
+
+**待实现指标**（显示 N/A）：
+
+| 指标 | 说明 |
+|------|------|
+| non_root_user | 是否普通用户启动（需额外采集） |
+| slave_running | Slave 是否启动（MGR 模式不适用）|
+
+### 待实现指标（Host）
 
 以下指标在报告中显示 "N/A"：
 
@@ -305,6 +398,95 @@ export INSPECT_LOGGING_LEVEL="debug"
 - `{{.Alerts}}` - 告警列表
 - `{{.DiskPaths}}` - 磁盘挂载点列表
 - `{{.Version}}` - 工具版本
+
+## Categraf MySQL 配置参考
+
+MySQL 巡检功能依赖 Categraf 采集的 MySQL 监控数据。以下是推荐的 `mysql.toml` 配置：
+
+### 基础配置
+
+```toml
+# configs/input.mysql/mysql.toml
+
+[[instances]]
+# MySQL 连接地址
+address = "127.0.0.1:3306"
+username = "monitor"
+password = "your-password"
+
+# 地址标签（用于实例标识）
+labels = { address = "172.18.182.130:3306" }
+
+# 采集开关
+extra_innodb_metrics = true
+gather_slave_status = false   # MGR 模式设为 false
+gather_variables = true
+```
+
+### MGR 集群采集配置
+
+```toml
+# 自定义查询：MGR 集群状态
+[[instances.queries]]
+mesurement = "innodb_cluster"
+timeout = "5s"
+request = '''
+SELECT
+  count(*) as mgr_member_count
+FROM performance_schema.replication_group_members
+WHERE MEMBER_STATE = 'ONLINE'
+'''
+metric_fields = ["mgr_member_count"]
+
+[[instances.queries]]
+mesurement = "innodb_cluster"
+timeout = "5s"
+request = '''
+SELECT
+  MEMBER_ID as member_id,
+  CASE WHEN MEMBER_ROLE = 'PRIMARY' THEN 1 ELSE 0 END as mgr_role_primary,
+  CASE WHEN MEMBER_STATE = 'ONLINE' THEN 1 ELSE 0 END as mgr_state_online
+FROM performance_schema.replication_group_members
+WHERE MEMBER_ID = @@server_uuid
+'''
+metric_fields = ["mgr_role_primary", "mgr_state_online"]
+label_fields = ["member_id"]
+```
+
+### 自定义变量采集
+
+```toml
+# 自定义查询：MySQL 变量
+[[instances.queries]]
+mesurement = "variables"
+timeout = "5s"
+request = '''
+SELECT
+  @@slow_query_log as slow_query_log,
+  @@slow_query_log_file as slow_query_log_file,
+  @@binlog_expire_logs_seconds as binlog_expire_logs_seconds,
+  @@server_id as server_id
+'''
+metric_fields = ["slow_query_log", "binlog_expire_logs_seconds", "server_id"]
+label_fields = ["slow_query_log_file"]
+```
+
+### 生成的指标名称
+
+Categraf 指标命名规则为 `mysql_{measurement}_{field}`：
+
+| Categraf 指标 | 说明 |
+|---------------|------|
+| `mysql_up` | 连接状态 (内置) |
+| `mysql_version_info{version="8.0.39"}` | 版本信息 (内置) |
+| `mysql_global_variables_max_connections` | 最大连接数 (内置) |
+| `mysql_global_status_threads_connected` | 当前连接数 (内置) |
+| `mysql_binlog_file_count` | Binlog 文件数 (内置) |
+| `mysql_innodb_cluster_mgr_member_count` | MGR 成员数 (自定义) |
+| `mysql_innodb_cluster_mgr_role_primary` | MGR 主节点 (自定义) |
+| `mysql_innodb_cluster_mgr_state_online` | MGR 在线状态 (自定义) |
+| `mysql_variables_slow_query_log` | 慢查询日志状态 (自定义) |
+| `mysql_variables_binlog_expire_logs_seconds` | Binlog 保留时长 (自定义) |
 
 ## 定时任务
 
@@ -401,6 +583,53 @@ report:
 
 不会。工具使用 errgroup 并发控制，单个主机失败只会在报告中标记为"失败"状态，不影响其他主机的采集。
 
+### Q: 如何只执行 MySQL 巡检？
+
+使用 `--mysql-only` 标志：
+
+```bash
+./bin/inspect run -c config.yaml --mysql-only
+```
+
+注意：需要在配置文件中设置 `mysql.enabled: true`，否则会报错。
+
+### Q: MGR 成员数告警规则是怎样的？
+
+根据 `mgr_member_count_expected` 配置（默认为 3）：
+
+| 实际成员数 | 状态 | 说明 |
+|-----------|------|------|
+| = 期望值 | 正常 | 集群完整 |
+| = 期望值 - 1 | 警告 | 掉 1 个节点 |
+| < 期望值 - 1 | 严重 | 掉 2 个及以上节点 |
+
+### Q: 如何配置非 MGR 集群？
+
+修改 `cluster_mode` 配置项：
+
+```yaml
+mysql:
+  enabled: true
+  cluster_mode: "master-slave"  # 或 "dual-master"
+```
+
+注意：当前 MVP 版本主要支持 MGR 模式，主从和双主模式的部分指标（如 Slave 状态）将显示 N/A。
+
+### Q: 数据库版本和 Server ID 为什么为空？
+
+这通常是因为：
+
+1. **VictoriaMetrics 中缺少指标**：检查是否存在 `mysql_version_info` 和 `mysql_variables_server_id` 指标
+2. **Categraf 配置不完整**：确保 mysql.toml 包含自定义变量查询（参考本文档的 Categraf 配置参考部分）
+3. **标签提取问题**：版本从 `mysql_version_info` 的 `version` 标签提取，Server ID 从 `member_id` 或 `server_id` 标签提取
+
+可通过以下命令验证指标是否存在：
+
+```bash
+curl -G "http://your-vm:8428/api/v1/query" \
+  --data-urlencode 'query=mysql_version_info'
+```
+
 ## 开发相关
 
 ### 构建和测试
@@ -434,14 +663,21 @@ inspection-tool/
 │   ├── client/
 │   │   ├── n9e/              # N9E API 客户端
 │   │   └── vm/               # VictoriaMetrics 客户端
-│   ├── model/                # 数据模型
+│   ├── model/                # 数据模型（Host + MySQL）
 │   ├── service/              # 业务逻辑
+│   │   ├── collector.go      # Host 数据采集
+│   │   ├── evaluator.go      # Host 阈值评估
+│   │   ├── inspector.go      # Host 巡检编排
+│   │   ├── mysql_collector.go    # MySQL 数据采集
+│   │   ├── mysql_evaluator.go    # MySQL 阈值评估
+│   │   └── mysql_inspector.go    # MySQL 巡检编排
 │   └── report/
-│       ├── excel/            # Excel 报告生成
-│       └── html/             # HTML 报告生成
+│       ├── excel/            # Excel 报告生成（Host + MySQL）
+│       └── html/             # HTML 报告生成（Host + MySQL）
 ├── configs/                  # 配置文件示例
 │   ├── config.example.yaml
-│   └── metrics.yaml
+│   ├── metrics.yaml          # Host 指标定义
+│   └── mysql-metrics.yaml    # MySQL 指标定义
 └── templates/html/           # 用户自定义模板目录
 ```
 
@@ -451,11 +687,14 @@ inspection-tool/
 |------|--------|
 | N9E 客户端 | 91.6% |
 | VM 客户端 | 94.0% |
-| Config | 89.8% |
-| Service | 80.1% |
+| Config | 90.9% |
+| Service (Host) | 80.1% |
+| Service (MySQL) | 88.6% |
+| MySQL Collector | 93.5% |
+| MySQL Evaluator | 95.9% |
 | Excel 报告 | 89.6% |
-| HTML 报告 | 90.4% |
-| **总计** | **71.8%** |
+| HTML 报告 | 90.8% |
+| **总计** | **85.2%** |
 
 ## 许可证
 
@@ -465,4 +704,5 @@ inspection-tool/
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v0.2.0 | 2025-12-16 | MySQL 8.0 MGR 巡检功能，合并报告 |
 | v0.1.0 | 2025-12-14 | 初始版本，完成 MVP 功能 |

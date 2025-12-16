@@ -559,3 +559,670 @@ func TestWriter_CollectDiskPaths(t *testing.T) {
 		}
 	}
 }
+
+// ============================================================================
+// MySQL Report Tests
+// ============================================================================
+
+func TestWriter_WriteMySQLInspection_NilResult(t *testing.T) {
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(nil, "test.xlsx")
+	if err == nil {
+		t.Error("WriteMySQLInspection() with nil result should return error")
+	}
+}
+
+func TestWriter_WriteMySQLInspection_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		t.Error("Output file was not created")
+	}
+
+	// Open and verify Excel file
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify MySQL sheet exists
+	sheets := f.GetSheetList()
+	found := false
+	for _, s := range sheets {
+		if s == sheetMySQL {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Sheet %q not found in Excel file", sheetMySQL)
+	}
+
+	// Verify default Sheet1 was removed
+	for _, s := range sheets {
+		if s == "Sheet1" {
+			t.Error("Default Sheet1 should have been removed")
+		}
+	}
+}
+
+func TestWriter_WriteMySQLInspection_AddsXlsxExtension(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report") // No extension
+
+	result := createTestMySQLInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	// Verify file with .xlsx extension exists
+	expectedPath := outputPath + ".xlsx"
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Error("Output file should have .xlsx extension added")
+	}
+}
+
+func TestWriter_MySQLSheet_Headers(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify all 11 headers
+	expectedHeaders := []struct {
+		cell   string
+		header string
+	}{
+		{"A1", "巡检时间"},
+		{"B1", "IP地址"},
+		{"C1", "端口"},
+		{"D1", "数据库版本"},
+		{"E1", "Server ID"},
+		{"F1", "集群模式"},
+		{"G1", "同步状态"},
+		{"H1", "最大连接数"},
+		{"I1", "当前连接数"},
+		{"J1", "Binlog状态"},
+		{"K1", "整体状态"},
+	}
+
+	for _, eh := range expectedHeaders {
+		value, _ := f.GetCellValue(sheetMySQL, eh.cell)
+		if value != eh.header {
+			t.Errorf("Header %s = %q, want %q", eh.cell, value, eh.header)
+		}
+	}
+}
+
+func TestWriter_MySQLSheet_DataMapping(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify first row data (row 2, since row 1 is header)
+	tests := []struct {
+		cell     string
+		expected string
+	}{
+		{"B2", "172.18.182.91"},       // IP地址
+		{"C2", "3306"},                // 端口
+		{"D2", "8.0.39"},              // 数据库版本
+		{"E2", "91"},                  // Server ID
+		{"F2", "MGR"},                 // 集群模式
+		{"G2", "在线"},                  // 同步状态
+		{"H2", "1000"},                // 最大连接数
+		{"I2", "100"},                 // 当前连接数
+		{"J2", "启用"},                  // Binlog状态
+		{"K2", "正常"},                  // 整体状态
+	}
+
+	for _, tt := range tests {
+		value, _ := f.GetCellValue(sheetMySQL, tt.cell)
+		if value != tt.expected {
+			t.Errorf("Cell %s = %q, want %q", tt.cell, value, tt.expected)
+		}
+	}
+}
+
+func TestWriter_MySQLSheet_ConditionalFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify status column values and order (normal, warning, critical)
+	expectedStatuses := []struct {
+		cell   string
+		status string
+	}{
+		{"K2", "正常"},
+		{"K3", "警告"},
+		{"K4", "严重"},
+	}
+
+	for _, es := range expectedStatuses {
+		value, _ := f.GetCellValue(sheetMySQL, es.cell)
+		if value != es.status {
+			t.Errorf("Status at %s = %q, want %q", es.cell, value, es.status)
+		}
+	}
+}
+
+// Helper function to create test MySQL inspection results
+func createTestMySQLInspectionResults() *model.MySQLInspectionResults {
+	tz, _ := time.LoadLocation("Asia/Shanghai")
+	inspectionTime := time.Date(2025, 12, 16, 10, 0, 0, 0, tz)
+
+	// Create alerts for warning and critical instances
+	warningAlert := &model.MySQLAlert{
+		Address:           "172.18.182.92:3306",
+		MetricName:        "connection_usage",
+		MetricDisplayName: "连接使用率",
+		CurrentValue:      80.0,
+		FormattedValue:    "80.0%",
+		WarningThreshold:  70.0,
+		CriticalThreshold: 90.0,
+		Level:             model.AlertLevelWarning,
+		Message:           "连接使用率 80.0% 超过警告阈值 70.0%",
+	}
+
+	criticalAlert := &model.MySQLAlert{
+		Address:           "172.18.182.93:3306",
+		MetricName:        "mgr_state_online",
+		MetricDisplayName: "MGR 在线状态",
+		CurrentValue:      0,
+		FormattedValue:    "离线",
+		WarningThreshold:  0,
+		CriticalThreshold: 1,
+		Level:             model.AlertLevelCritical,
+		Message:           "MGR 节点离线",
+	}
+
+	return &model.MySQLInspectionResults{
+		InspectionTime: inspectionTime,
+		Duration:       2 * time.Second,
+		Summary: &model.MySQLInspectionSummary{
+			TotalInstances:    3,
+			NormalInstances:   1,
+			WarningInstances:  1,
+			CriticalInstances: 1,
+		},
+		Results: []*model.MySQLInspectionResult{
+			// Normal instance
+			{
+				Instance: &model.MySQLInstance{
+					Address:     "172.18.182.91:3306",
+					IP:          "172.18.182.91",
+					Port:        3306,
+					Version:     "8.0.39",
+					ServerID:    "91",
+					ClusterMode: model.ClusterModeMGR,
+				},
+				MaxConnections:     1000,
+				CurrentConnections: 100,
+				MGRStateOnline:     true,
+				BinlogEnabled:      true,
+				Status:             model.MySQLStatusNormal,
+			},
+			// Warning instance (high connection usage)
+			{
+				Instance: &model.MySQLInstance{
+					Address:     "172.18.182.92:3306",
+					IP:          "172.18.182.92",
+					Port:        3306,
+					Version:     "8.0.39",
+					ServerID:    "92",
+					ClusterMode: model.ClusterModeMGR,
+				},
+				MaxConnections:     1000,
+				CurrentConnections: 800,
+				MGRStateOnline:     true,
+				BinlogEnabled:      true,
+				Status:             model.MySQLStatusWarning,
+				Alerts:             []*model.MySQLAlert{warningAlert},
+			},
+			// Critical instance (MGR offline)
+			{
+				Instance: &model.MySQLInstance{
+					Address:     "172.18.182.93:3306",
+					IP:          "172.18.182.93",
+					Port:        3306,
+					Version:     "8.0.39",
+					ServerID:    "93",
+					ClusterMode: model.ClusterModeMGR,
+				},
+				MaxConnections:     1000,
+				CurrentConnections: 50,
+				MGRStateOnline:     false,
+				BinlogEnabled:      true,
+				Status:             model.MySQLStatusCritical,
+				Alerts:             []*model.MySQLAlert{criticalAlert},
+			},
+		},
+		Alerts: []*model.MySQLAlert{warningAlert, criticalAlert},
+		AlertSummary: &model.MySQLAlertSummary{
+			TotalAlerts:   2,
+			WarningCount:  1,
+			CriticalCount: 1,
+		},
+		Version: "1.0.0-test",
+	}
+}
+
+// Test MySQL helper functions
+func TestMySQLStatusText(t *testing.T) {
+	tests := []struct {
+		status model.MySQLInstanceStatus
+		want   string
+	}{
+		{model.MySQLStatusNormal, "正常"},
+		{model.MySQLStatusWarning, "警告"},
+		{model.MySQLStatusCritical, "严重"},
+		{model.MySQLStatusFailed, "失败"},
+		{model.MySQLInstanceStatus("unknown"), "未知"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			if got := mysqlStatusText(tt.status); got != tt.want {
+				t.Errorf("mysqlStatusText(%v) = %q, want %q", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMySQLClusterModeText(t *testing.T) {
+	tests := []struct {
+		mode model.MySQLClusterMode
+		want string
+	}{
+		{model.ClusterModeMGR, "MGR"},
+		{model.ClusterModeDualMaster, "双主"},
+		{model.ClusterModeMasterSlave, "主从"},
+		{model.MySQLClusterMode("unknown"), "未知"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.mode), func(t *testing.T) {
+			if got := mysqlClusterModeText(tt.mode); got != tt.want {
+				t.Errorf("mysqlClusterModeText(%v) = %q, want %q", tt.mode, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBoolToText(t *testing.T) {
+	tests := []struct {
+		value bool
+		want  string
+	}{
+		{true, "启用"},
+		{false, "禁用"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := boolToText(tt.value); got != tt.want {
+				t.Errorf("boolToText(%v) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetMySQLSyncStatus(t *testing.T) {
+	w := NewWriter(nil)
+
+	tests := []struct {
+		name   string
+		result *model.MySQLInspectionResult
+		want   string
+	}{
+		{
+			name: "MGR online",
+			result: &model.MySQLInspectionResult{
+				Instance:       &model.MySQLInstance{ClusterMode: model.ClusterModeMGR},
+				MGRStateOnline: true,
+			},
+			want: "在线",
+		},
+		{
+			name: "MGR offline",
+			result: &model.MySQLInspectionResult{
+				Instance:       &model.MySQLInstance{ClusterMode: model.ClusterModeMGR},
+				MGRStateOnline: false,
+			},
+			want: "离线",
+		},
+		{
+			name: "Master-Slave sync OK",
+			result: &model.MySQLInspectionResult{
+				Instance:   &model.MySQLInstance{ClusterMode: model.ClusterModeMasterSlave},
+				SyncStatus: true,
+			},
+			want: "正常",
+		},
+		{
+			name: "Master-Slave sync failed",
+			result: &model.MySQLInspectionResult{
+				Instance:   &model.MySQLInstance{ClusterMode: model.ClusterModeMasterSlave},
+				SyncStatus: false,
+			},
+			want: "异常",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := w.getMySQLSyncStatus(tt.result); got != tt.want {
+				t.Errorf("getMySQLSyncStatus() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// MySQL Alerts Sheet Tests
+// ============================================================================
+
+func TestWriter_WriteMySQLInspection_AlertsSheetExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	// Open and verify Excel file
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify MySQL alerts sheet exists
+	sheets := f.GetSheetList()
+	found := false
+	for _, s := range sheets {
+		if s == sheetMySQLAlerts {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Sheet %q not found in Excel file, got sheets: %v", sheetMySQLAlerts, sheets)
+	}
+}
+
+func TestWriter_MySQLAlertsSheet_Headers(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify all 7 headers
+	expectedHeaders := []struct {
+		cell   string
+		header string
+	}{
+		{"A1", "实例地址"},
+		{"B1", "告警级别"},
+		{"C1", "指标名称"},
+		{"D1", "当前值"},
+		{"E1", "警告阈值"},
+		{"F1", "严重阈值"},
+		{"G1", "告警消息"},
+	}
+
+	for _, eh := range expectedHeaders {
+		value, _ := f.GetCellValue(sheetMySQLAlerts, eh.cell)
+		if value != eh.header {
+			t.Errorf("Header %s = %q, want %q", eh.cell, value, eh.header)
+		}
+	}
+}
+
+func TestWriter_MySQLAlertsSheet_DataMapping(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Row 2 should be the critical alert (sorted first by severity)
+	// Critical alert: 172.18.182.93:3306, mgr_state_online
+	tests := []struct {
+		cell     string
+		expected string
+	}{
+		{"A2", "172.18.182.93:3306"}, // 实例地址 (critical first)
+		{"B2", "严重"},                  // 告警级别
+		{"C2", "MGR 在线状态"},           // 指标名称
+		{"D2", "离线"},                  // 当前值
+		{"G2", "MGR 节点离线"},           // 告警消息
+	}
+
+	for _, tt := range tests {
+		value, _ := f.GetCellValue(sheetMySQLAlerts, tt.cell)
+		if value != tt.expected {
+			t.Errorf("Cell %s = %q, want %q", tt.cell, value, tt.expected)
+		}
+	}
+}
+
+func TestWriter_MySQLAlertsSheet_SortBySeverity(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	result := createTestMySQLInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify alerts are sorted by severity (critical first)
+	// Row 2: Critical alert
+	level2, _ := f.GetCellValue(sheetMySQLAlerts, "B2")
+	if level2 != "严重" {
+		t.Errorf("First alert level = %q, want %q (critical should be first)", level2, "严重")
+	}
+
+	// Row 3: Warning alert
+	level3, _ := f.GetCellValue(sheetMySQLAlerts, "B3")
+	if level3 != "警告" {
+		t.Errorf("Second alert level = %q, want %q", level3, "警告")
+	}
+}
+
+func TestWriter_MySQLAlertsSheet_EmptyAlerts(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
+
+	// Create result with no alerts
+	tz, _ := time.LoadLocation("Asia/Shanghai")
+	result := &model.MySQLInspectionResults{
+		InspectionTime: time.Now().In(tz),
+		Duration:       time.Second,
+		Summary: &model.MySQLInspectionSummary{
+			TotalInstances:  1,
+			NormalInstances: 1,
+		},
+		Results: []*model.MySQLInspectionResult{
+			{
+				Instance: &model.MySQLInstance{
+					Address:     "172.18.182.91:3306",
+					IP:          "172.18.182.91",
+					Port:        3306,
+					ClusterMode: model.ClusterModeMGR,
+				},
+				Status: model.MySQLStatusNormal,
+			},
+		},
+		Alerts:       []*model.MySQLAlert{}, // Empty alerts
+		AlertSummary: &model.MySQLAlertSummary{},
+	}
+
+	w := NewWriter(nil)
+	err := w.WriteMySQLInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteMySQLInspection() error = %v", err)
+	}
+
+	// Verify file exists and sheet is created (with only headers)
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Sheet should exist
+	sheets := f.GetSheetList()
+	found := false
+	for _, s := range sheets {
+		if s == sheetMySQLAlerts {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("MySQL alerts sheet should exist even with empty alerts")
+	}
+
+	// Headers should be present
+	header, _ := f.GetCellValue(sheetMySQLAlerts, "A1")
+	if header != "实例地址" {
+		t.Errorf("Header A1 = %q, want %q", header, "实例地址")
+	}
+
+	// Row 2 should be empty (no data)
+	row2, _ := f.GetCellValue(sheetMySQLAlerts, "A2")
+	if row2 != "" {
+		t.Errorf("Row 2 should be empty for empty alerts, got %q", row2)
+	}
+}
+
+func TestFormatMySQLThreshold(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      float64
+		metricName string
+		want       string
+	}{
+		{
+			name:       "connection_usage percentage",
+			value:      70.0,
+			metricName: "connection_usage",
+			want:       "70.0%",
+		},
+		{
+			name:       "mgr_member_count integer",
+			value:      3.0,
+			metricName: "mgr_member_count",
+			want:       "3",
+		},
+		{
+			name:       "mgr_state_online online",
+			value:      1.0,
+			metricName: "mgr_state_online",
+			want:       "在线",
+		},
+		{
+			name:       "mgr_state_online offline",
+			value:      0.0,
+			metricName: "mgr_state_online",
+			want:       "离线",
+		},
+		{
+			name:       "default format",
+			value:      1.234,
+			metricName: "unknown_metric",
+			want:       "1.23",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatMySQLThreshold(tt.value, tt.metricName); got != tt.want {
+				t.Errorf("formatMySQLThreshold(%v, %q) = %q, want %q", tt.value, tt.metricName, got, tt.want)
+			}
+		})
+	}
+}

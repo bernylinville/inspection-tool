@@ -91,4 +91,10 @@ func setDefaults(v *viper.Viper) {
 	// HTTP retry defaults
 	v.SetDefault("http.retry.max_retries", 3)
 	v.SetDefault("http.retry.base_delay", 1*time.Second)
+
+	// MySQL inspection defaults
+	v.SetDefault("mysql.enabled", false)
+	v.SetDefault("mysql.thresholds.connection_usage_warning", 70.0)
+	v.SetDefault("mysql.thresholds.connection_usage_critical", 90.0)
+	v.SetDefault("mysql.thresholds.mgr_member_count_expected", 3)
 }

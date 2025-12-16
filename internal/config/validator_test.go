@@ -48,6 +48,15 @@ func newValidConfig() *Config {
 				BaseDelay:  1 * time.Second,
 			},
 		},
+		MySQL: MySQLInspectionConfig{
+			Enabled:     false,
+			ClusterMode: "",
+			Thresholds: MySQLThresholds{
+				ConnectionUsageWarning:  70,
+				ConnectionUsageCritical: 90,
+				MGRMemberCountExpected:  3,
+			},
+		},
 	}
 }
 
@@ -385,5 +394,143 @@ func TestValidationErrors_Empty(t *testing.T) {
 	errors := ValidationErrors{}
 	if errors.Error() != "" {
 		t.Errorf("Empty ValidationErrors.Error() should return empty string, got: %s", errors.Error())
+	}
+}
+
+// =============================================================================
+// MySQL Validation Tests
+// =============================================================================
+
+func TestValidate_MySQLDisabled_SkipsValidation(t *testing.T) {
+	cfg := newValidConfig()
+	cfg.MySQL.Enabled = false
+	cfg.MySQL.ClusterMode = "" // Normally required, but should be skipped when disabled
+	cfg.MySQL.Thresholds.ConnectionUsageWarning = 90
+	cfg.MySQL.Thresholds.ConnectionUsageCritical = 70 // Invalid order
+
+	err := Validate(cfg)
+	if err != nil {
+		t.Errorf("Validate() should skip MySQL validation when disabled, got: %v", err)
+	}
+}
+
+func TestValidate_MySQLEnabled_ValidConfig(t *testing.T) {
+	cfg := newValidConfig()
+	cfg.MySQL.Enabled = true
+	cfg.MySQL.ClusterMode = "mgr"
+	cfg.MySQL.Thresholds.ConnectionUsageWarning = 70
+	cfg.MySQL.Thresholds.ConnectionUsageCritical = 90
+	cfg.MySQL.Thresholds.MGRMemberCountExpected = 3
+
+	err := Validate(cfg)
+	if err != nil {
+		t.Errorf("Validate() should pass for valid MySQL config, got: %v", err)
+	}
+}
+
+func TestValidate_MySQLThresholds_InvalidOrder(t *testing.T) {
+	cfg := newValidConfig()
+	cfg.MySQL.Enabled = true
+	cfg.MySQL.ClusterMode = "mgr"
+	cfg.MySQL.Thresholds.ConnectionUsageWarning = 90
+	cfg.MySQL.Thresholds.ConnectionUsageCritical = 70 // warning > critical
+
+	err := Validate(cfg)
+	if err == nil {
+		t.Fatal("Validate() should return error when warning >= critical")
+	}
+
+	errStr := err.Error()
+	if !strings.Contains(errStr, "mysql.thresholds.connection_usage") {
+		t.Errorf("error should mention 'mysql.thresholds.connection_usage', got: %s", errStr)
+	}
+}
+
+func TestValidate_MySQLThresholds_EqualValues(t *testing.T) {
+	cfg := newValidConfig()
+	cfg.MySQL.Enabled = true
+	cfg.MySQL.ClusterMode = "mgr"
+	cfg.MySQL.Thresholds.ConnectionUsageWarning = 80
+	cfg.MySQL.Thresholds.ConnectionUsageCritical = 80 // warning == critical
+
+	err := Validate(cfg)
+	if err == nil {
+		t.Fatal("Validate() should return error when warning == critical")
+	}
+
+	errStr := err.Error()
+	if !strings.Contains(errStr, "mysql.thresholds.connection_usage") {
+		t.Errorf("error should mention 'mysql.thresholds.connection_usage', got: %s", errStr)
+	}
+}
+
+func TestValidate_MySQLEnabled_MissingClusterMode(t *testing.T) {
+	cfg := newValidConfig()
+	cfg.MySQL.Enabled = true
+	cfg.MySQL.ClusterMode = "" // Missing
+
+	err := Validate(cfg)
+	if err == nil {
+		t.Fatal("Validate() should return error when cluster_mode is missing")
+	}
+
+	errStr := err.Error()
+	if !strings.Contains(errStr, "mysql.cluster_mode") {
+		t.Errorf("error should mention 'mysql.cluster_mode', got: %s", errStr)
+	}
+}
+
+func TestValidate_MySQLEnabled_InvalidClusterMode(t *testing.T) {
+	cfg := newValidConfig()
+	cfg.MySQL.Enabled = true
+	cfg.MySQL.ClusterMode = "invalid" // Not in oneof
+
+	err := Validate(cfg)
+	if err == nil {
+		t.Fatal("Validate() should return error for invalid cluster_mode")
+	}
+
+	errStr := err.Error()
+	// Struct tag validation will return field in lowercase
+	if !strings.Contains(errStr, "clustermode") && !strings.Contains(errStr, "cluster_mode") {
+		t.Errorf("error should mention cluster_mode field, got: %s", errStr)
+	}
+}
+
+func TestValidate_MySQLEnabled_ValidClusterModes(t *testing.T) {
+	validModes := []string{"mgr", "dual-master", "master-slave"}
+
+	for _, mode := range validModes {
+		t.Run(mode, func(t *testing.T) {
+			cfg := newValidConfig()
+			cfg.MySQL.Enabled = true
+			cfg.MySQL.ClusterMode = mode
+
+			err := Validate(cfg)
+			if err != nil {
+				t.Errorf("Validate() should allow cluster_mode '%s', got: %v", mode, err)
+			}
+		})
+	}
+}
+
+func TestValidate_MySQLMultipleErrors(t *testing.T) {
+	cfg := newValidConfig()
+	cfg.MySQL.Enabled = true
+	cfg.MySQL.ClusterMode = ""                            // Error 1: missing cluster_mode
+	cfg.MySQL.Thresholds.ConnectionUsageWarning = 90      // Error 2: warning >= critical
+	cfg.MySQL.Thresholds.ConnectionUsageCritical = 70
+
+	err := Validate(cfg)
+	if err == nil {
+		t.Fatal("Validate() should return error for multiple MySQL validation failures")
+	}
+
+	errStr := err.Error()
+	if !strings.Contains(errStr, "mysql.cluster_mode") {
+		t.Errorf("error should mention 'mysql.cluster_mode', got: %s", errStr)
+	}
+	if !strings.Contains(errStr, "mysql.thresholds.connection_usage") {
+		t.Errorf("error should mention 'mysql.thresholds.connection_usage', got: %s", errStr)
 	}
 }

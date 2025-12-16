@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .header-info span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Section Header */
+        .section-header {
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            margin-top: 32px;
+        }
+
+        .section-header.host-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .section-header.mysql-section {
+            background: linear-gradient(135deg, #00758f 0%, #005f73 100%);
+        }
+
+        .section-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* Summary Cards */
+        .summary-section {
+            margin-bottom: 24px;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .card-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .card-total .card-value { color: #4a5568; }
+        .card-normal .card-value { color: #28a745; }
+        .card-warning .card-value { color: #ffc107; }
+        .card-critical .card-value { color: #dc3545; }
+        .card-failed .card-value { color: #6c757d; }
+
+        /* Section Title */
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #667eea;
+            display: inline-block;
+        }
+
+        .section-title.mysql {
+            border-bottom-color: #00758f;
+        }
+
+        /* Tables */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #4472c4;
+            color: white;
+            font-weight: 600;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:hover {
+            background: #3a62a8;
+        }
+
+        th.mysql-header {
+            background: #00758f;
+        }
+
+        th.mysql-header:hover {
+            background: #005f73;
+        }
+
+        th.sortable::after {
+            content: " ↕";
+            opacity: 0.5;
+        }
+
+        th.sort-asc::after {
+            content: " ↑";
+            opacity: 1;
+        }
+
+        th.sort-desc::after {
+            content: " ↓";
+            opacity: 1;
+        }
+
+        tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        tbody tr:nth-child(even):hover {
+            background-color: #f0f4f8;
+        }
+
+        /* Status Styles */
+        .status-normal {
+            background-color: #c6efce !important;
+            color: #006100;
+        }
+
+        .status-warning {
+            background-color: #ffeb9c !important;
+            color: #9c6500;
+        }
+
+        .status-critical {
+            background-color: #ffc7ce !important;
+            color: #9c0006;
+        }
+
+        .status-failed {
+            background-color: #d9d9d9 !important;
+            color: #666;
+        }
+
+        /* Metric Status */
+        .metric-normal {
+            color: #006100;
+        }
+
+        .metric-warning {
+            background-color: #ffeb9c;
+            color: #9c6500;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .metric-critical {
+            background-color: #ffc7ce;
+            color: #9c0006;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .metric-pending {
+            color: #999;
+            font-style: italic;
+        }
+
+        /* Alert Styles */
+        .alert-warning {
+            background-color: #ffeb9c !important;
+            color: #9c6500;
+        }
+
+        .alert-critical {
+            background-color: #ffc7ce !important;
+            color: #9c0006;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-normal { background: #c6efce; color: #006100; }
+        .badge-warning { background: #ffeb9c; color: #9c6500; }
+        .badge-critical { background: #ffc7ce; color: #9c0006; }
+        .badge-failed { background: #d9d9d9; color: #666; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
+            border-top: 1px solid #e2e8f0;
+            margin-top: 24px;
+        }
+
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: white;
+            padding: 8px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-tab {
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+            color: #666;
+        }
+
+        .nav-tab:hover {
+            background: #f0f4f8;
+        }
+
+        .nav-tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .nav-tab.mysql.active {
+            background: #00758f;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .header-info {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .summary-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .card-value {
+                font-size: 28px;
+            }
+
+            th, td {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+            }
+
+            .header {
+                background: #667eea;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .card, .table-container {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+
+            th {
+                background: #4472c4 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            th.mysql-header {
+                background: #00758f !important;
+            }
+
+            .section-header {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>{{.Title}}</h1>
+            <div class="header-info">
+                <span>📅 巡检时间: {{.InspectionTime}}</span>
+                <span>⏱️ 耗时: {{.Duration}}</span>
+                {{if .Version}}<span>🔖 版本: {{.Version}}</span>{{end}}
+            </div>
+        </header>
+
+        {{if .HasHost}}
+        <!-- ============================================================ -->
+        <!-- Host Inspection Section -->
+        <!-- ============================================================ -->
+        <div class="section-header host-section">
+            <h2>🖥️ 主机巡检</h2>
+        </div>
+
+        <!-- Host Summary Section -->
+        <section class="summary-section">
+            <h3 class="section-title">巡检概览</h3>
+            <div class="summary-cards">
+                <div class="card card-total">
+                    <div class="card-value">{{.HostSummary.TotalHosts}}</div>
+                    <div class="card-label">主机总数</div>
+                </div>
+                <div class="card card-normal">
+                    <div class="card-value">{{.HostSummary.NormalHosts}}</div>
+                    <div class="card-label">正常主机</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.HostSummary.WarningHosts}}</div>
+                    <div class="card-label">警告主机</div>
+                </div>
+                <div class="card card-critical">
+                    <div class="card-value">{{.HostSummary.CriticalHosts}}</div>
+                    <div class="card-label">严重主机</div>
+                </div>
+                <div class="card card-failed">
+                    <div class="card-value">{{.HostSummary.FailedHosts}}</div>
+                    <div class="card-label">失败主机</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.HostAlertSummary.TotalAlerts}}</div>
+                    <div class="card-label">告警总数</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Host Details Section -->
+        <section class="hosts-section">
+            <h3 class="section-title">主机详情</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="hosts-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="string">主机名</th>
+                                <th>IP地址</th>
+                                <th class="sortable" data-sort="status">状态</th>
+                                <th>操作系统</th>
+                                <th>CPU核心</th>
+                                <th class="sortable" data-sort="number">CPU%</th>
+                                <th class="sortable" data-sort="number">内存%</th>
+                                <th class="sortable" data-sort="number">磁盘%</th>
+                                <th>运行时间</th>
+                                <th>1分钟负载</th>
+                                <th>每核负载</th>
+                                <th>僵尸进程</th>
+                                <th>总进程</th>
+                                {{range .DiskPaths}}
+                                <th>磁盘:{{.}}</th>
+                                {{end}}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Hosts}}
+                            <tr>
+                                <td>{{.Hostname}}</td>
+                                <td>{{.IP}}</td>
+                                <td><span class="badge badge-{{if eq .Status "正常"}}normal{{else if eq .Status "警告"}}warning{{else if eq .Status "严重"}}critical{{else}}failed{{end}}">{{.Status}}</span></td>
+                                <td>{{.OS}} {{.OSVersion}}</td>
+                                <td>{{.CPUCores}}</td>
+                                <td>{{with index .Metrics "cpu_usage"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "memory_usage"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "disk_usage_max"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "uptime"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "load_1m"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "load_per_core"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "processes_zombies"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "processes_total"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                {{$metrics := .Metrics}}
+                                {{range $.DiskPaths}}
+                                <td>{{with index $metrics (printf "disk_usage:%s" .)}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
+                                {{end}}
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Host Alerts Section -->
+        {{if .HostAlerts}}
+        <section class="alerts-section">
+            <h3 class="section-title">异常汇总</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="host-alerts-table">
+                        <thead>
+                            <tr>
+                                <th>主机名</th>
+                                <th>告警级别</th>
+                                <th>指标名称</th>
+                                <th>当前值</th>
+                                <th>警告阈值</th>
+                                <th>严重阈值</th>
+                                <th>告警消息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .HostAlerts}}
+                            <tr>
+                                <td>{{.Hostname}}</td>
+                                <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
+                                <td>{{.MetricDisplayName}}</td>
+                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
+                                <td>{{.WarningThreshold}}</td>
+                                <td>{{.CriticalThreshold}}</td>
+                                <td>{{.Message}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {{end}}
+        {{end}}
+
+        {{if .HasMySQL}}
+        <!-- ============================================================ -->
+        <!-- MySQL Inspection Section -->
+        <!-- ============================================================ -->
+        <div class="section-header mysql-section">
+            <h2>🐬 MySQL 数据库巡检</h2>
+        </div>
+
+        <!-- MySQL Summary Section -->
+        <section class="summary-section">
+            <h3 class="section-title mysql">MySQL 巡检概览</h3>
+            <div class="summary-cards">
+                <div class="card card-total">
+                    <div class="card-value">{{.MySQLSummary.TotalInstances}}</div>
+                    <div class="card-label">实例总数</div>
+                </div>
+                <div class="card card-normal">
+                    <div class="card-value">{{.MySQLSummary.NormalInstances}}</div>
+                    <div class="card-label">正常实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.MySQLSummary.WarningInstances}}</div>
+                    <div class="card-label">警告实例</div>
+                </div>
+                <div class="card card-critical">
+                    <div class="card-value">{{.MySQLSummary.CriticalInstances}}</div>
+                    <div class="card-label">严重实例</div>
+                </div>
+                <div class="card card-failed">
+                    <div class="card-value">{{.MySQLSummary.FailedInstances}}</div>
+                    <div class="card-label">失败实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.MySQLAlertSummary.TotalAlerts}}</div>
+                    <div class="card-label">告警总数</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MySQL Instances Section -->
+        <section class="mysql-section">
+            <h3 class="section-title mysql">MySQL 实例详情</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="mysql-table">
+                        <thead>
+                            <tr>
+                                <th class="mysql-header sortable" data-sort="string">IP地址</th>
+                                <th class="mysql-header sortable" data-sort="number">端口</th>
+                                <th class="mysql-header">数据库版本</th>
+                                <th class="mysql-header">Server ID</th>
+                                <th class="mysql-header">集群模式</th>
+                                <th class="mysql-header">同步状态</th>
+                                <th class="mysql-header sortable" data-sort="number">最大连接数</th>
+                                <th class="mysql-header sortable" data-sort="number">当前连接数</th>
+                                <th class="mysql-header">Binlog状态</th>
+                                <th class="mysql-header sortable" data-sort="status">整体状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .MySQLInstances}}
+                            <tr>
+                                <td>{{.IP}}</td>
+                                <td>{{.Port}}</td>
+                                <td>{{.Version}}</td>
+                                <td>{{.ServerID}}</td>
+                                <td>{{.ClusterMode}}</td>
+                                <td>{{.SyncStatus}}</td>
+                                <td>{{.MaxConnections}}</td>
+                                <td>{{.CurrentConnections}}</td>
+                                <td>{{.BinlogEnabled}}</td>
+                                <td><span class="badge badge-{{if eq .Status "正常"}}normal{{else if eq .Status "警告"}}warning{{else if eq .Status "严重"}}critical{{else}}failed{{end}}">{{.Status}}</span></td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- MySQL Alerts Section -->
+        {{if .MySQLAlerts}}
+        <section class="mysql-alerts-section">
+            <h3 class="section-title mysql">MySQL 异常汇总</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="mysql-alerts-table">
+                        <thead>
+                            <tr>
+                                <th class="mysql-header">实例地址</th>
+                                <th class="mysql-header">告警级别</th>
+                                <th class="mysql-header">指标名称</th>
+                                <th class="mysql-header">当前值</th>
+                                <th class="mysql-header">警告阈值</th>
+                                <th class="mysql-header">严重阈值</th>
+                                <th class="mysql-header">告警消息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .MySQLAlerts}}
+                            <tr>
+                                <td>{{.Address}}</td>
+                                <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
+                                <td>{{.MetricDisplayName}}</td>
+                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
+                                <td>{{.WarningThreshold}}</td>
+                                <td>{{.CriticalThreshold}}</td>
+                                <td>{{.Message}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {{end}}
+        {{end}}
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>报告生成时间: {{.GeneratedAt}} | {{if .Version}}版本: {{.Version}} | {{end}}系统巡检工具</p>
+        </footer>
+    </div>
+
+    <!-- JavaScript for table sorting -->
+    <script>
+        // Table sorting functionality
+        (function() {
+            function setupTableSorting(tableId, defaultSortColumnIndex) {
+                const table = document.getElementById(tableId);
+                if (!table) return;
+
+                let currentSortColumn = null;
+                let currentSortDirection = 'desc';
+
+                const headers = table.querySelectorAll('th.sortable');
+
+                headers.forEach((header) => {
+                    header.addEventListener('click', function() {
+                        const actualIndex = getActualColumnIndex(table, header);
+                        const sortType = this.dataset.sort;
+
+                        // Toggle direction if same column, otherwise default to desc
+                        if (currentSortColumn === actualIndex) {
+                            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSortDirection = 'desc';
+                            currentSortColumn = actualIndex;
+                        }
+
+                        // Update visual indicators
+                        headers.forEach(h => {
+                            h.classList.remove('sort-asc', 'sort-desc');
+                        });
+                        this.classList.add('sort-' + currentSortDirection);
+
+                        // Perform sort
+                        sortTable(table, actualIndex, sortType, currentSortDirection);
+                    });
+                });
+
+                // Default sort by status descending
+                const statusHeader = table.querySelector('th[data-sort="status"]');
+                if (statusHeader) {
+                    const statusIndex = getActualColumnIndex(table, statusHeader);
+                    currentSortColumn = statusIndex;
+                    currentSortDirection = 'desc';
+                    statusHeader.classList.add('sort-desc');
+                    sortTable(table, statusIndex, 'status', 'desc');
+                }
+            }
+
+            function getActualColumnIndex(table, header) {
+                const headers = table.querySelectorAll('th');
+                return Array.from(headers).indexOf(header);
+            }
+
+            function sortTable(table, columnIndex, sortType, direction) {
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                rows.sort((a, b) => {
+                    const aCell = a.cells[columnIndex];
+                    const bCell = b.cells[columnIndex];
+                    let aValue = aCell ? aCell.textContent.trim() : '';
+                    let bValue = bCell ? bCell.textContent.trim() : '';
+
+                    // Handle N/A values - always sort to bottom
+                    if (aValue === 'N/A' && bValue !== 'N/A') return 1;
+                    if (bValue === 'N/A' && aValue !== 'N/A') return -1;
+                    if (aValue === 'N/A' && bValue === 'N/A') return 0;
+
+                    if (sortType === 'number') {
+                        aValue = parseFloat(aValue.replace('%', '').replace(/[^\d.-]/g, '')) || 0;
+                        bValue = parseFloat(bValue.replace('%', '').replace(/[^\d.-]/g, '')) || 0;
+                    } else if (sortType === 'status') {
+                        const statusOrder = {'严重': 0, '警告': 1, '失败': 2, '正常': 3};
+                        aValue = statusOrder[aValue] !== undefined ? statusOrder[aValue] : 4;
+                        bValue = statusOrder[bValue] !== undefined ? statusOrder[bValue] : 4;
+                    }
+
+                    let result;
+                    if (typeof aValue === 'number' && typeof bValue === 'number') {
+                        result = aValue - bValue;
+                    } else {
+                        result = String(aValue).localeCompare(String(bValue), 'zh-CN');
+                    }
+
+                    return direction === 'asc' ? result : -result;
+                });
+
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            // Initialize on DOM ready
+            document.addEventListener('DOMContentLoaded', function() {
+                setupTableSorting('hosts-table', 2);
+                setupTableSorting('mysql-table', 9);
+            });
+        })();
+    </script>
+</body>
+</html>
