@@ -41,7 +41,7 @@ make lint               # Run golangci-lint
 
 ## Architecture
 
-```
+```text
 CLI Layer (cobra)
     ↓
 Service Layer (Inspector → Evaluator → Reporter)
@@ -74,7 +74,7 @@ type Evaluator interface {
 
 ## Directory Structure
 
-```
+```text
 cmd/inspect/main.go           # Entry point
 internal/
 ├── config/                   # Config loading & validation
@@ -125,11 +125,33 @@ Worker pool with errgroup, max 20 concurrent workers for 100+ hosts parallel col
 
 ## MCP Tool Instructions
 
-- Always use **context7** for code generation, setup steps, or library/API documentation
-- Always use **exa** for up-to-date information, current events, or fact-checking
+### Context7
 
-## 重要提示：
+Always use **context7** when code generation, setup or configuration steps, or library/API documentation is needed. Automatically use Context7 MCP tools to resolve library IDs and get library docs without explicit user request.
 
-- 写任何代码前必须完整阅读 memory-bank/@architecture.md（包含完整数据库结构）
-- 写任何代码前必须完整阅读 memory-bank/@product-requirement-document.md
-- 每完成一个重大功能或里程碑后，必须更新 memory-bank/@architecture.md
+### Brave Search
+
+Use **Brave Search MCP Server** for up-to-date information, current events, or fact-checking. Available capabilities include:
+
+- Web search
+- Local business search
+- Image search
+- Video search
+- News search
+- AI-powered summarization
+
+### Sequential Thinking
+
+Use **sequential-thinking** for complex problem-solving that requires structured reasoning:
+
+- Break down complex problems into manageable steps
+- Revise and refine thoughts as understanding deepens
+- Branch into alternative paths of reasoning
+- Adjust the total number of thoughts dynamically
+- Generate and verify solution hypotheses
+
+## 重要提示
+
+- 写任何代码前必须完整阅读 @memory-bank/architecture.md（包含完整数据库结构）
+- 写任何代码前必须完整阅读 @memory-bank/product-requirement-document.md
+- 每完成一个重大功能或里程碑后，必须更新 @memory-bank/architecture.md

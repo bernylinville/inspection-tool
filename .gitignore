@@ -2,3 +2,6 @@ bin/
 inspect
 config.yaml
 reports/
+.claude/
+.roo/
+.spec-workflow/
