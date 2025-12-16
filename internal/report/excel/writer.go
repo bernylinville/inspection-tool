@@ -20,6 +20,7 @@ const (
 	sheetSummary = "巡检概览"
 	sheetDetail  = "详细数据"
 	sheetAlerts  = "异常汇总"
+	sheetMySQL   = "MySQL 巡检" // MySQL inspection sheet
 
 	// Default sheet to remove
 	defaultSheet = "Sheet1"
@@ -634,4 +635,215 @@ func formatThreshold(value float64, metricName string) string {
 	default:
 		return fmt.Sprintf("%.2f", value)
 	}
+}
+
+// ============================================================================
+// MySQL Report Helper Functions
+// ============================================================================
+
+// mysqlStatusText converts MySQL instance status to Chinese text.
+func mysqlStatusText(status model.MySQLInstanceStatus) string {
+	switch status {
+	case model.MySQLStatusNormal:
+		return "正常"
+	case model.MySQLStatusWarning:
+		return "警告"
+	case model.MySQLStatusCritical:
+		return "严重"
+	case model.MySQLStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// mysqlClusterModeText converts MySQL cluster mode to Chinese text.
+func mysqlClusterModeText(mode model.MySQLClusterMode) string {
+	switch mode {
+	case model.ClusterModeMGR:
+		return "MGR"
+	case model.ClusterModeDualMaster:
+		return "双主"
+	case model.ClusterModeMasterSlave:
+		return "主从"
+	default:
+		return "未知"
+	}
+}
+
+// boolToText converts boolean to Chinese text (启用/禁用).
+func boolToText(b bool) string {
+	if b {
+		return "启用"
+	}
+	return "禁用"
+}
+
+// getMySQLSyncStatus returns sync status text based on cluster mode.
+func (w *Writer) getMySQLSyncStatus(r *model.MySQLInspectionResult) string {
+	if r.Instance.ClusterMode.IsMGR() {
+		if r.MGRStateOnline {
+			return "在线"
+		}
+		return "离线"
+	}
+	if r.SyncStatus {
+		return "正常"
+	}
+	return "异常"
+}
+
+// ============================================================================
+// MySQL Report Methods
+// ============================================================================
+
+// WriteMySQLInspection generates an Excel report for MySQL inspection results.
+func (w *Writer) WriteMySQLInspection(result *model.MySQLInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("MySQL inspection result is nil")
+	}
+
+	// Ensure output path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	// Create new Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create MySQL sheet
+	if err := w.createMySQLSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create MySQL sheet: %w", err)
+	}
+
+	// Remove default Sheet1
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+		// Ignore error if sheet doesn't exist
+	}
+
+	// Set active sheet to MySQL
+	idx, _ := f.GetSheetIndex(sheetMySQL)
+	f.SetActiveSheet(idx)
+
+	// Save the file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}
+
+// createMySQLSheet creates the MySQL inspection data worksheet.
+func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectionResults) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetMySQL)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{
+		"巡检时间", "IP地址", "端口", "数据库版本", "Server ID",
+		"集群模式", "同步状态", "最大连接数", "当前连接数", "Binlog状态", "整体状态",
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 20, // 巡检时间
+		"B": 15, // IP地址
+		"C": 8,  // 端口
+		"D": 12, // 数据库版本
+		"E": 12, // Server ID
+		"F": 12, // 集群模式
+		"G": 10, // 同步状态
+		"H": 12, // 最大连接数
+		"I": 12, // 当前连接数
+		"J": 12, // Binlog状态
+		"K": 10, // 整体状态
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetMySQL, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetMySQL, cell, header)
+		f.SetCellStyle(sheetMySQL, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetMySQL, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetMySQL, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Write MySQL instance data
+	for i, r := range result.Results {
+		row := i + 2 // Start from row 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		// A: 巡检时间
+		f.SetCellValue(sheetMySQL, "A"+rowStr, result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
+		// B: IP地址
+		f.SetCellValue(sheetMySQL, "B"+rowStr, r.Instance.IP)
+		// C: 端口
+		f.SetCellValue(sheetMySQL, "C"+rowStr, r.Instance.Port)
+		// D: 数据库版本
+		f.SetCellValue(sheetMySQL, "D"+rowStr, r.Instance.Version)
+		// E: Server ID
+		f.SetCellValue(sheetMySQL, "E"+rowStr, r.Instance.ServerID)
+		// F: 集群模式
+		f.SetCellValue(sheetMySQL, "F"+rowStr, mysqlClusterModeText(r.Instance.ClusterMode))
+		// G: 同步状态
+		f.SetCellValue(sheetMySQL, "G"+rowStr, w.getMySQLSyncStatus(r))
+		// H: 最大连接数
+		f.SetCellValue(sheetMySQL, "H"+rowStr, r.MaxConnections)
+		// I: 当前连接数
+		f.SetCellValue(sheetMySQL, "I"+rowStr, r.CurrentConnections)
+		// J: Binlog状态
+		f.SetCellValue(sheetMySQL, "J"+rowStr, boolToText(r.BinlogEnabled))
+		// K: 整体状态
+		f.SetCellValue(sheetMySQL, "K"+rowStr, mysqlStatusText(r.Status))
+
+		// Apply conditional format to status column
+		statusCell := "K" + rowStr
+		switch r.Status {
+		case model.MySQLStatusCritical:
+			f.SetCellStyle(sheetMySQL, statusCell, statusCell, criticalStyle)
+		case model.MySQLStatusWarning:
+			f.SetCellStyle(sheetMySQL, statusCell, statusCell, warningStyle)
+		case model.MySQLStatusNormal:
+			f.SetCellStyle(sheetMySQL, statusCell, statusCell, normalStyle)
+		}
+	}
+
+	return nil
 }

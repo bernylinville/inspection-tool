@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段三 - MySQL 评估与编排（已完成）
-**进度**: 步骤 11/18 完成
+**阶段**: 阶段四 - 报告生成扩展（进行中）
+**进度**: 步骤 12/18 完成
 
 ---
 
@@ -1116,9 +1116,99 @@ func TestMySQLInspector_Inspect_MGRNodeStateOffline(t *testing.T)
 
 ---
 
+### 步骤 12：扩展 Excel 报告 - MySQL 工作表 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `internal/report/excel/writer.go` 中添加 MySQL 报告功能
+2. 新增 `sheetMySQL = "MySQL 巡检"` 常量
+3. 实现 4 个辅助函数：
+   - `mysqlStatusText()` - MySQL 实例状态转中文
+   - `mysqlClusterModeText()` - 集群模式转中文
+   - `boolToText()` - 布尔值转中文（启用/禁用）
+   - `getMySQLSyncStatus()` - 根据集群模式获取同步状态文本
+4. 实现 `WriteMySQLInspection()` 主方法
+5. 实现 `createMySQLSheet()` 工作表创建方法
+6. 编写 10 个单元测试用例
+
+**新增方法 - internal/report/excel/writer.go**:
+
+```go
+// WriteMySQLInspection generates an Excel report for MySQL inspection results.
+func (w *Writer) WriteMySQLInspection(result *model.MySQLInspectionResults, outputPath string) error
+
+// createMySQLSheet creates the MySQL inspection data worksheet.
+func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectionResults) error
+```
+
+**MySQL 工作表列定义**（11 列）:
+
+| 列 | 表头名称 | 数据来源 | 列宽 |
+|----|----------|----------|------|
+| A | 巡检时间 | result.InspectionTime | 20 |
+| B | IP地址 | r.Instance.IP | 15 |
+| C | 端口 | r.Instance.Port | 8 |
+| D | 数据库版本 | r.Instance.Version | 12 |
+| E | Server ID | r.Instance.ServerID | 12 |
+| F | 集群模式 | r.Instance.ClusterMode | 12 |
+| G | 同步状态 | getMySQLSyncStatus(r) | 10 |
+| H | 最大连接数 | r.MaxConnections | 12 |
+| I | 当前连接数 | r.CurrentConnections | 12 |
+| J | Binlog状态 | boolToText(r.BinlogEnabled) | 12 |
+| K | 整体状态 | mysqlStatusText(r.Status) | 10 |
+
+**条件格式应用**:
+- K 列（整体状态）根据 Status 值应用颜色：
+  - Normal → 绿色背景 (#C6EFCE)
+  - Warning → 黄色背景 (#FFEB9C)
+  - Critical → 红色背景 (#FFC7CE)
+
+**生成文件**:
+- `internal/report/excel/writer.go` - 新增 2 个方法 + 4 个辅助函数（~160 行代码）
+- `internal/report/excel/writer_test.go` - 新增 10 个测试（~180 行代码）
+
+**验证结果**:
+- [x] 执行 `go build ./internal/report/excel/` 无编译错误
+- [x] 执行 `go test ./internal/report/excel/ -run "TestWriter_.*MySQL.*|TestMySQL|TestBoolToText|TestGetMySQLSyncStatus"` 全部通过（10 个测试）
+- [x] 测试覆盖率达到目标（>85%）：
+  - mysqlStatusText: 100.0%
+  - mysqlClusterModeText: 100.0%
+  - boolToText: 100.0%
+  - getMySQLSyncStatus: 100.0%
+  - WriteMySQLInspection: 85.7%
+  - createMySQLSheet: 88.9%
+- [x] Excel 文件包含 "MySQL 巡检" 工作表
+- [x] 表头 11 列完整正确
+- [x] 数据正确填充
+- [x] 条件格式正确应用（正常=绿，警告=黄，严重=红）
+
+**测试用例统计**:
+| 测试函数 | 验证内容 |
+|---------|---------|
+| TestWriter_WriteMySQLInspection_NilResult | nil 输入返回错误 |
+| TestWriter_WriteMySQLInspection_Success | 正常写入流程、Sheet 存在、Sheet1 删除 |
+| TestWriter_WriteMySQLInspection_AddsXlsxExtension | 自动补全 .xlsx 扩展名 |
+| TestWriter_MySQLSheet_Headers | 验证 11 列表头正确 |
+| TestWriter_MySQLSheet_DataMapping | 验证数据字段映射正确 |
+| TestWriter_MySQLSheet_ConditionalFormat | 验证状态条件格式（正常/警告/严重） |
+| TestMySQLStatusText | 5 个子测试：normal/warning/critical/failed/unknown |
+| TestMySQLClusterModeText | 4 个子测试：mgr/dual-master/master-slave/unknown |
+| TestBoolToText | 2 个子测试：启用/禁用 |
+| TestGetMySQLSyncStatus | 4 个子测试：MGR online/offline, Master-Slave sync OK/failed |
+
+**关键设计决策**:
+1. **复用现有样式方法**：使用 createHeaderStyle, createWarningStyle, createCriticalStyle, createNormalStyle
+2. **独立工作表**：MySQL 巡检与 Host 巡检使用独立工作表
+3. **同步状态智能判断**：getMySQLSyncStatus 根据集群模式返回不同文本（MGR: 在线/离线，主从: 正常/异常）
+4. **冻结首行**：设置 Panes 冻结表头行，便于滚动查看
+5. **默认 Sheet1 删除**：与 Host 报告保持一致的处理逻辑
+
+---
+
 ## 下一步骤
 
-**步骤 12：扩展 Excel 报告 - MySQL 工作表**（等待用户验证步骤 11）
+**步骤 13：扩展 Excel 报告 - MySQL 异常汇总**（等待用户验证步骤 12）
 
 ---
 
@@ -1137,3 +1227,4 @@ func TestMySQLInspector_Inspect_MGRNodeStateOffline(t *testing.T)
 | 2025-12-16 | 步骤 9 | 实现 MySQL 阈值评估完成，测试覆盖率 95.9%，阶段三开始 |
 | 2025-12-16 | 步骤 10 | 实现 MySQL 巡检编排服务完成，测试覆盖率 >80%（核心方法 88.6%），阶段三完成 |
 | 2025-12-16 | 步骤 11 | 编写 MySQL 巡检服务集成测试完成，新增 4 个 MGR 场景测试，总计 14 个测试全部通过 |
+| 2025-12-16 | 步骤 12 | 扩展 Excel 报告 - MySQL 工作表完成，测试覆盖率 85%+，阶段四开始 |
