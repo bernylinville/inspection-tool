@@ -1,0 +1,87 @@
+# Redis 集群巡检 - 开发进度记录
+
+## 当前状态
+
+**阶段**: 阶段一 - 数据模型
+**进度**: 步骤 1/18 完成
+
+---
+
+## 已完成步骤
+
+### 步骤 1：定义 Redis 实例模型（完成日期：2025-12-16）
+
+**操作**：
+- ✅ 创建 `internal/model/redis.go` 文件
+- ✅ 定义 `RedisInstance` 结构体（7 个字段）
+- ✅ 定义 `RedisInstanceStatus` 枚举（4 个状态：normal, warning, critical, failed）
+- ✅ 定义 `RedisRole` 枚举（3 个角色：master, slave, unknown）
+- ✅ 定义 `RedisClusterMode` 枚举（2 个模式：3m3s, 3m6s）
+
+**验证**：
+- ✅ 执行 `go build ./internal/model/` 无编译错误
+- ✅ 结构体字段覆盖所有巡检项要求
+- ✅ 代码风格与 MySQL 模型完全一致
+- ✅ 所有导出类型和函数都有英文注释
+- ✅ 复用 `ParseAddress` 函数（来自 mysql.go）
+
+**代码结构**：
+- 文件行数：171 行
+- 枚举类型：3 个
+- 结构体：1 个（RedisInstance）
+- 构造函数：2 个（NewRedisInstance, NewRedisInstanceWithRole）
+- 便捷方法：9 个
+  - RedisInstanceStatus: IsHealthy(), IsWarning(), IsCritical(), IsFailed()
+  - RedisRole: IsMaster(), IsSlave()
+  - RedisClusterMode: Is3M3S(), Is3M6S(), GetExpectedSlaveCount()
+
+**关键设计决策**：
+- 复用 `ParseAddress` 函数避免重复代码
+- 角色默认值为 `RedisRoleUnknown`，通过采集确定
+- Version 字段在 MVP 阶段为空字符串，报告生成时显示 "N/A"
+- 集群模式提供 `GetExpectedSlaveCount()` 方法便于后续评估器判断集群健康
+
+---
+
+## 待完成步骤
+
+### 阶段一：数据模型（步骤 1-4）
+
+- [x] 步骤 1：定义 Redis 实例模型（已完成）
+- [ ] 步骤 2：定义 Redis 巡检结果模型
+- [ ] 步骤 3：扩展配置结构体
+- [ ] 步骤 4：创建 Redis 指标定义文件
+
+### 阶段二：数据采集（步骤 5-8）
+
+- [ ] 步骤 5：创建 Redis 采集器接口
+- [ ] 步骤 6：实现 Redis 实例发现
+- [ ] 步骤 7：实现 Redis 指标采集
+- [ ] 步骤 8：编写 Redis 采集器单元测试
+
+### 阶段三：评估与编排（步骤 9-11）
+
+- [ ] 步骤 9：实现 Redis 状态评估器
+- [ ] 步骤 10：实现 Redis 巡检编排服务
+- [ ] 步骤 11：编写 Redis 巡检服务集成测试
+
+### 阶段四：报告生成（步骤 12-15）
+
+- [ ] 步骤 12：扩展 Excel 报告 - Redis 工作表
+- [ ] 步骤 13：扩展 Excel 报告 - Redis 异常汇总
+- [ ] 步骤 14：扩展 HTML 报告 - Redis 区域
+- [ ] 步骤 15：更新示例配置文件
+
+### 阶段五：CLI 集成与测试（步骤 16-18）
+
+- [ ] 步骤 16：扩展 run 命令支持 Redis 巡检
+- [ ] 步骤 17：端到端测试
+- [ ] 步骤 18：更新文档
+
+---
+
+## 版本记录
+
+| 日期 | 步骤 | 说明 |
+|------|------|------|
+| 2025-12-16 | 步骤 1 | 定义 Redis 实例模型完成，阶段一开始 |
