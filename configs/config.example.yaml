@@ -161,3 +161,57 @@ http:
     # 可重试的错误类型: 超时、5xx 响应、连接失败
     # 4xx 错误不会重试
     base_delay: 1s
+
+# -----------------------------------------------------------------------------
+# MySQL 数据库巡检配置
+# -----------------------------------------------------------------------------
+# 用途: MySQL 8.0 MGR 集群巡检（支持主从/双主模式扩展）
+# 数据来源: VictoriaMetrics（通过 Categraf 采集的 mysql_* 指标）
+mysql:
+  # 是否启用 MySQL 巡检 (默认: false)
+  enabled: true
+
+  # 集群模式 (必须手动指定，不支持自动检测)
+  # 可选值: mgr, dual-master, master-slave
+  # - mgr: MySQL 8.0 MGR 模式 (1主N从)
+  # - dual-master: 双主模式
+  # - master-slave: 传统主从模式
+  cluster_mode: "mgr"
+
+  # 实例筛选条件 (可选)
+  # 不配置则查询所有 MySQL 实例
+  instance_filter:
+    # 地址匹配模式 (支持通配符 *)
+    # 示例: "172.18.182.*" 匹配该网段所有实例
+    # 示例: "*:3306" 匹配所有 3306 端口实例
+    address_patterns:
+      # - "172.18.182.*"
+      # - "*:33306"
+
+    # 业务组筛选 (OR 关系)
+    # 匹配任意一个业务组的实例都会被纳入巡检
+    business_groups:
+      # - "生产MySQL"
+      # - "测试MySQL"
+
+    # 标签筛选 (AND 关系)
+    # 与业务组条件之间是 AND 关系
+    tags:
+      # env: "prod"
+      # app: "mysql"
+
+  # 阈值配置
+  thresholds:
+    # 连接使用率阈值 (单位: %)
+    # 计算方式: (当前连接数 / 最大连接数) * 100
+    connection_usage_warning: 70   # 连接使用率 > 70% 触发警告
+    connection_usage_critical: 90  # 连接使用率 > 90% 触发严重告警
+
+    # MGR 期望成员数 (默认: 3)
+    # 仅在 cluster_mode: mgr 时生效
+    # 支持配置为 3/5/7/9 等奇数（符合 MGR 最佳实践）
+    # 告警规则:
+    #   - 成员数 = expected: 正常
+    #   - 成员数 = expected - 1: 警告 (掉 1 个节点)
+    #   - 成员数 < expected - 1: 严重 (掉 2 个及以上节点)
+    mgr_member_count_expected: 3

@@ -77,6 +77,10 @@ func Validate(cfg *Config) error {
 		validationErrors = append(validationErrors, errs...)
 	}
 
+	if errs := validateMySQLThresholds(cfg); len(errs) > 0 {
+		validationErrors = append(validationErrors, errs...)
+	}
+
 	if len(validationErrors) > 0 {
 		return validationErrors
 	}
@@ -137,6 +141,38 @@ func validateTimezoneConfig(cfg *Config) ValidationErrors {
 				Message: fmt.Sprintf("invalid timezone: %s", cfg.Report.Timezone),
 			})
 		}
+	}
+
+	return errors
+}
+
+// validateMySQLThresholds validates MySQL threshold configuration.
+func validateMySQLThresholds(cfg *Config) ValidationErrors {
+	var errors ValidationErrors
+
+	// Skip validation if MySQL inspection is disabled
+	if !cfg.MySQL.Enabled {
+		return errors
+	}
+
+	// Validate connection usage thresholds (warning < critical)
+	if cfg.MySQL.Thresholds.ConnectionUsageWarning >= cfg.MySQL.Thresholds.ConnectionUsageCritical {
+		errors = append(errors, &ValidationError{
+			Field:   "mysql.thresholds.connection_usage",
+			Tag:     "threshold_order",
+			Value:   fmt.Sprintf("warning=%v, critical=%v", cfg.MySQL.Thresholds.ConnectionUsageWarning, cfg.MySQL.Thresholds.ConnectionUsageCritical),
+			Message: fmt.Sprintf("warning threshold (%.2f) must be less than critical threshold (%.2f)", cfg.MySQL.Thresholds.ConnectionUsageWarning, cfg.MySQL.Thresholds.ConnectionUsageCritical),
+		})
+	}
+
+	// Validate cluster_mode is set when enabled
+	if cfg.MySQL.ClusterMode == "" {
+		errors = append(errors, &ValidationError{
+			Field:   "mysql.cluster_mode",
+			Tag:     "required_when_enabled",
+			Value:   "",
+			Message: "cluster_mode is required when MySQL inspection is enabled",
+		})
 	}
 
 	return errors

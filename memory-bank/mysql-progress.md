@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段四 - 报告生成扩展（进行中）
-**进度**: 步骤 14/18 完成
+**阶段**: 阶段五 - CLI 集成与文档（进行中）
+**进度**: 步骤 15/18 完成
 
 ---
 
@@ -1465,9 +1465,103 @@ type MySQLAlertData struct {
 
 ---
 
+### 步骤 15：更新示例配置文件 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `configs/config.example.yaml` 中添加 MySQL 配置节（~55 行）
+2. 在 `internal/config/loader.go` 中添加 MySQL 默认值（4 个配置项）
+3. 在 `internal/config/validator.go` 中添加 `validateMySQLThresholds()` 函数
+4. 在 `internal/config/validator_test.go` 中更新 `newValidConfig()` 并添加 8 个测试
+
+**修改文件**:
+- `configs/config.example.yaml` - 添加 MySQL 配置节
+- `internal/config/loader.go` - 添加 MySQL 默认值
+- `internal/config/validator.go` - 添加 MySQL 阈值验证
+- `internal/config/validator_test.go` - 添加 MySQL 验证测试
+
+**config.example.yaml 新增内容**:
+
+```yaml
+# -----------------------------------------------------------------------------
+# MySQL 数据库巡检配置
+# -----------------------------------------------------------------------------
+mysql:
+  enabled: true
+  cluster_mode: "mgr"
+  instance_filter:
+    address_patterns:
+      # - "172.18.182.*"
+    business_groups:
+      # - "生产MySQL"
+    tags:
+      # env: "prod"
+  thresholds:
+    connection_usage_warning: 70
+    connection_usage_critical: 90
+    mgr_member_count_expected: 3
+```
+
+**loader.go 新增默认值**:
+
+```go
+// MySQL inspection defaults
+v.SetDefault("mysql.enabled", false)
+v.SetDefault("mysql.thresholds.connection_usage_warning", 70.0)
+v.SetDefault("mysql.thresholds.connection_usage_critical", 90.0)
+v.SetDefault("mysql.thresholds.mgr_member_count_expected", 3)
+```
+
+**validator.go 新增验证函数**:
+
+```go
+// validateMySQLThresholds validates MySQL threshold configuration.
+func validateMySQLThresholds(cfg *Config) ValidationErrors {
+    // Skip validation if MySQL inspection is disabled
+    if !cfg.MySQL.Enabled {
+        return errors
+    }
+    // Validate connection usage thresholds (warning < critical)
+    // Validate cluster_mode is set when enabled
+}
+```
+
+**新增测试用例（8 个）**:
+
+| 测试函数 | 验证内容 |
+|---------|---------|
+| TestValidate_MySQLDisabled_SkipsValidation | MySQL 禁用时跳过验证 |
+| TestValidate_MySQLEnabled_ValidConfig | 有效 MySQL 配置验证通过 |
+| TestValidate_MySQLThresholds_InvalidOrder | warning >= critical 返回错误 |
+| TestValidate_MySQLThresholds_EqualValues | warning == critical 返回错误 |
+| TestValidate_MySQLEnabled_MissingClusterMode | 缺少 cluster_mode 返回错误 |
+| TestValidate_MySQLEnabled_InvalidClusterMode | 无效 cluster_mode 返回错误 |
+| TestValidate_MySQLEnabled_ValidClusterModes | 3 个有效模式验证通过（mgr, dual-master, master-slave） |
+| TestValidate_MySQLMultipleErrors | 多个错误同时返回 |
+
+**验证结果**:
+- [x] 执行 `go build ./internal/config/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test ./internal/config/... -run MySQL` 全部通过（8 个测试）
+- [x] 执行 `go test ./internal/config/...` 全部通过
+- [x] 测试覆盖率：90.9%
+- [x] 执行 `go vet ./internal/config/...` 无警告
+- [x] 配置文件格式正确
+- [x] 配置可被正确加载和验证
+
+**关键设计决策**:
+1. **条件验证**：仅在 `mysql.enabled=true` 时执行 MySQL 特定验证
+2. **阈值顺序**：严格要求 `warning < critical`（不允许相等）
+3. **必填字段**：`cluster_mode` 在启用 MySQL 时必填
+4. **结构体标签验证**：通过 `validate:"oneof=mgr dual-master master-slave"` 验证 cluster_mode 有效值
+5. **与现有验证一致**：遵循 `validateThresholds()` 的设计模式
+
+---
+
 ## 下一步骤
 
-**步骤 15：CLI 命令扩展**（等待用户验证步骤 14）
+**步骤 16：CLI 命令扩展**（等待用户验证步骤 15）
 
 ---
 
@@ -1489,3 +1583,4 @@ type MySQLAlertData struct {
 | 2025-12-16 | 步骤 12 | 扩展 Excel 报告 - MySQL 工作表完成，测试覆盖率 85%+，阶段四开始 |
 | 2025-12-16 | 步骤 13 | 扩展 Excel 报告 - MySQL 异常汇总完成，测试覆盖率 89.9% |
 | 2025-12-16 | 步骤 14 | 扩展 HTML 报告 - MySQL 区域完成，测试覆盖率 90.8%，阶段四完成 |
+| 2025-12-16 | 步骤 15 | 更新示例配置文件完成，测试覆盖率 90.9%，阶段五开始 |
