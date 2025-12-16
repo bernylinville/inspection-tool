@@ -710,3 +710,416 @@ func TestCollectMetrics_PendingMetrics(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// Label Extraction Tests
+// =============================================================================
+
+// TestCollectMetrics_VersionLabelExtract tests version label extraction
+func TestCollectMetrics_VersionLabelExtract(t *testing.T) {
+	server := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+
+		w.Header().Set("Content-Type", "application/json")
+		timestamp := time.Now().Unix()
+
+		var jsonResp string
+		if contains(query, "mysql_version_info") {
+			// Return version label
+			jsonResp = fmt.Sprintf(`{
+				"status": "success",
+				"data": {
+					"resultType": "vector",
+					"result": [
+						{
+							"metric": {
+								"__name__": "mysql_version_info",
+								"address": "172.18.182.91:3306",
+								"version": "8.0.39"
+							},
+							"value": [%d, "1"]
+						}
+					]
+				}
+			}`, timestamp)
+		} else {
+			jsonResp = `{"status": "success", "data": {"resultType": "vector", "result": []}}`
+		}
+
+		w.Write([]byte(jsonResp))
+	})
+	defer server.Close()
+
+	cfg := &config.MySQLInspectionConfig{
+		ClusterMode: "mgr",
+	}
+
+	collector := createTestMySQLCollector(server.URL, cfg)
+
+	instances := []*model.MySQLInstance{
+		model.NewMySQLInstanceWithClusterMode("172.18.182.91:3306", model.ClusterModeMGR),
+	}
+
+	// Metric with label extraction
+	metrics := []*model.MySQLMetricDefinition{
+		{
+			Name:         "mysql_version",
+			DisplayName:  "数据库版本",
+			Query:        "mysql_version_info",
+			Category:     "info",
+			LabelExtract: "version",
+		},
+	}
+
+	ctx := context.Background()
+	results, err := collector.CollectMetrics(ctx, instances, metrics)
+
+	if err != nil {
+		t.Fatalf("CollectMetrics failed: %v", err)
+	}
+
+	result, ok := results["172.18.182.91:3306"]
+	if !ok {
+		t.Fatal("result for 172.18.182.91:3306 not found")
+	}
+
+	// Verify version label extracted
+	versionMetric := result.GetMetric("mysql_version")
+	if versionMetric == nil {
+		t.Fatal("mysql_version metric not found")
+	}
+
+	if versionMetric.StringValue != "8.0.39" {
+		t.Errorf("StringValue = %q, want \"8.0.39\"", versionMetric.StringValue)
+	}
+
+	if versionMetric.Name != "mysql_version" {
+		t.Errorf("Name = %q, want \"mysql_version\"", versionMetric.Name)
+	}
+
+	// Check labels contain version
+	if versionMetric.Labels["version"] != "8.0.39" {
+		t.Errorf("Labels[version] = %q, want \"8.0.39\"", versionMetric.Labels["version"])
+	}
+}
+
+// TestCollectMetrics_ServerIDLabelExtract tests Server ID label extraction
+func TestCollectMetrics_ServerIDLabelExtract(t *testing.T) {
+	server := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+
+		w.Header().Set("Content-Type", "application/json")
+		timestamp := time.Now().Unix()
+
+		var jsonResp string
+		if contains(query, "mgr_role_primary") {
+			// Return member_id label
+			jsonResp = fmt.Sprintf(`{
+				"status": "success",
+				"data": {
+					"resultType": "vector",
+					"result": [
+						{
+							"metric": {
+								"__name__": "mysql_innodb_cluster_mgr_role_primary",
+								"address": "172.18.182.91:3306",
+								"member_id": "91abc-def1-2345-6789"
+							},
+							"value": [%d, "1"]
+						}
+					]
+				}
+			}`, timestamp)
+		} else {
+			jsonResp = `{"status": "success", "data": {"resultType": "vector", "result": []}}`
+		}
+
+		w.Write([]byte(jsonResp))
+	})
+	defer server.Close()
+
+	cfg := &config.MySQLInspectionConfig{
+		ClusterMode: "mgr",
+	}
+
+	collector := createTestMySQLCollector(server.URL, cfg)
+
+	instances := []*model.MySQLInstance{
+		model.NewMySQLInstanceWithClusterMode("172.18.182.91:3306", model.ClusterModeMGR),
+	}
+
+	// Metric with member_id label extraction
+	metrics := []*model.MySQLMetricDefinition{
+		{
+			Name:         "server_id",
+			DisplayName:  "Server ID",
+			Query:        "mysql_innodb_cluster_mgr_role_primary",
+			Category:     "info",
+			ClusterMode:  "mgr",
+			LabelExtract: "member_id",
+		},
+	}
+
+	ctx := context.Background()
+	results, err := collector.CollectMetrics(ctx, instances, metrics)
+
+	if err != nil {
+		t.Fatalf("CollectMetrics failed: %v", err)
+	}
+
+	result, ok := results["172.18.182.91:3306"]
+	if !ok {
+		t.Fatal("result for 172.18.182.91:3306 not found")
+	}
+
+	// Verify member_id label extracted as server_id
+	serverIDMetric := result.GetMetric("server_id")
+	if serverIDMetric == nil {
+		t.Fatal("server_id metric not found")
+	}
+
+	if serverIDMetric.StringValue != "91abc-def1-2345-6789" {
+		t.Errorf("StringValue = %q, want \"91abc-def1-2345-6789\"", serverIDMetric.StringValue)
+	}
+
+	// Check labels contain member_id
+	if serverIDMetric.Labels["member_id"] != "91abc-def1-2345-6789" {
+		t.Errorf("Labels[member_id] = %q, want \"91abc-def1-2345-6789\"", serverIDMetric.Labels["member_id"])
+	}
+}
+
+// TestCollectMetrics_MissingLabelExtract tests handling of missing label
+func TestCollectMetrics_MissingLabelExtract(t *testing.T) {
+	server := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+
+		w.Header().Set("Content-Type", "application/json")
+		timestamp := time.Now().Unix()
+
+		var jsonResp string
+		if contains(query, "mysql_version_info") {
+			// Return WITHOUT version label
+			jsonResp = fmt.Sprintf(`{
+				"status": "success",
+				"data": {
+					"resultType": "vector",
+					"result": [
+						{
+							"metric": {
+								"__name__": "mysql_version_info",
+								"address": "172.18.182.91:3306"
+							},
+							"value": [%d, "1"]
+						}
+					]
+				}
+			}`, timestamp)
+		} else {
+			jsonResp = `{"status": "success", "data": {"resultType": "vector", "result": []}}`
+		}
+
+		w.Write([]byte(jsonResp))
+	})
+	defer server.Close()
+
+	cfg := &config.MySQLInspectionConfig{
+		ClusterMode: "mgr",
+	}
+
+	collector := createTestMySQLCollector(server.URL, cfg)
+
+	instances := []*model.MySQLInstance{
+		model.NewMySQLInstanceWithClusterMode("172.18.182.91:3306", model.ClusterModeMGR),
+	}
+
+	metrics := []*model.MySQLMetricDefinition{
+		{
+			Name:         "mysql_version",
+			DisplayName:  "数据库版本",
+			Query:        "mysql_version_info",
+			Category:     "info",
+			LabelExtract: "version",
+		},
+	}
+
+	ctx := context.Background()
+	results, err := collector.CollectMetrics(ctx, instances, metrics)
+
+	if err != nil {
+		t.Fatalf("CollectMetrics failed: %v", err)
+	}
+
+	result, ok := results["172.18.182.91:3306"]
+	if !ok {
+		t.Fatal("result for 172.18.182.91:3306 not found")
+	}
+
+	// Metric should not exist when label is missing
+	versionMetric := result.GetMetric("mysql_version")
+	if versionMetric != nil {
+		t.Error("Expected no metric when label extraction fails, but found one")
+	}
+}
+
+// =============================================================================
+// Cluster Mode Filtering Tests
+// =============================================================================
+
+// TestCollectMetrics_ClusterModeFiltering tests cluster mode metric filtering
+func TestCollectMetrics_ClusterModeFiltering(t *testing.T) {
+	tests := []struct {
+		name                   string
+		clusterMode            string
+		metrics                []*model.MySQLMetricDefinition
+		expectedMetricNames    []string
+		notExpectedMetricNames []string
+	}{
+		{
+			name:        "MGR mode includes MGR metrics and universal metrics",
+			clusterMode: "mgr",
+			metrics: []*model.MySQLMetricDefinition{
+				{
+					Name:        "mgr_member_count",
+					DisplayName: "MGR 成员数",
+					Query:       "mysql_innodb_cluster_mgr_member_count",
+					Category:    "mgr",
+					ClusterMode: "mgr",
+				},
+				{
+					Name:        "max_connections",
+					DisplayName: "最大连接数",
+					Query:       "mysql_global_variables_max_connections",
+					Category:    "connection",
+					ClusterMode: "", // Universal metric
+				},
+				{
+					Name:        "slave_running",
+					DisplayName: "Slave 是否启动",
+					Query:       "mysql_slave_status_slave_running",
+					Category:    "replication",
+					ClusterMode: "master-slave",
+				},
+			},
+			expectedMetricNames:    []string{"mgr_member_count", "max_connections"},
+			notExpectedMetricNames: []string{"slave_running"},
+		},
+		{
+			name:        "Master-Slave mode excludes MGR metrics",
+			clusterMode: "master-slave",
+			metrics: []*model.MySQLMetricDefinition{
+				{
+					Name:        "mgr_member_count",
+					DisplayName: "MGR 成员数",
+					Query:       "mysql_innodb_cluster_mgr_member_count",
+					Category:    "mgr",
+					ClusterMode: "mgr",
+				},
+				{
+					Name:        "slave_running",
+					DisplayName: "Slave 是否启动",
+					Query:       "mysql_slave_status_slave_running",
+					Category:    "replication",
+					ClusterMode: "master-slave",
+				},
+				{
+					Name:        "max_connections",
+					DisplayName: "最大连接数",
+					Query:       "mysql_global_variables_max_connections",
+					Category:    "connection",
+					ClusterMode: "", // Universal metric
+				},
+			},
+			expectedMetricNames:    []string{"slave_running", "max_connections"},
+			notExpectedMetricNames: []string{"mgr_member_count"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupMySQLVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				query := r.URL.Query().Get("query")
+
+				w.Header().Set("Content-Type", "application/json")
+				timestamp := time.Now().Unix()
+
+				var jsonResp string
+
+				// Match different metrics
+				if contains(query, "mgr_member_count") {
+					jsonResp = fmt.Sprintf(`{
+						"status": "success",
+						"data": {
+							"resultType": "vector",
+							"result": [
+								{"metric": {"address": "172.18.182.91:3306"}, "value": [%d, "3"]}
+							]
+						}
+					}`, timestamp)
+				} else if contains(query, "slave_running") {
+					jsonResp = fmt.Sprintf(`{
+						"status": "success",
+						"data": {
+							"resultType": "vector",
+							"result": [
+								{"metric": {"address": "172.18.182.91:3306"}, "value": [%d, "1"]}
+							]
+						}
+					}`, timestamp)
+				} else if contains(query, "max_connections") {
+					jsonResp = fmt.Sprintf(`{
+						"status": "success",
+						"data": {
+							"resultType": "vector",
+							"result": [
+								{"metric": {"address": "172.18.182.91:3306"}, "value": [%d, "1000"]}
+							]
+						}
+					}`, timestamp)
+				} else {
+					jsonResp = `{"status": "success", "data": {"resultType": "vector", "result": []}}`
+				}
+
+				w.Write([]byte(jsonResp))
+			})
+			defer server.Close()
+
+			cfg := &config.MySQLInspectionConfig{
+				ClusterMode: tt.clusterMode,
+			}
+
+			collector := createTestMySQLCollector(server.URL, cfg)
+
+			instances := []*model.MySQLInstance{
+				model.NewMySQLInstanceWithClusterMode("172.18.182.91:3306", model.MySQLClusterMode(tt.clusterMode)),
+			}
+
+			ctx := context.Background()
+			results, err := collector.CollectMetrics(ctx, instances, tt.metrics)
+
+			if err != nil {
+				t.Fatalf("CollectMetrics failed: %v", err)
+			}
+
+			result, ok := results["172.18.182.91:3306"]
+			if !ok {
+				t.Fatal("result for 172.18.182.91:3306 not found")
+			}
+
+			// Check expected metrics are present
+			for _, metricName := range tt.expectedMetricNames {
+				metric := result.GetMetric(metricName)
+				if metric == nil {
+					t.Errorf("Expected metric %q not found in results", metricName)
+				}
+			}
+
+			// Check not expected metrics are absent
+			for _, metricName := range tt.notExpectedMetricNames {
+				metric := result.GetMetric(metricName)
+				if metric != nil {
+					t.Errorf("Unexpected metric %q found in results (should be filtered)", metricName)
+				}
+			}
+		})
+	}
+}
