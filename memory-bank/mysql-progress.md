@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段二 - MySQL 数据采集服务（进行中）
-**进度**: 步骤 7/18 完成
+**阶段**: 阶段三 - MySQL 评估与编排（已完成）
+**进度**: 步骤 10/18 完成
 
 ---
 
@@ -859,22 +859,172 @@ func (e *MySQLEvaluator) evaluateMGRStateOnline(result) *MySQLAlert {
 
 ---
 
+### 步骤 10：实现 MySQL 巡检编排服务 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `internal/service/` 目录下创建 `mysql_inspector.go` 文件
+2. 定义 `MySQLInspector` 结构体，包含：
+   - collector (*MySQLCollector): MySQL 数据采集器
+   - evaluator (*MySQLEvaluator): 阈值评估器
+   - config (*config.Config): 完整配置
+   - timezone (*time.Location): 时区（从 config.Report.Timezone）
+   - version (string): 工具版本号（可选）
+   - logger (zerolog.Logger): 日志器
+3. 定义 `MySQLInspectorOption` 函数选项类型
+4. 实现构造函数 `NewMySQLInspector`
+5. 实现函数选项 `WithMySQLVersion`
+6. 实现辅助方法 `GetTimezone()` 和 `GetVersion()`
+7. 实现核心方法 `Inspect()`，协调完整巡检流程：
+   - Step 1: 记录开始时间（Asia/Shanghai）
+   - Step 2: 创建结果容器
+   - Step 3: 发现实例
+   - Step 4: 空实例列表处理（优雅降级）
+   - Step 5: 采集指标
+   - Step 5.5: **从 Metrics map 填充字段**（MaxConnections, CurrentConnections, MGRMemberCount, MGRStateOnline）
+   - Step 6: 评估阈值
+   - Step 7: 构建结果
+   - Step 8: 最终化（计算 Duration、Summary、AlertSummary）
+8. 实现辅助方法 `buildInspectionResults`
+9. 编写 10 个单元测试（3 个构造函数测试 + 7 个 Inspect 流程测试）
+
+**新增方法**:
+- `NewMySQLInspector()` - 创建巡检编排器（~48 行）
+- `WithMySQLVersion()` - 函数选项（~4 行）
+- `GetTimezone()` - 获取时区（~3 行）
+- `GetVersion()` - 获取版本（~3 行）
+- `Inspect()` - 核心巡检流程（~97 行）
+- `buildInspectionResults()` - 构建结果（~19 行）
+
+**生成文件**:
+- `internal/service/mysql_inspector.go` - MySQL 巡检编排服务（~230 行代码）
+- `internal/service/mysql_inspector_test.go` - 单元测试（~640 行代码，10 个测试）
+
+**验证结果**:
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test -v ./internal/service/ -run "TestMySQLInspector|TestNewMySQLInspector"` 全部通过（10 个测试）
+  - TestNewMySQLInspector (3 个子测试)
+    - basic_construction ✅
+    - with_version_option ✅
+    - invalid_timezone ✅
+  - TestMySQLInspector_Inspect_Success ✅
+  - TestMySQLInspector_Inspect_NoInstances ✅
+  - TestMySQLInspector_Inspect_WithWarning ✅
+  - TestMySQLInspector_Inspect_WithCritical ✅
+  - TestMySQLInspector_Inspect_MultipleInstances ✅
+  - TestMySQLInspector_Inspect_DiscoveryError ✅
+  - TestMySQLInspector_Inspect_ContextCanceled ✅
+- [x] 测试覆盖率达到目标（>80%）：
+  - NewMySQLInspector: 81.2%
+  - WithMySQLVersion: 100.0%
+  - GetTimezone: 100.0%
+  - GetVersion: 100.0%
+  - Inspect: 88.6%
+  - buildInspectionResults: 83.3%
+- [x] 执行 `go test -race ./internal/service/ -run "TestMySQLInspector"` 无竞态条件警告
+- [x] 执行 `go vet ./internal/service/...` 无警告
+- [x] 能够完整协调巡检流程（发现 → 采集 → 评估 → 汇总）
+- [x] 空实例列表优雅降级（返回空结果，不报错）
+- [x] 实例发现失败正确中止并返回错误
+- [x] 上下文取消正确处理
+
+**代码结构概览**:
+```go
+// 核心编排流程
+func (i *MySQLInspector) Inspect(ctx context.Context) (*model.MySQLInspectionResults, error) {
+    // 1. 记录开始时间（Asia/Shanghai）
+    startTime := time.Now().In(i.timezone)
+
+    // 2. 创建结果容器
+    result := model.NewMySQLInspectionResults(startTime)
+    result.Version = i.version
+
+    // 3. 发现实例
+    instances, err := i.collector.DiscoverInstances(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("instance discovery failed: %w", err)
+    }
+
+    // 4. 空实例列表处理（优雅降级）
+    if len(instances) == 0 {
+        result.Finalize(time.Now().In(i.timezone))
+        return result, nil
+    }
+
+    // 5. 采集指标
+    metrics := i.collector.GetMetrics()
+    resultsMap, err := i.collector.CollectMetrics(ctx, instances, metrics)
+    if err != nil {
+        return nil, fmt.Errorf("metrics collection failed: %w", err)
+    }
+
+    // 5.5 从 Metrics map 填充字段（为评估器准备数据）
+    for _, inspResult := range resultsMap {
+        if maxConnMetric := inspResult.GetMetric("max_connections"); maxConnMetric != nil {
+            inspResult.MaxConnections = int(maxConnMetric.RawValue)
+        }
+        if currConnMetric := inspResult.GetMetric("current_connections"); currConnMetric != nil {
+            inspResult.CurrentConnections = int(currConnMetric.RawValue)
+        }
+        if mgrCountMetric := inspResult.GetMetric("mgr_member_count"); mgrCountMetric != nil {
+            inspResult.MGRMemberCount = int(mgrCountMetric.RawValue)
+        }
+        if mgrStateMetric := inspResult.GetMetric("mgr_state_online"); mgrStateMetric != nil {
+            inspResult.MGRStateOnline = mgrStateMetric.RawValue > 0
+        }
+    }
+
+    // 6. 评估阈值
+    _ = i.evaluator.EvaluateAll(resultsMap)
+
+    // 7. 构建结果
+    i.buildInspectionResults(result, resultsMap)
+
+    // 8. 最终化
+    result.Finalize(time.Now().In(i.timezone))
+
+    return result, nil
+}
+```
+
+**关键设计决策**:
+1. **依赖注入**：通过构造函数注入 Collector 和 Evaluator，便于测试
+2. **函数选项模式**：使用 `WithMySQLVersion()` 设置可选参数
+3. **时区统一**：所有时间戳使用 `config.Report.Timezone` 配置（默认 Asia/Shanghai）
+4. **优雅降级**：无实例时返回空结果而不是错误
+5. **错误分级**：实例发现失败中止，单实例失败由 Collector 处理
+6. **字段映射**：在评估前从 Metrics map 填充 MaxConnections/CurrentConnections/MGR 字段
+7. **自动聚合**：通过 result.AddResult() 自动聚合 Summary 和 AlertSummary
+8. **日志分级**：Info (开始/完成), Debug (详细数据), Error (严重错误)
+
+**测试策略**:
+1. **真实组件测试**：使用真实的 Collector 和 Evaluator，而不是 mock
+2. **Mock HTTP 服务器**：使用 httptest 模拟 VictoriaMetrics API
+3. **查询匹配优化**：使用 contains() 而不是精确匹配
+4. **完整数据覆盖**：为 MGR 模式测试提供完整的 MGR 指标数据
+5. **边界情况覆盖**：测试无实例、发现失败、上下文取消等场景
+6. **多实例测试**：验证混合状态（正常/警告/严重）的正确处理
+
+**测试用例统计**:
+| 类别 | 测试数量 | 说明 |
+|------|---------|------|
+| 构造函数测试 | 3 个 | basic_construction, with_version_option, invalid_timezone |
+| Inspect 流程测试 | 7 个 | Success, NoInstances, WithWarning, WithCritical, MultipleInstances, DiscoveryError, ContextCanceled |
+| **总计** | **10 个测试** | 全部通过 ✅ |
+
+**重要修复**:
+1. **问题**：Evaluator 期望 MaxConnections/CurrentConnections 字段，但 Collector 只存储在 Metrics map
+2. **解决**：在 Inspect() 中调用 EvaluateAll() **之前**，从 Metrics map 填充字段
+3. **位置**：`mysql_inspector.go:163-180` (Step 5.5)
+4. **效果**：评估器能正确计算连接使用率和 MGR 状态
+
+---
+
 ## 下一步骤
 
-**步骤 10：实现 MySQL 巡检编排服务**（等待用户验证步骤 9）
-
-待实现内容：
-- 创建 `MySQLInspector` 结构体
-- 整合 `MySQLCollector` 和 `MySQLEvaluator`
-- 实现 `Inspect` 方法协调完整巡检流程：
-  1. 发现实例
-  2. 采集指标
-  3. 评估状态
-  4. 汇总结果
-- 单实例失败不影响其他实例
-- 巡检摘要统计正确
-
-⚠️ **注意**：等待用户验证步骤 9 后再开始步骤 10
+**步骤 11：实现 MySQL 巡检 CLI 命令**（等待用户验证步骤 10）
 
 ---
 
@@ -891,3 +1041,4 @@ func (e *MySQLEvaluator) evaluateMGRStateOnline(result) *MySQLAlert {
 | 2025-12-16 | 步骤 7 | 实现 MySQL 指标采集完成，5 个方法，测试覆盖率 93.5% |
 | 2025-12-16 | 步骤 8 | 编写 MySQL 采集器单元测试完成，新增 4 个测试，覆盖率 85%+ |
 | 2025-12-16 | 步骤 9 | 实现 MySQL 阈值评估完成，测试覆盖率 95.9%，阶段三开始 |
+| 2025-12-16 | 步骤 10 | 实现 MySQL 巡检编排服务完成，测试覆盖率 >80%（核心方法 88.6%），阶段三完成 |
