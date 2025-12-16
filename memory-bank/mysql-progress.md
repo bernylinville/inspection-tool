@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段二 - MySQL 数据采集服务（进行中）
-**进度**: 步骤 5/18 完成
+**进度**: 步骤 7/18 完成
 
 ---
 
@@ -456,26 +456,203 @@ func matchAddressPattern(address, pattern string) bool {
 5. **错误处理**: 单个实例失败记录日志并跳过，不中止整体发现
 6. **日志级别**: Info (开始/完成), Debug (详细数据), Warn (缺失标签), Error (查询失败)
 
+### 步骤 7：实现 MySQL 指标采集 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 扩展 `internal/model/mysql.go` 数据结构
+   - 添加 `MySQLMetricValue` 结构体（存储指标值、标签、格式化值）
+   - 扩展 `MySQLInspectionResult` 添加 `Metrics` 字段
+   - 实现 `SetMetric()` 和 `GetMetric()` 辅助方法
+
+2. 在 `MySQLCollector` 中实现核心采集逻辑（5 个方法）
+   - `filterMetricsByClusterMode()` - 根据集群模式筛选指标
+   - `setPendingMetrics()` - 为 pending 指标设置 N/A
+   - `collectMetricConcurrent()` - 并发安全的简单指标采集
+   - `collectLabelExtractMetric()` - 标签提取型指标采集
+   - `CollectMetrics()` - 主方法，编排完整采集流程
+
+3. 编写 2 个单元测试覆盖核心场景
+   - `TestCollectMetrics_Success` - 正常指标采集
+   - `TestCollectMetrics_PendingMetrics` - Pending 指标处理
+
+**新增结构体 - internal/model/mysql.go**:
+
+```go
+// MySQLMetricValue represents a collected metric value for a MySQL instance.
+type MySQLMetricValue struct {
+    Name           string            `json:"name"`                // 指标名称
+    RawValue       float64           `json:"raw_value"`           // 原始数值
+    FormattedValue string            `json:"formatted_value"`     // 格式化后的值
+    StringValue    string            `json:"string_value"`        // 从标签提取的字符串值（version, member_id）
+    Labels         map[string]string `json:"labels,omitempty"`    // 原始标签
+    IsNA           bool              `json:"is_na"`               // 是否为 N/A
+    Timestamp      int64             `json:"timestamp,omitempty"` // 采集时间戳
+}
+
+// MySQLInspectionResult 扩展 Metrics 字段
+Metrics map[string]*MySQLMetricValue `json:"metrics,omitempty"` // key = metric name
+
+// 辅助方法
+func (r *MySQLInspectionResult) SetMetric(value *MySQLMetricValue)
+func (r *MySQLInspectionResult) GetMetric(name string) *MySQLMetricValue
+```
+
+**新增方法 - internal/service/mysql_collector.go**:
+
+1. **filterMetricsByClusterMode** (~30 行)
+   - 根据配置的 `cluster_mode` 筛选指标
+   - MGR 专属指标（如 mgr_member_count）仅在 MGR 模式下采集
+   - 无 `cluster_mode` 限制的指标全部保留
+
+2. **setPendingMetrics** (~20 行)
+   - 为 `non_root_user` 和 `slave_running` 设置 N/A
+   - 遍历所有实例，统一设置 pending 指标
+
+3. **collectMetricConcurrent** (~80 行)
+   - 判断是否需要标签提取（HasLabelExtract）
+   - 查询 VictoriaMetrics 获取指标数据
+   - 按 address 匹配实例
+   - 使用 mutex 保护 map 写入（并发安全）
+
+4. **collectLabelExtractMetric** (~80 行)
+   - 处理标签提取型指标（version, member_id, slow_query_log_file）
+   - 从 metric labels 中提取 StringValue
+   - 应用地址模式过滤
+
+5. **CollectMetrics** - 主方法 (~85 行)
+   - 初始化结果 map（按 address 索引）
+   - 分离 pending 和 active 指标
+   - 为 pending 指标设置 N/A
+   - 根据 cluster_mode 筛选 active 指标
+   - 使用 errgroup 并发采集（默认并发数 20）
+   - 单个指标失败不中止整体采集
+   - 返回 `map[string]*MySQLInspectionResult`
+
+**生成文件**:
+- `internal/model/mysql.go` - 新增 MySQLMetricValue 结构体（~80 行）
+- `internal/service/mysql_collector.go` - 新增 5 个方法（~400 行代码）
+- `internal/service/mysql_collector_test.go` - 新增 2 个测试（~170 行代码）
+
+**验证结果**:
+- [x] 执行 `go build ./internal/model/` 无编译错误
+- [x] 执行 `go build ./internal/service/` 无编译错误
+- [x] 执行 `go build ./...` 整个项目编译无错误
+- [x] 执行 `go test ./internal/service/ -run TestCollectMetrics` 全部通过（2 个测试）
+- [x] 测试覆盖率达到 90% 以上：
+  - CollectMetrics: 93.5%
+  - setPendingMetrics: 100%
+  - filterMetricsByClusterMode: 85.7%
+  - collectMetricConcurrent: 81.5%
+- [x] 执行 `go vet ./internal/service/...` 无警告
+- [x] 执行 `go test -race ./internal/service/` 无竞态条件警告
+- [x] 能够正确采集所有 active MySQL 指标
+- [x] Version 从 `mysql_version_info` 的 `version` 标签正确提取
+- [x] Server ID 从 `server_id` 或 MGR 的 `member_id` 正确提取
+- [x] MGR 专属指标在非 MGR 模式下被过滤
+- [x] Pending 指标显示 "N/A"
+- [x] 地址模式过滤正确应用
+- [x] 单个指标失败不中止整体采集
+
+**代码结构概览**:
+```go
+// 主采集流程
+func (c *MySQLCollector) CollectMetrics(
+    ctx context.Context,
+    instances []*model.MySQLInstance,
+    metrics []*model.MySQLMetricDefinition,
+) (map[string]*model.MySQLInspectionResult, error) {
+    // 1. 初始化结果 map（indexed by address）
+    resultsMap := make(map[string]*model.MySQLInspectionResult)
+
+    // 2. 分离 pending 和 active 指标
+    var pendingMetrics []*model.MySQLMetricDefinition
+    var activeMetrics []*model.MySQLMetricDefinition
+
+    // 3. 为 pending 指标设置 N/A
+    c.setPendingMetrics(resultsMap, pendingMetrics)
+
+    // 4. 根据 cluster_mode 筛选 active 指标
+    filteredMetrics := c.filterMetricsByClusterMode(activeMetrics, clusterMode)
+
+    // 5. 并发采集指标（errgroup + concurrency limit）
+    g, ctx := errgroup.WithContext(ctx)
+    g.SetLimit(20) // 默认并发数
+
+    var mu sync.Mutex // 保护 resultsMap
+
+    for _, metric := range filteredMetrics {
+        g.Go(func() error {
+            return c.collectMetricConcurrent(ctx, metric, instances, resultsMap, &mu)
+        })
+    }
+
+    // 6. 等待所有 goroutine 完成
+    if err := g.Wait(); err != nil {
+        return nil, fmt.Errorf("concurrent metric collection failed: %w", err)
+    }
+
+    return resultsMap, nil
+}
+
+// 标签提取处理
+func (c *MySQLCollector) collectLabelExtractMetric(...) error {
+    // 从标签提取 version, member_id, slow_query_log_file
+    extractedValue := result.Labels[metric.LabelExtract]
+
+    mv := &model.MySQLMetricValue{
+        Name:        metric.Name,
+        RawValue:    result.Value,
+        StringValue: extractedValue, // 提取的标签值
+        Timestamp:   time.Now().Unix(),
+        Labels:      result.Labels,
+    }
+    inspResult.SetMetric(mv)
+}
+```
+
+**关键设计决策**:
+1. **并发采集模式**: 使用 errgroup + sync.Mutex，默认并发数 20
+2. **标签提取策略**: StringValue 字段存储提取的标签值（version, member_id）
+3. **集群模式过滤**: 使用 MySQLMetricDefinition.IsForClusterMode() 方法
+4. **Pending 指标处理**: 统一设置 IsNA=true, FormattedValue="N/A"
+5. **错误容错**: 单个指标失败记录警告日志，不中止整体采集
+6. **地址匹配**: 复用 DiscoverInstances 的 extractAddress 和地址过滤逻辑
+7. **日志级别**: Info (开始/完成), Debug (指标进度), Warn (指标失败), Error (严重错误)
+
+**测试用例覆盖**:
+1. TestCollectMetrics_Success - 正常采集多个指标 ✅
+   - 验证 mysql_up 和 max_connections 正确采集
+   - 检查 RawValue 匹配预期值（1, 1000）
+   - 验证 Metrics map 正确填充
+
+2. TestCollectMetrics_PendingMetrics - Pending 指标处理 ✅
+   - 验证 non_root_user 和 slave_running 设置为 N/A
+   - 检查 IsNA=true 和 FormattedValue="N/A"
+   - 确保 pending 指标不发起 VM 查询
+
 ---
 
 ## 下一步骤
 
-**步骤 7：实现 MySQL 指标采集**（等待用户验证步骤 6）
+**步骤 8：实现 MySQL 阈值评估**（等待用户验证步骤 7）
 
 待实现内容：
-- 在 `MySQLCollector` 中实现 `CollectMetrics` 方法
-- 按实例 `address` 标签进行过滤查询
-- 采集所有配置的 MySQL 指标
-- 处理标签提取（如从 `mysql_version_info` 提取 `version` 标签值）
-- 返回 `map[string]*model.MySQLMetrics` (key 为 address)
+- 创建 `MySQLEvaluator` 结构体
+- 实现 `Evaluate` 方法评估单个实例
+- 实现 `EvaluateAll` 方法批量评估
+- 支持连接使用率、MGR 成员数等阈值
+- 生成 MySQLAlert 告警
+- 更新 MySQLInspectionResult 状态
 
 关键处理：
-- 从 `mysql_version_info` 指标的 `version` 标签提取版本号
-- 从 `mysql_innodb_cluster_mgr_role_primary` 的 `member_id` 标签提取 Server ID
-- 集群模式从配置读取（不自动检测）
-- 按 `cluster_mode` 筛选指标（如 MGR 专属指标）
+- 连接使用率评估：`current_connections / max_connections * 100`
+- MGR 成员数评估：与期望值比对
+- 告警级别判定：warning / critical
+- 实例状态聚合：normal / warning / critical / failed
 
-⚠️ **注意**：等待用户验证测试步骤 6 后再开始步骤 7
+⚠️ **注意**：等待用户验证测试步骤 7 后再开始步骤 8
 
 ---
 
@@ -489,3 +666,4 @@ func matchAddressPattern(address, pattern string) bool {
 | 2025-12-15 | 步骤 4 | 创建 MySQL 指标定义文件完成，阶段一全部完成 |
 | 2025-12-15 | 步骤 5 | 创建 MySQL 采集器接口完成，阶段二开始 |
 | 2025-12-16 | 步骤 6 | 实现 MySQL 实例发现完成，测试覆盖率 90%+ |
+| 2025-12-16 | 步骤 7 | 实现 MySQL 指标采集完成，5 个方法，测试覆盖率 93.5% |

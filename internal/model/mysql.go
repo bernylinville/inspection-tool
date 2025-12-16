@@ -223,6 +223,22 @@ func (a *MySQLAlert) IsCritical() bool {
 }
 
 // =============================================================================
+// MySQL 指标值结构体
+// =============================================================================
+
+// MySQLMetricValue represents a collected metric value for a MySQL instance.
+// It stores both numeric values and label-extracted string values (e.g., version, member_id).
+type MySQLMetricValue struct {
+	Name           string            `json:"name"`                // 指标名称
+	RawValue       float64           `json:"raw_value"`           // 原始数值
+	FormattedValue string            `json:"formatted_value"`     // 格式化后的值
+	StringValue    string            `json:"string_value"`        // 从标签提取的字符串值（version, member_id）
+	Labels         map[string]string `json:"labels,omitempty"`    // 原始标签
+	IsNA           bool              `json:"is_na"`               // 是否为 N/A
+	Timestamp      int64             `json:"timestamp,omitempty"` // 采集时间戳
+}
+
+// =============================================================================
 // MySQL 巡检结果结构体
 // =============================================================================
 
@@ -270,6 +286,9 @@ type MySQLInspectionResult struct {
 
 	// 错误信息
 	Error string `json:"error,omitempty"`
+
+	// 指标集合 (key = metric name)
+	Metrics map[string]*MySQLMetricValue `json:"metrics,omitempty"`
 }
 
 // NewMySQLInspectionResult creates a new MySQLInspectionResult from a MySQLInstance.
@@ -323,6 +342,22 @@ func (r *MySQLInspectionResult) GetAddress() string {
 		return ""
 	}
 	return r.Instance.Address
+}
+
+// SetMetric adds or updates a metric value for this instance.
+func (r *MySQLInspectionResult) SetMetric(value *MySQLMetricValue) {
+	if r.Metrics == nil {
+		r.Metrics = make(map[string]*MySQLMetricValue)
+	}
+	r.Metrics[value.Name] = value
+}
+
+// GetMetric retrieves a metric value by name, returns nil if not found.
+func (r *MySQLInspectionResult) GetMetric(name string) *MySQLMetricValue {
+	if r.Metrics == nil {
+		return nil
+	}
+	return r.Metrics[name]
 }
 
 // =============================================================================
