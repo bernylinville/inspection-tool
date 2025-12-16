@@ -1,0 +1,123 @@
+# =============================================================================
+# Redis 数据库巡检工具 - 指标定义文件
+# =============================================================================
+#
+# 本文件定义了所有 Redis 巡检指标的 PromQL 查询表达式和元数据。
+# 基于 Categraf 采集的 Redis 监控数据，支持 Redis 6.2 Cluster 模式（3主3从/3主6从）。
+#
+# 指标字段说明:
+#   name:           指标唯一标识符（用于代码引用）
+#   display_name:   中文显示名称（用于报告展示）
+#   query:          PromQL 查询表达式（待定项为空字符串）
+#   category:       分类（connection、cluster、replication、status、info、security）
+#   format:         格式化类型（可选：size、duration、percent）
+#   status:         状态（可选：pending 表示待实现）
+#   note:           备注说明
+#
+# =============================================================================
+
+redis_metrics:
+  # ---------------------------------------------------------------------------
+  # 基础连接状态
+  # ---------------------------------------------------------------------------
+  - name: redis_up
+    display_name: "连接状态"
+    query: "redis_up"
+    category: connection
+    note: "1=正常, 0=连接失败"
+
+  # ---------------------------------------------------------------------------
+  # 集群配置
+  # ---------------------------------------------------------------------------
+  - name: redis_cluster_enabled
+    display_name: "集群模式"
+    query: "redis_cluster_enabled"
+    category: cluster
+    note: "1=启用集群, 0=未启用"
+
+  # ---------------------------------------------------------------------------
+  # 主从链接状态（仅 slave 节点有值）
+  # ---------------------------------------------------------------------------
+  - name: redis_master_link_status
+    display_name: "主从链接状态"
+    query: "redis_master_link_status"
+    category: replication
+    note: "1=链接正常, 0=链接断开（仅 slave 节点）"
+
+  # ---------------------------------------------------------------------------
+  # 连接相关
+  # ---------------------------------------------------------------------------
+  - name: redis_connected_clients
+    display_name: "当前连接数"
+    query: "redis_connected_clients"
+    category: connection
+    note: "当前活跃的客户端连接数"
+
+  - name: redis_maxclients
+    display_name: "最大连接数"
+    query: "redis_maxclients"
+    category: connection
+    note: "通过 maxclients 配置的最大客户端连接数"
+
+  # ---------------------------------------------------------------------------
+  # 复制偏移量
+  # ---------------------------------------------------------------------------
+  - name: redis_master_repl_offset
+    display_name: "Master 复制偏移量"
+    query: "redis_master_repl_offset"
+    category: replication
+    note: "slave 节点上记录的是已知的 master 偏移量"
+
+  - name: redis_slave_repl_offset
+    display_name: "Slave 复制偏移量"
+    query: "redis_slave_repl_offset"
+    category: replication
+    note: "slave 自己的复制偏移量"
+
+  # ---------------------------------------------------------------------------
+  # 运行状态
+  # ---------------------------------------------------------------------------
+  - name: redis_uptime_in_seconds
+    display_name: "运行时间"
+    query: "redis_uptime_in_seconds"
+    category: status
+    format: duration
+    note: "Redis 实例启动后运行的时长（秒）"
+
+  # ---------------------------------------------------------------------------
+  # 对应 master 端口（slave 节点）
+  # ---------------------------------------------------------------------------
+  - name: redis_master_port
+    display_name: "Master 端口"
+    query: "redis_master_port"
+    category: replication
+    note: "slave 节点对应的 master 端口"
+
+  # ---------------------------------------------------------------------------
+  # 连接的 slave 数量（用于角色判断）
+  # ---------------------------------------------------------------------------
+  - name: redis_connected_slaves
+    display_name: "连接的 Slave 数"
+    query: "redis_connected_slaves"
+    category: replication
+    note: ">0 表示 master 节点"
+
+  # ---------------------------------------------------------------------------
+  # 待定项 - MVP 阶段显示 N/A
+  # ---------------------------------------------------------------------------
+  # 以下指标当前监控数据不包含，在报告中显示 "N/A"
+  # 后续可通过扩展 Categraf 插件或其他方式实现
+
+  - name: redis_version
+    display_name: "Redis 版本"
+    query: ""
+    category: info
+    status: pending
+    note: "需要扩展 Categraf command 配置采集"
+
+  - name: non_root_user
+    display_name: "非 root 用户启动"
+    query: ""
+    category: security
+    status: pending
+    note: "MVP 阶段显示 N/A"

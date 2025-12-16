@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段一 - 数据模型
-**进度**: 步骤 3/18 完成
+**阶段**: 阶段一 - 数据模型（已完成）
+**进度**: 步骤 4/18 完成
 
 ---
 
@@ -132,6 +132,45 @@
 
 ---
 
+### 步骤 4：创建 Redis 指标定义文件（完成日期：2025-12-17）
+
+**操作**：
+- ✅ 在 `configs/` 目录下创建 `redis-metrics.yaml` 文件
+- ✅ 定义所有 Redis 巡检指标的 PromQL 查询表达式
+- ✅ 使用与 `mysql-metrics.yaml` 相同的格式
+
+**验证**：
+- ✅ YAML 文件格式正确，可被解析
+- ✅ 所有巡检项都有对应的指标定义
+- ✅ 待定项正确标记 `status: pending`
+
+**代码结构**：
+- 文件行数：96 行
+- 根键：`redis_metrics:`
+- 指标分类：6 个（connection、cluster、replication、status、info、security）
+- 活跃指标：10 个
+  - redis_up：连接状态
+  - redis_cluster_enabled：集群模式
+  - redis_master_link_status：主从链接状态
+  - redis_connected_clients：当前连接数
+  - redis_maxclients：最大连接数
+  - redis_master_repl_offset：Master 复制偏移量
+  - redis_slave_repl_offset：Slave 复制偏移量
+  - redis_uptime_in_seconds：运行时间
+  - redis_master_port：Master 端口
+  - redis_connected_slaves：连接的 Slave 数
+- 待定指标：2 个
+  - redis_version：Redis 版本（需扩展 Categraf）
+  - non_root_user：非 root 用户启动
+
+**关键设计决策**：
+- 根键命名 `redis_metrics:` 与 MySQL 保持一致
+- 分类体系参考 MySQL，增加 cluster 分类
+- 运行时间指标使用 `format: duration`
+- 待定项使用 `status: pending` 标记
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -139,7 +178,7 @@
 - [x] 步骤 1：定义 Redis 实例模型（已完成）
 - [x] 步骤 2：定义 Redis 巡检结果模型（已完成）
 - [x] 步骤 3：扩展配置结构体（已完成）
-- [ ] 步骤 4：创建 Redis 指标定义文件
+- [x] 步骤 4：创建 Redis 指标定义文件（已完成）
 
 ### 阶段二：数据采集（步骤 5-8）
 
@@ -176,3 +215,4 @@
 | 2025-12-16 | 步骤 1 | 定义 Redis 实例模型完成，阶段一开始 |
 | 2025-12-16 | 步骤 2 | 定义 Redis 巡检结果模型完成（6 个结构体、5 个构造函数、17 个辅助方法） |
 | 2025-12-17 | 步骤 3 | 扩展配置结构体完成（3 个结构体、7 行默认值、40 行验证逻辑） |
+| 2025-12-17 | 步骤 4 | 创建 Redis 指标定义文件完成（12 个指标：10 活跃 + 2 待定），阶段一全部完成 |
