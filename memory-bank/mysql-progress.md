@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段五 - CLI 集成与文档（进行中）
-**进度**: 步骤 17/18 完成
+**阶段**: 阶段五 - CLI 集成与文档（**已完成**）
+**进度**: 步骤 18/18 完成 ✅
 
 ---
 
@@ -1727,9 +1727,62 @@ MySQL 告警总数: 80
 
 ---
 
-## 下一步骤
+### 步骤 18：更新文档 ✅
 
-**步骤 18：更新文档**（等待用户确认步骤 17）
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 更新 README.md 添加 MySQL 巡检功能说明
+2. 更新系统架构图，添加 MySQL 数据流
+3. 添加 MySQL 命令行参数说明（--mysql-only, --skip-mysql, --mysql-metrics）
+4. 添加 MySQL 配置节说明（enabled, cluster_mode, instance_filter, thresholds）
+5. 添加 MySQL 报告说明（Excel 5 工作表、HTML 合并区域）
+6. 添加 MySQL 巡检指标列表（12 个已实现 + 2 个待实现）
+7. 添加 Categraf mysql.toml 配置参考（基础配置 + MGR 采集 + 变量采集）
+8. 添加 MySQL 相关 FAQ（4 个常见问题）
+9. 更新项目结构说明，添加 MySQL 模块
+10. 更新测试覆盖率表格，添加 MySQL 模块覆盖率
+11. 更新版本记录，添加 v0.2.0
+
+**修改文件**:
+- `README.md` - 新增约 200 行 MySQL 文档内容
+
+**验证结果**:
+- [x] 文档完整描述 MySQL 巡检功能
+- [x] MySQL 命令行参数说明完整
+- [x] MySQL 配置节说明完整
+- [x] MySQL 报告说明完整
+- [x] MySQL 巡检指标列表完整
+- [x] Categraf mysql.toml 配置参考可直接使用
+- [x] MySQL FAQ 覆盖 4 个常见问题
+- [x] 项目结构说明包含 MySQL 模块
+- [x] 测试覆盖率表格包含 MySQL 模块
+- [x] 版本记录包含 v0.2.0
+
+---
+
+## 功能完成总结
+
+**MySQL 8.0 MGR 巡检功能已全部完成！**
+
+### 核心功能
+- ✅ MySQL 实例自动发现（基于 mysql_up 指标）
+- ✅ 12 个巡检指标采集（连接、MGR、Binlog、日志等）
+- ✅ 阈值评估和告警生成（连接使用率、MGR 成员数、MGR 状态）
+- ✅ Excel 报告（MySQL 巡检 + MySQL 异常 工作表）
+- ✅ HTML 报告（青绿色主题 MySQL 区域）
+- ✅ Host + MySQL 合并报告
+
+### CLI 支持
+- `--mysql-only` - 仅执行 MySQL 巡检
+- `--skip-mysql` - 跳过 MySQL 巡检
+- `--mysql-metrics` - 自定义 MySQL 指标文件
+
+### 测试覆盖
+- MySQL Collector: 93.5%
+- MySQL Evaluator: 95.9%
+- MySQL Inspector: 88.6%
+- 端到端测试: 10 项全部通过
 
 ---
 
@@ -1754,3 +1807,4 @@ MySQL 告警总数: 80
 | 2025-12-16 | 步骤 15 | 更新示例配置文件完成，测试覆盖率 90.9%，阶段五开始 |
 | 2025-12-16 | 步骤 16 | CLI 命令扩展完成，MySQL 巡检集成、报告合并、combined.html 模板 |
 | 2025-12-16 | 步骤 17 | 端到端测试完成，10 项测试全部通过，MGR 集群状态判断正确 |
+| 2025-12-16 | 步骤 18 | 更新文档完成，README.md 新增 MySQL 功能文档，**阶段五全部完成** |
