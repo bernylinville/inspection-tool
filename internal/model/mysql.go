@@ -571,3 +571,9 @@ func (m *MySQLMetricDefinition) GetDisplayName() string {
 	}
 	return m.Name
 }
+
+// MySQLMetricsConfig represents the root structure of mysql-metrics.yaml file.
+// This struct is used by config.LoadMySQLMetrics to parse the YAML configuration.
+type MySQLMetricsConfig struct {
+	Metrics []*MySQLMetricDefinition `yaml:"mysql_metrics" json:"mysql_metrics"` // MySQL 指标定义列表
+}

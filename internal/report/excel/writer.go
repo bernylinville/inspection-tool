@@ -960,3 +960,40 @@ func (w *Writer) createMySQLAlertsSheet(f *excelize.File, result *model.MySQLIns
 
 	return nil
 }
+
+// AppendMySQLInspection appends MySQL inspection data to an existing Excel file.
+// This method opens an existing file and adds MySQL-specific worksheets.
+func (w *Writer) AppendMySQLInspection(result *model.MySQLInspectionResults, existingPath string) error {
+	if result == nil {
+		return fmt.Errorf("MySQL inspection result is nil")
+	}
+
+	// Ensure path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(existingPath), ".xlsx") {
+		existingPath = existingPath + ".xlsx"
+	}
+
+	// Open existing Excel file
+	f, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		return fmt.Errorf("failed to open existing file: %w", err)
+	}
+	defer f.Close()
+
+	// Add MySQL inspection worksheet (reuse existing method)
+	if err := w.createMySQLSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create MySQL sheet: %w", err)
+	}
+
+	// Add MySQL alerts worksheet (reuse existing method)
+	if err := w.createMySQLAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
+	}
+
+	// Save the file
+	if err := f.Save(); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	return nil
+}

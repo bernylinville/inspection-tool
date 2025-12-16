@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段五 - CLI 集成与文档（进行中）
-**进度**: 步骤 15/18 完成
+**进度**: 步骤 16/18 完成
 
 ---
 
@@ -1559,9 +1559,116 @@ func validateMySQLThresholds(cfg *Config) ValidationErrors {
 
 ---
 
+### 步骤 16：CLI 命令扩展 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `internal/model/mysql.go` 中添加 `MySQLMetricsConfig` 结构体
+2. 在 `internal/config/metrics.go` 中实现 `LoadMySQLMetrics` 和 `CountActiveMySQLMetrics` 函数
+3. 在 `cmd/inspect/cmd/run.go` 中添加 MySQL CLI 标志：
+   - `--mysql-only`: 仅执行 MySQL 巡检
+   - `--skip-mysql`: 跳过 MySQL 巡检
+   - `--mysql-metrics`: MySQL 指标定义文件路径
+4. 修改 `runInspection` 函数集成 MySQL 巡检流程
+5. 添加 `printMySQLSummary` 函数打印 MySQL 巡检摘要
+6. 实现 `generateCombinedExcel` 和 `generateCombinedHTML` 辅助函数
+7. 在 `internal/report/excel/writer.go` 中实现 `AppendMySQLInspection` 方法
+8. 在 `internal/report/html/writer.go` 中实现 `WriteCombined` 方法和相关结构体
+9. 创建 `internal/report/html/templates/combined.html` 合并模板
+
+**新增/修改文件**:
+- `internal/model/mysql.go` - 添加 MySQLMetricsConfig 结构体（~5 行）
+- `internal/config/metrics.go` - 添加 LoadMySQLMetrics 函数（~55 行）
+- `internal/config/metrics_test.go` - 添加 MySQL 指标加载测试（~150 行）
+- `cmd/inspect/cmd/run.go` - CLI 标志和 MySQL 集成（~180 行修改）
+- `internal/report/excel/writer.go` - 添加 AppendMySQLInspection 方法（~35 行）
+- `internal/report/html/writer.go` - 添加 WriteCombined 方法（~130 行）
+- `internal/report/html/templates/combined.html` - 合并 HTML 模板（~765 行，新文件）
+
+**CLI 标志定义**:
+```go
+// MySQL-specific flags
+runCmd.Flags().StringVar(&mysqlMetricsPath, "mysql-metrics", "configs/mysql-metrics.yaml", "MySQL 指标定义文件路径")
+runCmd.Flags().BoolVar(&mysqlOnly, "mysql-only", false, "仅执行 MySQL 巡检")
+runCmd.Flags().BoolVar(&skipMySQL, "skip-mysql", false, "跳过 MySQL 巡检")
+```
+
+**执行模式逻辑**:
+```go
+// 验证标志互斥
+if mysqlOnly && skipMySQL {
+    fmt.Fprintf(os.Stderr, "❌ --mysql-only 和 --skip-mysql 不能同时使用\n")
+    os.Exit(1)
+}
+
+// 确定执行模式
+runHostInspection := !mysqlOnly
+runMySQLInspection := !skipMySQL && cfg.MySQL.Enabled
+```
+
+**报告合并逻辑**:
+- **Excel**: 先写 Host 报告，再使用 `AppendMySQLInspection` 追加 MySQL 工作表
+- **HTML**: 使用 `WriteCombined` 方法和 `combined.html` 模板渲染合并报告
+
+**合并 HTML 模板结构**:
+```html
+{{if .HasHost}}
+<!-- 主机巡检区域 (蓝色主题) -->
+<div class="section-header host-section">
+    <h2>🖥️ 主机巡检</h2>
+</div>
+<!-- 主机摘要、详情、异常汇总 -->
+{{end}}
+
+{{if .HasMySQL}}
+<!-- MySQL 巡检区域 (青绿色主题) -->
+<div class="section-header mysql-section">
+    <h2>🐬 MySQL 数据库巡检</h2>
+</div>
+<!-- MySQL 摘要、实例详情、异常汇总 -->
+{{end}}
+```
+
+**验证结果**:
+- [x] 执行 `go build ./...` 无编译错误
+- [x] 执行 `go test ./internal/report/...` 全部通过
+- [x] 执行 `go test ./internal/config/... -run MySQL` 全部通过
+- [x] 执行 `go test ./...` 全部通过
+- [x] `--mysql-only` 和 `--skip-mysql` 互斥验证正常
+- [x] MySQL 未启用时使用 `--mysql-only` 正确报错
+- [x] Excel 报告包含 MySQL 工作表（追加模式）
+- [x] HTML 报告包含 Host 和 MySQL 合并区域
+- [x] 合并模板条件渲染正常
+
+**关键设计决策**:
+1. **互斥标志**: `--mysql-only` 和 `--skip-mysql` 不能同时使用
+2. **配置优先**: MySQL 是否执行由配置 `mysql.enabled` 控制，`--skip-mysql` 可覆盖
+3. **报告合并**: Host 和 MySQL 报告合并到同一文件，而非分开生成
+4. **Excel 追加**: 使用 `excelize.OpenFile` + `Save` 实现追加工作表
+5. **HTML 条件渲染**: 使用 `{{if .HasHost}}` 和 `{{if .HasMySQL}}` 控制区域显示
+6. **样式区分**: Host 区域使用蓝色主题，MySQL 区域使用青绿色主题
+
+**使用示例**:
+```bash
+# 完整巡检（Host + MySQL）
+./bin/inspect run -c config.yaml
+
+# 仅执行 MySQL 巡检
+./bin/inspect run -c config.yaml --mysql-only
+
+# 跳过 MySQL 巡检（仅执行 Host 巡检）
+./bin/inspect run -c config.yaml --skip-mysql
+
+# 指定 MySQL 指标文件
+./bin/inspect run -c config.yaml --mysql-metrics custom-mysql-metrics.yaml
+```
+
+---
+
 ## 下一步骤
 
-**步骤 16：CLI 命令扩展**（等待用户验证步骤 15）
+**步骤 17：使用文档**（等待用户验证步骤 16）
 
 ---
 
@@ -1584,3 +1691,4 @@ func validateMySQLThresholds(cfg *Config) ValidationErrors {
 | 2025-12-16 | 步骤 13 | 扩展 Excel 报告 - MySQL 异常汇总完成，测试覆盖率 89.9% |
 | 2025-12-16 | 步骤 14 | 扩展 HTML 报告 - MySQL 区域完成，测试覆盖率 90.8%，阶段四完成 |
 | 2025-12-16 | 步骤 15 | 更新示例配置文件完成，测试覆盖率 90.9%，阶段五开始 |
+| 2025-12-16 | 步骤 16 | CLI 命令扩展完成，MySQL 巡检集成、报告合并、combined.html 模板 |

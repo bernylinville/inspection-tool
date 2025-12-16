@@ -692,3 +692,140 @@ func (w *Writer) convertMySQLAlerts(alerts []*model.MySQLAlert) []*MySQLAlertDat
 	}
 	return result
 }
+
+// ============================================================================
+// Combined Report (Host + MySQL) Data Structures and Methods
+// ============================================================================
+
+// CombinedTemplateData holds both Host and MySQL inspection data for combined template.
+type CombinedTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	// Host data
+	HasHost          bool
+	HostSummary      *model.InspectionSummary
+	HostAlertSummary *model.AlertSummary
+	Hosts            []*HostData
+	HostAlerts       []*AlertData
+	DiskPaths        []string
+	// MySQL data
+	HasMySQL          bool
+	MySQLSummary      *model.MySQLInspectionSummary
+	MySQLAlertSummary *model.MySQLAlertSummary
+	MySQLInstances    []*MySQLInstanceData
+	MySQLAlerts       []*MySQLAlertData
+	// Common
+	Version     string
+	GeneratedAt string
+}
+
+// WriteCombined generates an HTML report combining Host and MySQL inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, outputPath string) error {
+	// At least one result must be present
+	if hostResult == nil && mysqlResult == nil {
+		return fmt.Errorf("both host and MySQL inspection results are nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load combined template
+	tmpl, err := w.loadCombinedTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load combined template: %w", err)
+	}
+
+	// Prepare combined template data
+	data := w.prepareCombinedTemplateData(hostResult, mysqlResult)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute combined template: %w", err)
+	}
+
+	return nil
+}
+
+// loadCombinedTemplate loads the combined HTML template.
+func (w *Writer) loadCombinedTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    statusClass,
+		"alertClass":     alertLevelClass,
+	}
+
+	// Load embedded combined template
+	tmpl, err := template.New("combined.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/combined.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded combined template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareCombinedTemplateData prepares data for the combined template.
+func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults) *CombinedTemplateData {
+	data := &CombinedTemplateData{
+		Title:       "系统巡检报告",
+		GeneratedAt: time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+
+	// Determine inspection time and duration from available results
+	if hostResult != nil {
+		data.InspectionTime = hostResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(hostResult.Duration)
+		data.Version = hostResult.Version
+	} else if mysqlResult != nil {
+		data.InspectionTime = mysqlResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(mysqlResult.Duration)
+		data.Version = mysqlResult.Version
+	}
+
+	// Fill Host data if available
+	if hostResult != nil {
+		data.HasHost = true
+		data.HostSummary = hostResult.Summary
+		data.HostAlertSummary = hostResult.AlertSummary
+		data.DiskPaths = w.collectDiskPaths(hostResult.Hosts)
+
+		// Convert hosts
+		hosts := make([]*HostData, 0, len(hostResult.Hosts))
+		for _, host := range hostResult.Hosts {
+			hosts = append(hosts, w.convertHostData(host))
+		}
+		data.Hosts = hosts
+
+		// Convert host alerts
+		data.HostAlerts = w.convertAlerts(hostResult.Alerts)
+	}
+
+	// Fill MySQL data if available
+	if mysqlResult != nil {
+		data.HasMySQL = true
+		data.MySQLSummary = mysqlResult.Summary
+		data.MySQLAlertSummary = mysqlResult.AlertSummary
+
+		// Convert MySQL instances
+		instances := make([]*MySQLInstanceData, 0, len(mysqlResult.Results))
+		for _, r := range mysqlResult.Results {
+			instances = append(instances, w.convertMySQLInstanceData(r))
+		}
+		data.MySQLInstances = instances
+
+		// Convert MySQL alerts
+		data.MySQLAlerts = w.convertMySQLAlerts(mysqlResult.Alerts)
+	}
+
+	return data
+}
