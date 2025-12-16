@@ -20,7 +20,8 @@ const (
 	sheetSummary = "巡检概览"
 	sheetDetail  = "详细数据"
 	sheetAlerts  = "异常汇总"
-	sheetMySQL   = "MySQL 巡检" // MySQL inspection sheet
+	sheetMySQL       = "MySQL 巡检" // MySQL inspection sheet
+	sheetMySQLAlerts = "MySQL 异常" // MySQL alerts sheet
 
 	// Default sheet to remove
 	defaultSheet = "Sheet1"
@@ -693,6 +694,23 @@ func (w *Writer) getMySQLSyncStatus(r *model.MySQLInspectionResult) string {
 	return "异常"
 }
 
+// formatMySQLThreshold formats a MySQL alert threshold value based on metric type.
+func formatMySQLThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "connection_usage":
+		return fmt.Sprintf("%.1f%%", value)
+	case "mgr_member_count":
+		return fmt.Sprintf("%.0f", value)
+	case "mgr_state_online":
+		if value > 0 {
+			return "在线"
+		}
+		return "离线"
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
 // ============================================================================
 // MySQL Report Methods
 // ============================================================================
@@ -715,6 +733,11 @@ func (w *Writer) WriteMySQLInspection(result *model.MySQLInspectionResults, outp
 	// Create MySQL sheet
 	if err := w.createMySQLSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create MySQL sheet: %w", err)
+	}
+
+	// Create MySQL alerts sheet
+	if err := w.createMySQLAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
 	}
 
 	// Remove default Sheet1
@@ -842,6 +865,96 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 			f.SetCellStyle(sheetMySQL, statusCell, statusCell, warningStyle)
 		case model.MySQLStatusNormal:
 			f.SetCellStyle(sheetMySQL, statusCell, statusCell, normalStyle)
+		}
+	}
+
+	return nil
+}
+
+// createMySQLAlertsSheet creates the MySQL alerts summary worksheet.
+func (w *Writer) createMySQLAlertsSheet(f *excelize.File, result *model.MySQLInspectionResults) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetMySQLAlerts)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{"实例地址", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
+
+	// Set column widths
+	colWidths := []float64{20, 12, 15, 15, 12, 12, 40}
+	for i, width := range colWidths {
+		col := columnName(i + 1)
+		f.SetColWidth(sheetMySQLAlerts, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetMySQLAlerts, cell, header)
+		f.SetCellStyle(sheetMySQLAlerts, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetMySQLAlerts, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetMySQLAlerts, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Sort alerts by level (critical first) then by address
+	alerts := make([]*model.MySQLAlert, len(result.Alerts))
+	copy(alerts, result.Alerts)
+	sort.Slice(alerts, func(i, j int) bool {
+		if alerts[i].Level != alerts[j].Level {
+			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
+		}
+		return alerts[i].Address < alerts[j].Address
+	})
+
+	// Write alert data
+	for i, alert := range alerts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		f.SetCellValue(sheetMySQLAlerts, "A"+rowStr, alert.Address)
+		f.SetCellValue(sheetMySQLAlerts, "B"+rowStr, alertLevelText(alert.Level))
+		f.SetCellValue(sheetMySQLAlerts, "C"+rowStr, alert.MetricDisplayName)
+		f.SetCellValue(sheetMySQLAlerts, "D"+rowStr, alert.FormattedValue)
+		f.SetCellValue(sheetMySQLAlerts, "E"+rowStr, formatMySQLThreshold(alert.WarningThreshold, alert.MetricName))
+		f.SetCellValue(sheetMySQLAlerts, "F"+rowStr, formatMySQLThreshold(alert.CriticalThreshold, alert.MetricName))
+		f.SetCellValue(sheetMySQLAlerts, "G"+rowStr, alert.Message)
+
+		// Apply style based on alert level
+		var style int
+		if alert.Level == model.AlertLevelCritical {
+			style = criticalStyle
+		} else if alert.Level == model.AlertLevelWarning {
+			style = warningStyle
+		}
+		if style > 0 {
+			f.SetCellStyle(sheetMySQLAlerts, "B"+rowStr, "B"+rowStr, style)
 		}
 	}
 

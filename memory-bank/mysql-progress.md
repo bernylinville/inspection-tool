@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段四 - 报告生成扩展（进行中）
-**进度**: 步骤 12/18 完成
+**进度**: 步骤 13/18 完成
 
 ---
 
@@ -1206,9 +1206,98 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 
 ---
 
+### 步骤 13：扩展 Excel 报告 - MySQL 异常汇总 ✅
+
+**完成日期**: 2025-12-16
+
+**执行内容**:
+1. 在 `internal/report/excel/writer.go` 中添加 MySQL 异常工作表功能
+2. 新增 `sheetMySQLAlerts = "MySQL 异常"` 常量
+3. 实现 `formatMySQLThreshold()` 辅助函数（阈值格式化）
+4. 实现 `createMySQLAlertsSheet()` 工作表创建方法
+5. 修改 `WriteMySQLInspection()` 添加异常工作表调用
+6. 更新测试数据 `createTestMySQLInspectionResults()` 添加告警信息
+7. 编写 6 个单元测试用例
+
+**MySQL 异常工作表列定义**（7 列）:
+
+| 列 | 表头名称 | 数据来源 | 列宽 |
+|----|----------|----------|------|
+| A | 实例地址 | alert.Address | 20 |
+| B | 告警级别 | alert.Level | 12 |
+| C | 指标名称 | alert.MetricDisplayName | 15 |
+| D | 当前值 | alert.FormattedValue | 15 |
+| E | 警告阈值 | formatMySQLThreshold(WarningThreshold) | 12 |
+| F | 严重阈值 | formatMySQLThreshold(CriticalThreshold) | 12 |
+| G | 告警消息 | alert.Message | 40 |
+
+**核心功能**:
+- 按严重级别排序（Critical > Warning），同级别按实例地址排序
+- 告警级别列（B列）应用条件格式：严重=红色，警告=黄色
+- 空告警时工作表仍创建，仅显示表头
+- 冻结首行，便于滚动查看
+
+**新增辅助函数**:
+```go
+// formatMySQLThreshold 格式化 MySQL 告警阈值
+func formatMySQLThreshold(value float64, metricName string) string {
+    switch metricName {
+    case "connection_usage":
+        return fmt.Sprintf("%.1f%%", value)
+    case "mgr_member_count":
+        return fmt.Sprintf("%.0f", value)
+    case "mgr_state_online":
+        if value > 0 {
+            return "在线"
+        }
+        return "离线"
+    default:
+        return fmt.Sprintf("%.2f", value)
+    }
+}
+```
+
+**生成文件**:
+- `internal/report/excel/writer.go` - 新增 1 个常量 + 1 个辅助函数 + 1 个工作表方法（~100 行代码）
+- `internal/report/excel/writer_test.go` - 新增 6 个测试（~200 行代码）
+
+**验证结果**:
+- [x] 执行 `go build ./internal/report/excel/` 无编译错误
+- [x] 执行 `go test ./internal/report/excel/ -run "TestWriter_.*MySQL.*|TestMySQL|TestBoolToText|TestGetMySQLSyncStatus|TestFormatMySQLThreshold"` 全部通过（16 个测试）
+- [x] 测试覆盖率达到目标（>85%）：
+  - formatMySQLThreshold: 100.0%
+  - createMySQLAlertsSheet: 89.4%
+  - WriteMySQLInspection: 81.2%
+  - 整体覆盖率: 89.9%
+- [x] 执行 `go vet ./internal/report/excel/...` 无警告
+- [x] Excel 文件包含 "MySQL 异常" 工作表
+- [x] 表头 7 列完整正确
+- [x] 数据按严重级别排序（严重优先）
+- [x] 条件格式正确应用（严重=红色，警告=黄色）
+- [x] 无告警时工作表仅显示表头
+
+**测试用例统计**:
+| 测试函数 | 验证内容 |
+|---------|---------|
+| TestWriter_WriteMySQLInspection_AlertsSheetExists | 验证 MySQL 异常工作表存在 |
+| TestWriter_MySQLAlertsSheet_Headers | 验证 7 列表头正确 |
+| TestWriter_MySQLAlertsSheet_DataMapping | 验证数据字段映射正确（Critical 告警在前） |
+| TestWriter_MySQLAlertsSheet_SortBySeverity | 验证按严重级别排序（Critical > Warning） |
+| TestWriter_MySQLAlertsSheet_EmptyAlerts | 验证无告警时工作表仍创建 |
+| TestFormatMySQLThreshold | 5 个子测试：百分比、整数、在线/离线、默认格式 |
+
+**关键设计决策**:
+1. **复用排序逻辑**：使用现有 `alertLevelPriority()` 函数（复用 `AlertLevel` 类型）
+2. **独立工作表**：MySQL 异常与 Host 异常使用独立工作表
+3. **样式一致性**：与 MySQL 巡检工作表和 Host 异常汇总使用相同的颜色编码
+4. **阈值格式化**：根据指标类型智能格式化阈值（百分比、整数、状态文本）
+5. **空数据处理**：无告警时工作表仍创建，避免打开文件时出错
+
+---
+
 ## 下一步骤
 
-**步骤 13：扩展 Excel 报告 - MySQL 异常汇总**（等待用户验证步骤 12）
+**步骤 14：扩展 HTML 报告 - MySQL 区域**（等待用户验证步骤 13）
 
 ---
 
@@ -1228,3 +1317,4 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 | 2025-12-16 | 步骤 10 | 实现 MySQL 巡检编排服务完成，测试覆盖率 >80%（核心方法 88.6%），阶段三完成 |
 | 2025-12-16 | 步骤 11 | 编写 MySQL 巡检服务集成测试完成，新增 4 个 MGR 场景测试，总计 14 个测试全部通过 |
 | 2025-12-16 | 步骤 12 | 扩展 Excel 报告 - MySQL 工作表完成，测试覆盖率 85%+，阶段四开始 |
+| 2025-12-16 | 步骤 13 | 扩展 Excel 报告 - MySQL 异常汇总完成，测试覆盖率 89.9% |
