@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段一 - 数据模型
-**进度**: 步骤 2/18 完成
+**进度**: 步骤 3/18 完成
 
 ---
 
@@ -89,13 +89,56 @@
 
 ---
 
+### 步骤 3：扩展配置结构体（完成日期：2025-12-17）
+
+**操作**：
+- ✅ 在 `internal/config/config.go` 中添加 `RedisInspectionConfig` 结构体
+- ✅ 在 `internal/config/config.go` 中添加 `RedisFilter` 结构体
+- ✅ 在 `internal/config/config.go` 中添加 `RedisThresholds` 结构体
+- ✅ 在主配置结构体 `Config` 中添加 `Redis RedisInspectionConfig` 字段
+- ✅ 在 `internal/config/loader.go` 中添加 Redis 默认值
+- ✅ 在 `internal/config/validator.go` 中添加 `validateRedisThresholds` 函数
+
+**验证**：
+- ✅ 执行 `go build ./internal/config/` 无编译错误
+- ✅ 执行 `go test ./internal/config/ -v` 全部 63 个测试通过
+- ✅ 执行 `go test ./...` 完整测试套件通过
+- ✅ 代码风格与 MySQL 配置完全一致
+- ✅ 所有导出类型都有英文注释
+
+**代码结构**：
+
+1. **config.go 新增内容**（27 行）：
+   - `RedisInspectionConfig` 结构体（4 个字段：Enabled, ClusterMode, InstanceFilter, Thresholds）
+   - `RedisFilter` 结构体（3 个字段：AddressPatterns, BusinessGroups, Tags）
+   - `RedisThresholds` 结构体（4 个字段：ConnectionUsageWarning/Critical, ReplicationLagWarning/Critical）
+
+2. **loader.go 新增内容**（7 行）：
+   - Redis 默认值设置：enabled=false, cluster_mode="3m3s"
+   - 连接使用率阈值默认值：warning=70%, critical=90%
+   - 复制延迟阈值默认值：warning=1MB, critical=10MB
+
+3. **validator.go 新增内容**（40 行）：
+   - `validateRedisThresholds` 函数
+   - 连接使用率阈值验证（warning < critical）
+   - 复制延迟阈值验证（warning < critical）
+   - cluster_mode 启用时必填验证
+
+**关键设计决策**：
+- 完全参照 MySQL 配置的实现模式，保持代码一致性
+- ClusterMode 验证值：`3m3s`（3主3从）或 `3m6s`（3主6从）
+- 复制延迟阈值使用 int64 类型（字节），默认 1MB/10MB
+- 禁用时跳过验证，避免不必要的错误提示
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
 
 - [x] 步骤 1：定义 Redis 实例模型（已完成）
 - [x] 步骤 2：定义 Redis 巡检结果模型（已完成）
-- [ ] 步骤 3：扩展配置结构体
+- [x] 步骤 3：扩展配置结构体（已完成）
 - [ ] 步骤 4：创建 Redis 指标定义文件
 
 ### 阶段二：数据采集（步骤 5-8）
@@ -132,3 +175,4 @@
 |------|------|------|
 | 2025-12-16 | 步骤 1 | 定义 Redis 实例模型完成，阶段一开始 |
 | 2025-12-16 | 步骤 2 | 定义 Redis 巡检结果模型完成（6 个结构体、5 个构造函数、17 个辅助方法） |
+| 2025-12-17 | 步骤 3 | 扩展配置结构体完成（3 个结构体、7 行默认值、40 行验证逻辑） |

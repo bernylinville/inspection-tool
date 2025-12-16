@@ -97,4 +97,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("mysql.thresholds.connection_usage_warning", 70.0)
 	v.SetDefault("mysql.thresholds.connection_usage_critical", 90.0)
 	v.SetDefault("mysql.thresholds.mgr_member_count_expected", 3)
+
+	// Redis inspection defaults
+	v.SetDefault("redis.enabled", false)
+	v.SetDefault("redis.cluster_mode", "3m3s")
+	v.SetDefault("redis.thresholds.connection_usage_warning", 70.0)
+	v.SetDefault("redis.thresholds.connection_usage_critical", 90.0)
+	v.SetDefault("redis.thresholds.replication_lag_warning", 1048576)   // 1MB
+	v.SetDefault("redis.thresholds.replication_lag_critical", 10485760) // 10MB
 }

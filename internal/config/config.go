@@ -12,6 +12,7 @@ type Config struct {
 	Logging     LoggingConfig         `mapstructure:"logging"`
 	HTTP        HTTPConfig            `mapstructure:"http"`
 	MySQL       MySQLInspectionConfig `mapstructure:"mysql"`
+	Redis       RedisInspectionConfig `mapstructure:"redis"`
 }
 
 // DatasourcesConfig contains configurations for data sources.
@@ -113,4 +114,31 @@ type MySQLThresholds struct {
 	ConnectionUsageWarning  float64 `mapstructure:"connection_usage_warning" validate:"gte=0,lte=100"`  // Default: 70
 	ConnectionUsageCritical float64 `mapstructure:"connection_usage_critical" validate:"gte=0,lte=100"` // Default: 90
 	MGRMemberCountExpected  int     `mapstructure:"mgr_member_count_expected" validate:"gte=1"`         // Default: 3
+}
+
+// =============================================================================
+// Redis Inspection Configuration
+// =============================================================================
+
+// RedisInspectionConfig contains configurations for Redis inspection.
+type RedisInspectionConfig struct {
+	Enabled        bool            `mapstructure:"enabled"`
+	ClusterMode    string          `mapstructure:"cluster_mode" validate:"omitempty,oneof=3m3s 3m6s"` // "3m3s" or "3m6s"
+	InstanceFilter RedisFilter     `mapstructure:"instance_filter"`
+	Thresholds     RedisThresholds `mapstructure:"thresholds"`
+}
+
+// RedisFilter defines Redis instance filtering criteria.
+type RedisFilter struct {
+	AddressPatterns []string          `mapstructure:"address_patterns"` // Address matching patterns (glob)
+	BusinessGroups  []string          `mapstructure:"business_groups"`  // Business groups (OR relation)
+	Tags            map[string]string `mapstructure:"tags"`             // Tags (AND relation)
+}
+
+// RedisThresholds contains threshold configurations for Redis alerts.
+type RedisThresholds struct {
+	ConnectionUsageWarning  float64 `mapstructure:"connection_usage_warning" validate:"gte=0,lte=100"`  // Default: 70
+	ConnectionUsageCritical float64 `mapstructure:"connection_usage_critical" validate:"gte=0,lte=100"` // Default: 90
+	ReplicationLagWarning   int64   `mapstructure:"replication_lag_warning" validate:"gte=0"`           // Default: 1MB (1048576)
+	ReplicationLagCritical  int64   `mapstructure:"replication_lag_critical" validate:"gte=0"`          // Default: 10MB (10485760)
 }
