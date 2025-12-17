@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段二 - 数据采集（进行中）
-**进度**: 步骤 6/18 完成
+**进度**: 步骤 7/18 完成
 
 ---
 
@@ -269,6 +269,77 @@
 
 ---
 
+### 步骤 7：实现 Redis 指标采集（完成日期：2025-12-17）
+
+**操作**：
+- ✅ 在 `redis_collector.go` 中添加新 import（sync, time, errgroup）
+- ✅ 实现 `setPendingMetrics()` 辅助方法：为 pending 指标设置 N/A 值
+- ✅ 实现 `collectMetricConcurrent()` 辅助方法：并发采集单个指标（mutex 保护）
+- ✅ 实现 `verifyRoles()` 辅助方法：角色双重验证
+- ✅ 实现 `calculateReplicationLag()` 辅助方法：计算复制延迟（仅 slave）
+- ✅ 实现 `populateResultFields()` 辅助方法：将指标映射到结构体字段
+- ✅ 实现 `CollectMetrics()` 主方法：完整指标采集流程
+- ✅ 在 `redis_collector_test.go` 中添加 CollectMetrics 相关测试
+
+**验证**：
+- ✅ 执行 `go build ./internal/service/` 无编译错误
+- ✅ 执行 `go test ./internal/service/ -run TestRedis -v` 全部 24 个测试通过
+- ✅ `CollectMetrics` 方法覆盖率达到 87.9%
+- ✅ `verifyRoles` 方法覆盖率达到 91.7%
+- ✅ `calculateReplicationLag` 方法覆盖率达到 90.0%
+- ✅ `populateResultFields` 方法覆盖率达到 95.2%
+- ✅ 代码风格与 MySQL collector 完全一致
+- ✅ 所有导出类型和函数都有英文注释
+
+**代码结构**：
+
+1. **redis_collector.go 新增内容**（约 280 行，232→512 行）：
+   - `setPendingMetrics()` 方法：为 pending 指标设置 N/A 值
+   - `collectMetricConcurrent()` 方法：并发安全的单指标采集
+   - `verifyRoles()` 方法：角色双重验证（replica_role + connected_slaves）
+   - `calculateReplicationLag()` 方法：计算复制延迟（master_offset - slave_offset）
+   - `populateResultFields()` 方法：将指标值映射到结构体字段
+   - `CollectMetrics()` 方法：完整指标采集主流程
+
+2. **redis_collector_test.go 新增内容**（约 700 行）：
+   - `writeRedisMetricResponse()` 辅助函数：生成 Mock 响应
+   - `createRedisMetricsForTest()` 辅助函数：创建测试用指标定义
+   - `TestRedisCollectMetrics_Success`：测试完整流程（3 master + 3 slave）
+   - `TestRedisCollectMetrics_PendingMetrics`：测试 pending 指标 N/A 处理
+   - `TestRedisCollectMetrics_EmptyInstances`：测试空实例处理
+   - `TestRedisCollectMetrics_RoleVerification`：测试角色双重验证
+   - `TestRedisCollectMetrics_ReplicationLag`：测试复制延迟计算
+   - `TestRedisCollector_setPendingMetrics`：单元测试 N/A 设置
+   - `TestRedisCollector_verifyRoles`：单元测试角色验证（4 个子测试）
+   - `TestRedisCollector_calculateReplicationLag`：单元测试延迟计算（5 个子测试）
+   - `TestRedisCollector_populateResultFields`：单元测试字段填充
+
+**关键设计决策**：
+- 完全参照 MySQL collector 的 `CollectMetrics` 实现模式
+- 使用 `errgroup` 并发采集，默认并发数 20（由配置控制）
+- 使用 `sync.Mutex` 保护 resultsMap 的并发写入
+- 角色双重验证：主来源 `replica_role` 标签，备用 `redis_connected_slaves > 0` 推断 master
+- 复制延迟计算仅对 slave 节点执行：`lag = master_repl_offset - slave_repl_offset`
+- 负延迟保护：`lag < 0` 时返回 0
+- 单指标失败不中止整体采集（记录警告继续）
+- 字段映射覆盖 10 个关键指标（redis_up、cluster_enabled、maxclients 等）
+
+**指标字段映射表**：
+| 指标名称 | 结构体字段 | 说明 |
+|----------|-----------|------|
+| redis_up | ConnectionStatus | 连接状态（value == 1） |
+| redis_cluster_enabled | ClusterEnabled | 集群模式（value == 1） |
+| redis_master_link_status | MasterLinkStatus | 主从链接状态（value == 1） |
+| redis_maxclients | MaxClients | 最大连接数 |
+| redis_connected_clients | ConnectedClients | 当前连接数 |
+| redis_connected_slaves | ConnectedSlaves | 连接的从节点数 |
+| redis_master_port | MasterPort | Master 端口 |
+| redis_uptime_in_seconds | Uptime | 运行时间（秒） |
+| redis_master_repl_offset | MasterReplOffset | Master 复制偏移量 |
+| redis_slave_repl_offset | SlaveReplOffset | Slave 复制偏移量 |
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -282,7 +353,7 @@
 
 - [x] 步骤 5：创建 Redis 采集器接口（已完成）
 - [x] 步骤 6：实现 Redis 实例发现（已完成）
-- [ ] 步骤 7：实现 Redis 指标采集
+- [x] 步骤 7：实现 Redis 指标采集（已完成）
 - [ ] 步骤 8：编写 Redis 采集器单元测试
 
 ### 阶段三：评估与编排（步骤 9-11）
@@ -316,3 +387,4 @@
 | 2025-12-17 | 步骤 4 | 创建 Redis 指标定义文件完成（12 个指标：10 活跃 + 2 待定），阶段一全部完成 |
 | 2025-12-17 | 步骤 5 | 创建 Redis 采集器接口完成（2 个结构体、1 个构造函数、1 个辅助方法），阶段二开始 |
 | 2025-12-17 | 步骤 6 | 实现 Redis 实例发现完成（9 个方法、14 个测试用例、覆盖率 93.3%） |
+| 2025-12-17 | 步骤 7 | 实现 Redis 指标采集完成（6 个方法、10 个测试用例、覆盖率 87.9%） |
