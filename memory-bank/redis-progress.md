@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段二 - 数据采集（进行中）
-**进度**: 步骤 5/18 完成
+**进度**: 步骤 6/18 完成
 
 ---
 
@@ -209,6 +209,66 @@
 
 ---
 
+### 步骤 6：实现 Redis 实例发现（完成日期：2025-12-17）
+
+**操作**：
+- ✅ 在 `RedisInstanceFilter` 中实现 `IsEmpty()` 方法
+- ✅ 在 `RedisInstanceFilter` 中实现 `ToVMHostFilter()` 方法
+- ✅ 在 `RedisCollector` 中实现 `GetConfig()`, `GetMetrics()`, `GetInstanceFilter()` 访问器方法
+- ✅ 在 `RedisCollector` 中实现 `DiscoverInstances()` 核心方法
+- ✅ 在 `RedisCollector` 中实现 `extractAddress()` 辅助方法
+- ✅ 在 `RedisCollector` 中实现 `extractRole()` 辅助方法（从 replica_role 标签提取角色）
+- ✅ 在 `RedisCollector` 中实现 `matchesAddressPatterns()` 辅助方法
+- ✅ 创建 `internal/service/redis_collector_test.go` 测试文件
+
+**验证**：
+- ✅ 执行 `go build ./internal/service/` 无编译错误
+- ✅ 执行 `go test ./internal/service/ -run TestRedis -v` 全部 14 个测试通过
+- ✅ 执行 `go test ./...` 完整测试套件通过
+- ✅ `DiscoverInstances` 方法覆盖率达到 93.3%
+- ✅ 代码风格与 MySQL collector 完全一致
+- ✅ 所有导出类型和函数都有英文注释
+
+**代码结构**：
+
+1. **redis_collector.go 新增内容**（164 行，68→232 行）：
+   - `GetConfig()` 方法：返回配置
+   - `GetMetrics()` 方法：返回指标定义列表
+   - `GetInstanceFilter()` 方法：返回实例过滤器
+   - `IsEmpty()` 方法：检查过滤器是否为空
+   - `ToVMHostFilter()` 方法：转换为 VM HostFilter
+   - `DiscoverInstances()` 方法：发现 Redis 实例
+   - `extractAddress()` 方法：提取实例地址
+   - `extractRole()` 方法：提取节点角色
+   - `matchesAddressPatterns()` 方法：地址模式匹配
+
+2. **redis_collector_test.go 新文件**（约 550 行）：
+   - `TestRedisDiscoverInstances_Success`：测试正常发现 6 个实例（3 master + 3 slave）
+   - `TestRedisDiscoverInstances_RoleExtraction`：测试角色提取
+   - `TestRedisDiscoverInstances_AddressParsing`：测试 IP/Port 解析
+   - `TestRedisDiscoverInstances_WithAddressPatternFilter`：测试地址模式过滤
+   - `TestRedisDiscoverInstances_EmptyResults`：测试空结果处理
+   - `TestRedisDiscoverInstances_QueryError`：测试查询错误处理
+   - `TestRedisDiscoverInstances_DuplicateAddresses`：测试地址去重
+   - `TestRedisDiscoverInstances_MissingAddressLabel`：测试缺失地址标签
+   - `TestRedisDiscoverInstances_UnknownRole`：测试未知角色值
+   - `TestRedisInstanceFilter_IsEmpty`：测试 IsEmpty 方法（5 个子测试）
+   - `TestRedisInstanceFilter_ToVMHostFilter`：测试 ToVMHostFilter 方法（6 个子测试）
+   - `TestRedisCollector_extractRole`：测试角色提取（5 个子测试）
+   - `TestRedisCollector_extractAddress`：测试地址提取（6 个子测试）
+   - `TestRedisCollector_matchesAddressPatterns`：测试地址模式匹配（6 个子测试）
+
+**关键设计决策**：
+- 查询 `redis_up` 指标发现实例（不需要 `== 1` 条件，直接查询）
+- 从 `replica_role` 标签提取角色（master/slave），未知值返回 `RedisRoleUnknown`
+- 使用 `NewRedisInstanceWithRole()` 构造函数设置角色
+- 复用 MySQL collector 的 `matchAddressPattern` 函数（包级别）
+- 地址提取优先级：`address` > `instance` > `server`
+- 过滤方式：前置（VM HostFilter）+ 后置（AddressPatterns）
+- 去重策略：使用 map 记录已见地址
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -221,7 +281,7 @@
 ### 阶段二：数据采集（步骤 5-8）
 
 - [x] 步骤 5：创建 Redis 采集器接口（已完成）
-- [ ] 步骤 6：实现 Redis 实例发现
+- [x] 步骤 6：实现 Redis 实例发现（已完成）
 - [ ] 步骤 7：实现 Redis 指标采集
 - [ ] 步骤 8：编写 Redis 采集器单元测试
 
@@ -255,3 +315,4 @@
 | 2025-12-17 | 步骤 3 | 扩展配置结构体完成（3 个结构体、7 行默认值、40 行验证逻辑） |
 | 2025-12-17 | 步骤 4 | 创建 Redis 指标定义文件完成（12 个指标：10 活跃 + 2 待定），阶段一全部完成 |
 | 2025-12-17 | 步骤 5 | 创建 Redis 采集器接口完成（2 个结构体、1 个构造函数、1 个辅助方法），阶段二开始 |
+| 2025-12-17 | 步骤 6 | 实现 Redis 实例发现完成（9 个方法、14 个测试用例、覆盖率 93.3%） |
