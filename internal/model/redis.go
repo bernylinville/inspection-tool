@@ -499,3 +499,24 @@ func (r *RedisInspectionResults) HasWarning() bool {
 func (r *RedisInspectionResults) HasAlerts() bool {
 	return len(r.Alerts) > 0
 }
+
+// =============================================================================
+// Redis Metric Definition
+// =============================================================================
+
+// RedisMetricDefinition defines a Redis metric from redis-metrics.yaml.
+type RedisMetricDefinition struct {
+	Name        string `yaml:"name"`         // Metric unique identifier
+	DisplayName string `yaml:"display_name"` // Chinese display name
+	Query       string `yaml:"query"`        // PromQL query expression
+	Category    string `yaml:"category"`     // Category: connection, cluster, replication, status, info, security
+	Format      string `yaml:"format"`       // Format type: size, duration, percent (optional)
+	Status      string `yaml:"status"`       // Status: pending = not yet implemented (optional)
+	Note        string `yaml:"note"`         // Note/description
+}
+
+// IsPending returns true if this metric is not yet implemented.
+// A metric is considered pending if its status is "pending" or if it has no query.
+func (m *RedisMetricDefinition) IsPending() bool {
+	return m.Status == "pending" || m.Query == ""
+}

@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段一 - 数据模型（已完成）
-**进度**: 步骤 4/18 完成
+**阶段**: 阶段二 - 数据采集（进行中）
+**进度**: 步骤 5/18 完成
 
 ---
 
@@ -171,6 +171,44 @@
 
 ---
 
+### 步骤 5：创建 Redis 采集器接口（完成日期：2025-12-17）
+
+**操作**：
+- ✅ 在 `internal/model/redis.go` 中添加 `RedisMetricDefinition` 结构体
+- ✅ 在 `internal/service/` 目录下创建 `redis_collector.go` 文件
+- ✅ 定义 `RedisCollector` 结构体（5 个字段）
+- ✅ 定义 `RedisInstanceFilter` 结构体（3 个字段）
+- ✅ 实现 `NewRedisCollector` 构造函数
+- ✅ 实现 `buildInstanceFilter` 辅助方法
+
+**验证**：
+- ✅ 执行 `go build ./internal/model/` 无编译错误
+- ✅ 执行 `go build ./internal/service/` 无编译错误
+- ✅ 执行 `go build ./...` 完整项目编译通过
+- ✅ 代码风格与 MySQL collector 完全一致
+- ✅ 所有导出类型和函数都有英文注释
+
+**代码结构**：
+
+1. **redis.go 新增内容**（21 行，502→523 行）：
+   - `RedisMetricDefinition` 结构体（7 个字段：Name, DisplayName, Query, Category, Format, Status, Note）
+   - `IsPending()` 方法：判断指标是否为待实现项
+
+2. **redis_collector.go 新文件**（64 行）：
+   - `RedisCollector` 结构体（5 个字段：vmClient, config, metrics, instanceFilter, logger）
+   - `RedisInstanceFilter` 结构体（3 个字段：AddressPatterns, BusinessGroups, Tags）
+   - `NewRedisCollector` 构造函数
+   - `buildInstanceFilter` 辅助方法
+
+**关键设计决策**：
+- `RedisMetricDefinition` 参考 `MySQLMetricDefinition` 设计，包含 YAML 解析标签
+- `RedisCollector` 字段顺序与需求文档一致：vmClient, config, metrics, instanceFilter, logger
+- 构造函数使用 `.With().Str("component", "redis-collector")` 添加日志上下文
+- `buildInstanceFilter` 在构造时初始化，避免重复构建
+- 过滤器为空时返回 nil，便于后续判断是否需要过滤
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -182,7 +220,7 @@
 
 ### 阶段二：数据采集（步骤 5-8）
 
-- [ ] 步骤 5：创建 Redis 采集器接口
+- [x] 步骤 5：创建 Redis 采集器接口（已完成）
 - [ ] 步骤 6：实现 Redis 实例发现
 - [ ] 步骤 7：实现 Redis 指标采集
 - [ ] 步骤 8：编写 Redis 采集器单元测试
@@ -216,3 +254,4 @@
 | 2025-12-16 | 步骤 2 | 定义 Redis 巡检结果模型完成（6 个结构体、5 个构造函数、17 个辅助方法） |
 | 2025-12-17 | 步骤 3 | 扩展配置结构体完成（3 个结构体、7 行默认值、40 行验证逻辑） |
 | 2025-12-17 | 步骤 4 | 创建 Redis 指标定义文件完成（12 个指标：10 活跃 + 2 待定），阶段一全部完成 |
+| 2025-12-17 | 步骤 5 | 创建 Redis 采集器接口完成（2 个结构体、1 个构造函数、1 个辅助方法），阶段二开始 |
