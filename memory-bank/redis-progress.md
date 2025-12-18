@@ -792,6 +792,125 @@
 
 ---
 
+### 步骤 14：扩展 HTML 报告 - Redis 区域（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 在 `writer.go` 中添加 Redis 数据结构（RedisTemplateData, RedisInstanceData, RedisAlertData）
+- ✅ 在 `writer.go` 中添加 Redis Helper 函数（9 个函数）
+- ✅ 在 `writer.go` 中添加 Redis 报告方法（5 个方法）
+- ✅ 修改 `CombinedTemplateData` 支持 Redis 参数（5 个字段）
+- ✅ 创建 `templates/redis.html` 独立 Redis 报告模板
+- ✅ 更新 `templates/combined.html` 添加 Redis Section
+- ✅ 编写完整单元测试（20 个测试函数）
+
+**验证**：
+- ✅ 执行 `go build ./internal/report/html/` 无编译错误
+- ✅ 执行 `go test ./internal/report/html/ -run "TestRedis|TestWriter.*Redis" -v` 全部 20 个测试通过
+- ✅ HTML 报告正确显示 Redis 巡检区域
+- ✅ 样式与主机巡检区域一致（红色主题 #dc3545）
+- ✅ 排序功能正常（支持 IP、端口、连接数、状态列）
+
+**代码结构**：
+
+1. **writer.go 新增内容**（约 360 行，860→1166 行）：
+   - `RedisTemplateData` 结构体（9 个字段）
+   - `RedisInstanceData` 结构体（17 个字段）
+   - `RedisAlertData` 结构体（9 个字段）
+   - Helper 函数（9 个）：
+     - `redisStatusText()`: 状态枚举转中文
+     - `redisStatusClass()`: 状态转 CSS 类
+     - `redisRoleText()`: 角色枚举转中文
+     - `redisConnectionStatusText()`: 连接状态文本
+     - `formatRedisConnectionUsage()`: 连接使用率格式化
+     - `getRedisLinkStatus()`: 主从链接状态（仅 Slave）
+     - `getRedisReplicationLag()`: 复制延迟格式化（仅 Slave）
+     - `getRedisMasterPort()`: Master 端口（仅 Slave）
+     - `formatRedisThreshold()`: 阈值格式化
+   - 报告方法（5 个）：
+     - `WriteRedisInspection()`: 独立 Redis 报告入口
+     - `loadRedisTemplate()`: 加载 Redis 模板
+     - `prepareRedisTemplateData()`: 准备模板数据
+     - `convertRedisInstanceData()`: 转换实例数据
+     - `convertRedisAlerts()`: 转换告警数据
+   - `CombinedTemplateData` 扩展字段（5 个）：
+     - `HasRedis`: 是否包含 Redis 数据
+     - `RedisSummary`: Redis 巡检摘要
+     - `RedisAlertSummary`: Redis 告警摘要
+     - `RedisInstances`: Redis 实例列表
+     - `RedisAlerts`: Redis 告警列表
+
+2. **redis.html 新文件**（523 行）：
+   - 独立 Redis 报告模板
+   - 红色主题 Header（#dc3545 → #c82333）
+   - 摘要卡片（6 个：实例总数、正常、警告、严重、失败、告警总数）
+   - 实例详情表（14 列）
+   - 异常汇总表（7 列）
+   - JavaScript 表格排序功能
+
+3. **combined.html 修改内容**（约 150 行）：
+   - CSS 样式：`.section-header.redis-section`、`.section-title.redis`、`th.redis-header`
+   - Redis Section HTML 区域（680-804 行）
+   - JavaScript 排序：`setupTableSorting('redis-table', 13);`
+
+4. **writer_test.go 新增内容**（约 400 行，1032→1774 行）：
+   - 20 个测试函数：
+     - `TestWriter_WriteRedisInspection_NilResult`
+     - `TestWriter_WriteRedisInspection_Success`
+     - `TestWriter_WriteRedisInspection_AddsHtmlExtension`
+     - `TestWriter_WriteRedisInspection_WithAlerts`
+     - `TestWriter_WriteRedisInspection_EmptyResult`
+     - `TestPrepareRedisTemplateData`
+     - `TestConvertRedisInstanceData_Master`
+     - `TestConvertRedisInstanceData_Slave`
+     - `TestConvertRedisAlerts`
+     - `TestRedisStatusText`
+     - `TestRedisStatusClass`
+     - `TestRedisRoleText`
+     - `TestGetRedisLinkStatus`（3 个子测试）
+     - `TestGetRedisReplicationLag`（3 个子测试）
+     - `TestGetRedisMasterPort`（3 个子测试）
+     - `TestFormatRedisConnectionUsage`（3 个子测试）
+     - `TestFormatRedisThreshold`
+     - `TestWriter_WriteCombined_WithRedis`
+     - `TestWriter_WriteCombined_OnlyRedis`
+   - 测试辅助函数：
+     - `createTestRedisInspectionResults()`
+     - `createTestRedisInspectionResultsWithAlerts()`
+
+**Redis 实例详情表结构**（14 列）：
+| 列 | 表头 | 数据来源 |
+|----|------|----------|
+| 1 | IP地址 | r.Instance.IP |
+| 2 | 端口 | r.Instance.Port |
+| 3 | Redis版本 | r.Instance.Version |
+| 4 | 节点角色 | redisRoleText() |
+| 5 | 集群模式 | boolToText(r.ClusterEnabled) |
+| 6 | 连接状态 | redisConnectionStatusText() |
+| 7 | 最大连接数 | r.MaxClients |
+| 8 | 当前连接数 | r.ConnectedClients |
+| 9 | 连接使用率 | formatRedisConnectionUsage() |
+| 10 | 连接的从节点 | r.ConnectedSlaves |
+| 11 | 主从链接状态 | getRedisLinkStatus()（Slave 专属）|
+| 12 | Master端口 | getRedisMasterPort()（Slave 专属）|
+| 13 | 复制延迟 | getRedisReplicationLag()（Slave 专属）|
+| 14 | 整体状态 | redisStatusText() |
+
+**颜色主题差异化**：
+| 组件 | 颜色 | 用途 |
+|------|------|------|
+| Host | #667eea → #764ba2（紫色）| 主机巡检 |
+| MySQL | #00758f → #005f73（蓝绿色）| MySQL 数据库巡检 |
+| Redis | #dc3545 → #c82333（红色）| Redis 数据库巡检 |
+
+**关键设计决策**：
+- 完全参照 MySQL HTML 报告的实现模式
+- Master 节点的 Slave 专属字段（主从链接状态、Master端口、复制延迟）显示 "N/A"
+- 告警按严重程度排序（Critical > Warning），复用 `alertLevelPriority()` 函数
+- 条件格式与 Host/MySQL 报告一致（警告黄色、严重红色、正常绿色）
+- `WriteCombined` 方法签名更新支持三种报告类型
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -818,7 +937,7 @@
 
 - [x] 步骤 12：扩展 Excel 报告 - Redis 工作表（已完成）
 - [x] 步骤 13：扩展 Excel 报告 - Redis 异常汇总（已完成）
-- [ ] 步骤 14：扩展 HTML 报告 - Redis 区域
+- [x] 步骤 14：扩展 HTML 报告 - Redis 区域（已完成）
 - [ ] 步骤 15：更新示例配置文件
 
 ### 阶段五：CLI 集成与测试（步骤 16-18）

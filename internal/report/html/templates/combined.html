@@ -71,6 +71,10 @@
             background: linear-gradient(135deg, #00758f 0%, #005f73 100%);
         }
 
+        .section-header.redis-section {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+
         .section-header h2 {
             font-size: 20px;
             font-weight: 600;
@@ -133,6 +137,10 @@
             border-bottom-color: #00758f;
         }
 
+        .section-title.redis {
+            border-bottom-color: #dc3545;
+        }
+
         /* Tables */
         .table-container {
             background: white;
@@ -179,6 +187,14 @@
 
         th.mysql-header:hover {
             background: #005f73;
+        }
+
+        th.redis-header {
+            background: #dc3545;
+        }
+
+        th.redis-header:hover {
+            background: #c82333;
         }
 
         th.sortable::after {
@@ -387,6 +403,10 @@
 
             th.mysql-header {
                 background: #00758f !important;
+            }
+
+            th.redis-header {
+                background: #dc3545 !important;
             }
 
             .section-header {
@@ -657,6 +677,132 @@
         {{end}}
         {{end}}
 
+        {{if .HasRedis}}
+        <!-- ============================================================ -->
+        <!-- Redis Inspection Section -->
+        <!-- ============================================================ -->
+        <div class="section-header redis-section">
+            <h2>🔴 Redis 数据库巡检</h2>
+        </div>
+
+        <!-- Redis Summary Section -->
+        <section class="summary-section">
+            <h3 class="section-title redis">Redis 巡检概览</h3>
+            <div class="summary-cards">
+                <div class="card card-total">
+                    <div class="card-value">{{.RedisSummary.TotalInstances}}</div>
+                    <div class="card-label">实例总数</div>
+                </div>
+                <div class="card card-normal">
+                    <div class="card-value">{{.RedisSummary.NormalInstances}}</div>
+                    <div class="card-label">正常实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.RedisSummary.WarningInstances}}</div>
+                    <div class="card-label">警告实例</div>
+                </div>
+                <div class="card card-critical">
+                    <div class="card-value">{{.RedisSummary.CriticalInstances}}</div>
+                    <div class="card-label">严重实例</div>
+                </div>
+                <div class="card card-failed">
+                    <div class="card-value">{{.RedisSummary.FailedInstances}}</div>
+                    <div class="card-label">失败实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.RedisAlertSummary.TotalAlerts}}</div>
+                    <div class="card-label">告警总数</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Redis Instances Section -->
+        <section class="redis-section">
+            <h3 class="section-title redis">Redis 实例详情</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="redis-table">
+                        <thead>
+                            <tr>
+                                <th class="redis-header sortable" data-sort="string">IP地址</th>
+                                <th class="redis-header sortable" data-sort="number">端口</th>
+                                <th class="redis-header">Redis版本</th>
+                                <th class="redis-header">节点角色</th>
+                                <th class="redis-header">集群模式</th>
+                                <th class="redis-header">连接状态</th>
+                                <th class="redis-header sortable" data-sort="number">最大连接数</th>
+                                <th class="redis-header sortable" data-sort="number">当前连接数</th>
+                                <th class="redis-header">连接使用率</th>
+                                <th class="redis-header">连接的从节点</th>
+                                <th class="redis-header">主从链接状态</th>
+                                <th class="redis-header">Master端口</th>
+                                <th class="redis-header">复制延迟</th>
+                                <th class="redis-header sortable" data-sort="status">整体状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .RedisInstances}}
+                            <tr>
+                                <td>{{.IP}}</td>
+                                <td>{{.Port}}</td>
+                                <td>{{.Version}}</td>
+                                <td>{{.Role}}</td>
+                                <td>{{.ClusterEnabled}}</td>
+                                <td>{{.ConnectionStatus}}</td>
+                                <td>{{.MaxClients}}</td>
+                                <td>{{.ConnectedClients}}</td>
+                                <td>{{.ConnectionUsage}}</td>
+                                <td>{{.ConnectedSlaves}}</td>
+                                <td>{{.MasterLinkStatus}}</td>
+                                <td>{{.MasterPort}}</td>
+                                <td>{{.ReplicationLag}}</td>
+                                <td><span class="badge badge-{{if eq .Status "正常"}}normal{{else if eq .Status "警告"}}warning{{else if eq .Status "严重"}}critical{{else}}failed{{end}}">{{.Status}}</span></td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Redis Alerts Section -->
+        {{if .RedisAlerts}}
+        <section class="redis-alerts-section">
+            <h3 class="section-title redis">Redis 异常汇总</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="redis-alerts-table">
+                        <thead>
+                            <tr>
+                                <th class="redis-header">实例地址</th>
+                                <th class="redis-header">告警级别</th>
+                                <th class="redis-header">指标名称</th>
+                                <th class="redis-header">当前值</th>
+                                <th class="redis-header">警告阈值</th>
+                                <th class="redis-header">严重阈值</th>
+                                <th class="redis-header">告警消息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .RedisAlerts}}
+                            <tr>
+                                <td>{{.Address}}</td>
+                                <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
+                                <td>{{.MetricDisplayName}}</td>
+                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
+                                <td>{{.WarningThreshold}}</td>
+                                <td>{{.CriticalThreshold}}</td>
+                                <td>{{.Message}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {{end}}
+        {{end}}
+
         <!-- Footer -->
         <footer class="footer">
             <p>报告生成时间: {{.GeneratedAt}} | {{if .Version}}版本: {{.Version}} | {{end}}系统巡检工具</p>
@@ -757,6 +903,7 @@
             document.addEventListener('DOMContentLoaded', function() {
                 setupTableSorting('hosts-table', 2);
                 setupTableSorting('mysql-table', 9);
+                setupTableSorting('redis-table', 13);
             });
         })();
     </script>

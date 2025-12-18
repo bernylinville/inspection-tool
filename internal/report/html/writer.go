@@ -715,16 +715,22 @@ type CombinedTemplateData struct {
 	MySQLAlertSummary *model.MySQLAlertSummary
 	MySQLInstances    []*MySQLInstanceData
 	MySQLAlerts       []*MySQLAlertData
+	// Redis data
+	HasRedis          bool
+	RedisSummary      *model.RedisInspectionSummary
+	RedisAlertSummary *model.RedisAlertSummary
+	RedisInstances    []*RedisInstanceData
+	RedisAlerts       []*RedisAlertData
 	// Common
 	Version     string
 	GeneratedAt string
 }
 
-// WriteCombined generates an HTML report combining Host and MySQL inspection results.
-func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, outputPath string) error {
+// WriteCombined generates an HTML report combining Host, MySQL, and Redis inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, outputPath string) error {
 	// At least one result must be present
-	if hostResult == nil && mysqlResult == nil {
-		return fmt.Errorf("both host and MySQL inspection results are nil")
+	if hostResult == nil && mysqlResult == nil && redisResult == nil {
+		return fmt.Errorf("all inspection results are nil")
 	}
 
 	// Ensure output path has .html extension
@@ -739,7 +745,7 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 	}
 
 	// Prepare combined template data
-	data := w.prepareCombinedTemplateData(hostResult, mysqlResult)
+	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult)
 
 	// Create output file
 	file, err := os.Create(outputPath)
@@ -775,7 +781,7 @@ func (w *Writer) loadCombinedTemplate() (*template.Template, error) {
 }
 
 // prepareCombinedTemplateData prepares data for the combined template.
-func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults) *CombinedTemplateData {
+func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults) *CombinedTemplateData {
 	data := &CombinedTemplateData{
 		Title:       "系统巡检报告",
 		GeneratedAt: time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
@@ -790,6 +796,10 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 		data.InspectionTime = mysqlResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
 		data.Duration = formatDuration(mysqlResult.Duration)
 		data.Version = mysqlResult.Version
+	} else if redisResult != nil {
+		data.InspectionTime = redisResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(redisResult.Duration)
+		data.Version = redisResult.Version
 	}
 
 	// Fill Host data if available
@@ -827,5 +837,329 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 		data.MySQLAlerts = w.convertMySQLAlerts(mysqlResult.Alerts)
 	}
 
+	// Fill Redis data if available
+	if redisResult != nil {
+		data.HasRedis = true
+		data.RedisSummary = redisResult.Summary
+		data.RedisAlertSummary = redisResult.AlertSummary
+
+		// Convert Redis instances
+		redisInstances := make([]*RedisInstanceData, 0, len(redisResult.Results))
+		for _, r := range redisResult.Results {
+			redisInstances = append(redisInstances, w.convertRedisInstanceData(r))
+		}
+		data.RedisInstances = redisInstances
+
+		// Convert Redis alerts
+		data.RedisAlerts = w.convertRedisAlerts(redisResult.Alerts)
+	}
+
 	return data
+}
+
+// ============================================================================
+// Redis Report Data Structures
+// ============================================================================
+
+// RedisTemplateData holds Redis inspection data for template rendering.
+type RedisTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.RedisInspectionSummary
+	AlertSummary   *model.RedisAlertSummary
+	Instances      []*RedisInstanceData
+	Alerts         []*RedisAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+// RedisInstanceData represents Redis instance data formatted for template.
+type RedisInstanceData struct {
+	Address          string
+	IP               string
+	Port             int
+	Version          string // N/A for MVP
+	Role             string // "主"/"从"/"未知"
+	ClusterEnabled   string // "启用"/"禁用"
+	ConnectionStatus string // "正常"/"异常"
+	MaxClients       int
+	ConnectedClients int
+	ConnectionUsage  string // 格式化百分比
+	ConnectedSlaves  int    // 仅主节点显示
+	MasterLinkStatus string // 仅从节点：同步状态
+	MasterPort       string // 仅从节点：Master 端口
+	ReplicationLag   string // 仅从节点：格式化延迟
+	Status           string // "正常"/"警告"/"严重"/"失败"
+	StatusClass      string // CSS class
+	AlertCount       int
+}
+
+// RedisAlertData represents Redis alert data formatted for template.
+type RedisAlertData struct {
+	Address           string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// ============================================================================
+// Redis Report Helper Functions
+// ============================================================================
+
+// redisStatusText converts Redis instance status to Chinese text.
+func redisStatusText(status model.RedisInstanceStatus) string {
+	switch status {
+	case model.RedisStatusNormal:
+		return "正常"
+	case model.RedisStatusWarning:
+		return "警告"
+	case model.RedisStatusCritical:
+		return "严重"
+	case model.RedisStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// redisStatusClass returns the CSS class for Redis instance status.
+func redisStatusClass(status model.RedisInstanceStatus) string {
+	switch status {
+	case model.RedisStatusNormal:
+		return "status-normal"
+	case model.RedisStatusWarning:
+		return "status-warning"
+	case model.RedisStatusCritical:
+		return "status-critical"
+	case model.RedisStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// redisRoleText converts Redis role to Chinese text.
+func redisRoleText(role model.RedisRole) string {
+	switch role {
+	case model.RedisRoleMaster:
+		return "主"
+	case model.RedisRoleSlave:
+		return "从"
+	default:
+		return "未知"
+	}
+}
+
+// redisConnectionStatusText returns connection status text.
+func redisConnectionStatusText(r *model.RedisInspectionResult) string {
+	if r.ConnectionStatus {
+		return "正常"
+	}
+	return "异常"
+}
+
+// formatRedisConnectionUsage formats connection usage percentage.
+func formatRedisConnectionUsage(r *model.RedisInspectionResult) string {
+	if r.MaxClients == 0 {
+		return "N/A"
+	}
+	usage := float64(r.ConnectedClients) / float64(r.MaxClients) * 100
+	return fmt.Sprintf("%.1f%%", usage)
+}
+
+// getRedisLinkStatus returns master link status text (only for slave nodes).
+func getRedisLinkStatus(r *model.RedisInspectionResult) string {
+	if r.Instance.Role != model.RedisRoleSlave {
+		return "N/A"
+	}
+	if r.MasterLinkStatus {
+		return "正常"
+	}
+	return "异常"
+}
+
+// getRedisReplicationLag returns replication lag text (only for slave nodes).
+func getRedisReplicationLag(r *model.RedisInspectionResult) string {
+	if r.Instance.Role != model.RedisRoleSlave {
+		return "N/A"
+	}
+	if r.ReplicationLag == 0 {
+		return "0 B"
+	}
+	return formatSize(r.ReplicationLag)
+}
+
+// getRedisMasterPort returns master port text (only for slave nodes).
+func getRedisMasterPort(r *model.RedisInspectionResult) string {
+	if r.Instance.Role != model.RedisRoleSlave {
+		return "N/A"
+	}
+	if r.MasterPort == 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%d", r.MasterPort)
+}
+
+// formatRedisThreshold formats a Redis alert threshold value based on metric type.
+func formatRedisThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "connection_usage":
+		return fmt.Sprintf("%.1f%%", value)
+	case "replication_lag":
+		return formatSize(int64(value))
+	case "master_link_status":
+		if value > 0 {
+			return "正常"
+		}
+		return "异常"
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// ============================================================================
+// Redis Report Methods
+// ============================================================================
+
+// WriteRedisInspection generates an HTML report for Redis inspection results.
+func (w *Writer) WriteRedisInspection(result *model.RedisInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("Redis inspection result is nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load Redis template
+	tmpl, err := w.loadRedisTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Redis template: %w", err)
+	}
+
+	// Prepare template data
+	data := w.prepareRedisTemplateData(result)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute Redis template: %w", err)
+	}
+
+	return nil
+}
+
+// loadRedisTemplate loads the Redis HTML template.
+func (w *Writer) loadRedisTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    statusClass,
+		"alertClass":     alertLevelClass,
+	}
+
+	// Load embedded Redis template
+	tmpl, err := template.New("redis.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/redis.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded Redis template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareRedisTemplateData converts RedisInspectionResults to RedisTemplateData for template rendering.
+func (w *Writer) prepareRedisTemplateData(result *model.RedisInspectionResults) *RedisTemplateData {
+	// Convert instances
+	instances := make([]*RedisInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertRedisInstanceData(r))
+	}
+
+	// Convert and sort alerts (critical first)
+	alerts := w.convertRedisAlerts(result.Alerts)
+
+	return &RedisTemplateData{
+		Title:          "Redis 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Instances:      instances,
+		Alerts:         alerts,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+// convertRedisInstanceData converts a RedisInspectionResult to RedisInstanceData for template rendering.
+func (w *Writer) convertRedisInstanceData(r *model.RedisInspectionResult) *RedisInstanceData {
+	version := r.Instance.Version
+	if version == "" {
+		version = "N/A"
+	}
+
+	return &RedisInstanceData{
+		Address:          r.GetAddress(),
+		IP:               r.Instance.IP,
+		Port:             r.Instance.Port,
+		Version:          version,
+		Role:             redisRoleText(r.Instance.Role),
+		ClusterEnabled:   boolToText(r.ClusterEnabled),
+		ConnectionStatus: redisConnectionStatusText(r),
+		MaxClients:       r.MaxClients,
+		ConnectedClients: r.ConnectedClients,
+		ConnectionUsage:  formatRedisConnectionUsage(r),
+		ConnectedSlaves:  r.ConnectedSlaves,
+		MasterLinkStatus: getRedisLinkStatus(r),
+		MasterPort:       getRedisMasterPort(r),
+		ReplicationLag:   getRedisReplicationLag(r),
+		Status:           redisStatusText(r.Status),
+		StatusClass:      redisStatusClass(r.Status),
+		AlertCount:       len(r.Alerts),
+	}
+}
+
+// convertRedisAlerts converts and sorts Redis alerts for template rendering.
+func (w *Writer) convertRedisAlerts(alerts []*model.RedisAlert) []*RedisAlertData {
+	// Make a copy for sorting
+	sortedAlerts := make([]*model.RedisAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+
+	// Sort by level (critical first) then by address
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Address < sortedAlerts[j].Address
+	})
+
+	// Convert to RedisAlertData
+	result := make([]*RedisAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &RedisAlertData{
+			Address:           alert.Address,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatRedisThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatRedisThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
 }
