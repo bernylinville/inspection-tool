@@ -528,3 +528,9 @@ func (m *RedisMetricDefinition) GetDisplayName() string {
 	}
 	return m.Name
 }
+
+// RedisMetricsConfig represents the root structure of redis-metrics.yaml file.
+// This struct is used by config.LoadRedisMetrics to parse the YAML configuration.
+type RedisMetricsConfig struct {
+	Metrics []*RedisMetricDefinition `yaml:"redis_metrics" json:"redis_metrics"` // Redis metric definitions list
+}

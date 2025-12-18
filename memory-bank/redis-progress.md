@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段四 - 报告生成（完成）
-**进度**: 步骤 15/18 完成
+**阶段**: 阶段五 - CLI 集成与测试（进行中）
+**进度**: 步骤 16/18 完成
 
 ---
 
@@ -962,6 +962,70 @@ redis:
 
 ---
 
+### 步骤 16：扩展 run 命令支持 Redis 巡检（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 验证 `RedisMetricsConfig` 结构体已存在于 `internal/model/redis.go`
+- ✅ 验证 `LoadRedisMetrics` 和 `CountActiveRedisMetrics` 函数已存在于 `internal/config/metrics.go`
+- ✅ 验证 Redis 指标加载测试已存在于 `internal/config/metrics_test.go`（12 个测试）
+- ✅ 更新 `cmd/inspect/cmd/run.go` 集成 Redis 巡检流程
+  - 添加 Redis 指标加载（Step 3c）
+  - 添加 Redis 服务创建（Step 7c）
+  - 添加 Redis 巡检执行逻辑
+  - 更新时区获取逻辑支持 `redisInspector`
+  - 更新报告生成函数支持三数据源
+  - 更新退出码逻辑支持 Redis 告警状态
+  - 添加 `printRedisSummary()` 函数
+  - 更新 `generateCombinedExcel()` 函数签名和实现
+  - 更新 `generateCombinedHTML()` 函数签名和实现
+
+**验证**：
+- ✅ 执行 `go build ./...` 编译成功
+- ✅ 执行 `go test ./internal/config/ -run "TestLoadRedisMetrics|TestCountActiveRedisMetrics" -v` 全部 12 个测试通过
+- ✅ 执行 `go test ./...` 完整测试套件通过（所有包）
+- ✅ CLI 标志已在之前步骤中添加：`--redis-only`、`--skip-redis`、`--redis-metrics`
+- ✅ 标志互斥验证逻辑已实现
+
+**代码结构**：
+
+1. **run.go 关键修改**（约 120 行新增/修改）：
+   - Redis 指标加载（195-208 行）
+   - Redis 服务创建（270-283 行）
+   - Redis 巡检执行（324-339 行）
+   - 时区获取更新（350-360 行）
+   - 报告生成更新（375-378 行）
+   - 退出码更新（411-417 行）
+   - `printRedisSummary()` 函数（545-561 行）
+   - `generateCombinedExcel()` 函数（563-619 行）
+   - `generateCombinedHTML()` 函数（621-653 行）
+
+**CLI 命令支持**：
+| 命令 | 说明 |
+|------|------|
+| `inspect run -c config.yaml` | 完整巡检（Host + MySQL + Redis） |
+| `inspect run -c config.yaml --redis-only` | 仅执行 Redis 巡检 |
+| `inspect run -c config.yaml --skip-redis` | 跳过 Redis 巡检 |
+| `inspect run -c config.yaml --skip-mysql --skip-redis` | 仅执行 Host 巡检 |
+| `inspect run -c config.yaml --redis-metrics custom.yaml` | 使用自定义 Redis 指标文件 |
+
+**报告生成逻辑**：
+| 模式 | Excel 方法 | HTML 方法 |
+|------|------------|-----------|
+| 仅 Redis | `WriteRedisInspection()` | `WriteRedisInspection()` |
+| 仅 MySQL | `WriteMySQLInspection()` | `WriteMySQLInspection()` |
+| 仅 Host | `Write()` | `Write()` |
+| Host + MySQL | `Write()` → `AppendMySQLInspection()` | `WriteCombined()` |
+| Host + Redis | `Write()` → `AppendRedisInspection()` | `WriteCombined()` |
+| Host + MySQL + Redis | `Write()` → `AppendMySQLInspection()` → `AppendRedisInspection()` | `WriteCombined()` |
+
+**关键设计决策**：
+- 完全参照 MySQL 集成模式，保持代码风格一致
+- Redis 巡检失败不中止 Host/MySQL 报告生成（优雅降级）
+- 退出码逻辑：0=正常，1=警告，2=严重（三种巡检类型共享）
+- 时区获取优先级：inspector > mysqlInspector > redisInspector > 默认值
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -993,7 +1057,7 @@ redis:
 
 ### 阶段五：CLI 集成与测试（步骤 16-18）
 
-- [ ] 步骤 16：扩展 run 命令支持 Redis 巡检
+- [x] 步骤 16：扩展 run 命令支持 Redis 巡检（已完成）
 - [ ] 步骤 17：端到端测试
 - [ ] 步骤 18：更新文档
 
@@ -1018,3 +1082,4 @@ redis:
 | 2025-12-18 | 步骤 13 | 扩展 Excel 报告 - Redis 异常汇总（验证步骤，功能已在步骤 12 实现，4 个测试通过） |
 | 2025-12-18 | 步骤 14 | 扩展 HTML 报告 - Redis 区域完成（~360 行 writer.go、20 个测试、独立/组合模板支持） |
 | 2025-12-18 | 步骤 15 | 更新示例配置文件完成（~50 行 Redis 配置示例、详细注释），阶段四全部完成 |
+| 2025-12-18 | 步骤 16 | 扩展 run 命令支持 Redis 巡检完成（~120 行修改、12 个测试通过），阶段五开始 |

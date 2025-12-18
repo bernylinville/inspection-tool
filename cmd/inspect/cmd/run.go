@@ -30,6 +30,9 @@ var (
 	mysqlMetricsPath string   // Path to MySQL metrics definition file
 	mysqlOnly        bool     // Run MySQL inspection only
 	skipMySQL        bool     // Skip MySQL inspection
+	redisMetricsPath string   // Path to Redis metrics definition file
+	redisOnly        bool     // Run Redis inspection only
+	skipRedis        bool     // Skip Redis inspection
 )
 
 // runCmd represents the run command.
@@ -40,24 +43,34 @@ var runCmd = &cobra.Command{
 1. 从夜莺（N9E）获取主机元信息
 2. 从 VictoriaMetrics 查询监控指标
 3. 执行 MySQL 数据库巡检（如果启用）
-4. 根据配置的阈值评估告警级别
-5. 生成 Excel 和 HTML 格式的巡检报告
+4. 执行 Redis 集群巡检（如果启用）
+5. 根据配置的阈值评估告警级别
+6. 生成 Excel 和 HTML 格式的巡检报告
 
 示例:
-  # 使用默认配置执行巡检（包含 Host 和 MySQL）
+  # 使用默认配置执行巡检（包含 Host、MySQL 和 Redis）
   inspect run -c config.yaml
 
   # 仅执行 MySQL 巡检
   inspect run -c config.yaml --mysql-only
 
-  # 跳过 MySQL 巡检（仅执行 Host 巡检）
+  # 仅执行 Redis 巡检
+  inspect run -c config.yaml --redis-only
+
+  # 跳过 MySQL 巡检
   inspect run -c config.yaml --skip-mysql
+
+  # 跳过 Redis 巡检
+  inspect run -c config.yaml --skip-redis
+
+  # 仅执行 Host 巡检（跳过 MySQL 和 Redis）
+  inspect run -c config.yaml --skip-mysql --skip-redis
 
   # 指定输出格式和目录
   inspect run -c config.yaml -f excel,html -o ./reports
 
   # 使用自定义指标定义文件
-  inspect run -c config.yaml -m custom_metrics.yaml --mysql-metrics custom_mysql_metrics.yaml`,
+  inspect run -c config.yaml -m custom_metrics.yaml --mysql-metrics custom_mysql_metrics.yaml --redis-metrics custom_redis_metrics.yaml`,
 	Run: runInspection,
 }
 
@@ -73,6 +86,11 @@ func init() {
 	runCmd.Flags().StringVar(&mysqlMetricsPath, "mysql-metrics", "configs/mysql-metrics.yaml", "MySQL 指标定义文件路径")
 	runCmd.Flags().BoolVar(&mysqlOnly, "mysql-only", false, "仅执行 MySQL 巡检")
 	runCmd.Flags().BoolVar(&skipMySQL, "skip-mysql", false, "跳过 MySQL 巡检")
+
+	// Redis-specific flags
+	runCmd.Flags().StringVar(&redisMetricsPath, "redis-metrics", "configs/redis-metrics.yaml", "Redis 指标定义文件路径")
+	runCmd.Flags().BoolVar(&redisOnly, "redis-only", false, "仅执行 Redis 巡检")
+	runCmd.Flags().BoolVar(&skipRedis, "skip-redis", false, "跳过 Redis 巡检")
 }
 
 // runInspection executes the complete inspection workflow.
@@ -110,10 +128,19 @@ func runInspection(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(os.Stderr, "❌ --mysql-only 和 --skip-mysql 不能同时使用\n")
 		os.Exit(1)
 	}
+	if redisOnly && skipRedis {
+		fmt.Fprintf(os.Stderr, "❌ --redis-only 和 --skip-redis 不能同时使用\n")
+		os.Exit(1)
+	}
+	if redisOnly && mysqlOnly {
+		fmt.Fprintf(os.Stderr, "❌ --redis-only 和 --mysql-only 不能同时使用\n")
+		os.Exit(1)
+	}
 
 	// Determine execution mode
-	runHostInspection := !mysqlOnly
-	runMySQLInspection := !skipMySQL && cfg.MySQL.Enabled
+	runHostInspection := !mysqlOnly && !redisOnly
+	runMySQLInspection := !skipMySQL && !redisOnly && cfg.MySQL.Enabled
+	runRedisInspection := !skipRedis && !mysqlOnly && cfg.Redis.Enabled
 
 	// If --mysql-only but MySQL is not enabled
 	if mysqlOnly && !cfg.MySQL.Enabled {
@@ -121,10 +148,18 @@ func runInspection(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// If --redis-only but Redis is not enabled
+	if redisOnly && !cfg.Redis.Enabled {
+		fmt.Fprintf(os.Stderr, "❌ Redis 巡检未启用，请在配置文件中设置 redis.enabled: true\n")
+		os.Exit(1)
+	}
+
 	logger.Debug().
 		Bool("run_host", runHostInspection).
 		Bool("run_mysql", runMySQLInspection).
+		Bool("run_redis", runRedisInspection).
 		Bool("mysql_enabled", cfg.MySQL.Enabled).
+		Bool("redis_enabled", cfg.Redis.Enabled).
 		Msg("execution mode determined")
 
 	// Step 3: Load Host metrics definitions (if needed)
@@ -155,6 +190,21 @@ func runInspection(cmd *cobra.Command, args []string) {
 		mysqlActiveCount := config.CountActiveMySQLMetrics(mysqlMetrics)
 		fmt.Printf(" (%d 个活跃指标)\n", mysqlActiveCount)
 		logger.Debug().Int("active_metrics", mysqlActiveCount).Int("total_metrics", len(mysqlMetrics)).Msg("MySQL metrics loaded")
+	}
+
+	// Step 3c: Load Redis metrics definitions (if needed)
+	var redisMetrics []*model.RedisMetricDefinition
+	if runRedisInspection {
+		fmt.Printf("📊 加载 Redis 指标定义: %s", redisMetricsPath)
+		redisMetrics, err = config.LoadRedisMetrics(redisMetricsPath)
+		if err != nil {
+			logger.Error().Err(err).Str("path", redisMetricsPath).Msg("failed to load Redis metrics")
+			fmt.Fprintf(os.Stderr, "\n❌ 加载 Redis 指标定义失败: %v\n", err)
+			os.Exit(1)
+		}
+		redisActiveCount := config.CountActiveRedisMetrics(redisMetrics)
+		fmt.Printf(" (%d 个活跃指标)\n", redisActiveCount)
+		logger.Debug().Int("active_metrics", redisActiveCount).Int("total_metrics", len(redisMetrics)).Msg("Redis metrics loaded")
 	}
 
 	// Step 4: Determine output settings
@@ -217,6 +267,21 @@ func runInspection(cmd *cobra.Command, args []string) {
 		logger.Debug().Msg("MySQL services initialized")
 	}
 
+	// Step 7c: Create Redis services (if needed)
+	var redisInspector *service.RedisInspector
+	if runRedisInspection {
+		redisCollector := service.NewRedisCollector(&cfg.Redis, vmClient, redisMetrics, logger)
+		redisEvaluator := service.NewRedisEvaluator(&cfg.Redis.Thresholds, redisMetrics, logger)
+		redisInspector, err = service.NewRedisInspector(cfg, redisCollector, redisEvaluator, logger,
+			service.WithRedisVersion(Version))
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to create Redis inspector")
+			fmt.Fprintf(os.Stderr, "❌ 创建 Redis 巡检器失败: %v\n", err)
+			os.Exit(1)
+		}
+		logger.Debug().Msg("Redis services initialized")
+	}
+
 	// Step 8: Execute inspection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -224,6 +289,7 @@ func runInspection(cmd *cobra.Command, args []string) {
 
 	var hostResult *model.InspectionResult
 	var mysqlResult *model.MySQLInspectionResults
+	var redisResult *model.RedisInspectionResults
 
 	// Execute Host inspection
 	if runHostInspection {
@@ -255,6 +321,23 @@ func runInspection(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Execute Redis inspection
+	if runRedisInspection {
+		fmt.Println("\n⏳ 开始 Redis 巡检...")
+		redisResult, err = redisInspector.Inspect(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Redis inspection failed")
+			fmt.Fprintf(os.Stderr, "❌ Redis 巡检执行失败: %v\n", err)
+			// Don't exit, continue to generate Host/MySQL report if available
+			if hostResult == nil && mysqlResult == nil {
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("\n📊 Redis 巡检完成！\n")
+			printRedisSummary(redisResult)
+		}
+	}
+
 	fmt.Printf("\n⏱️  总耗时 %.1fs\n", time.Since(startTime).Seconds())
 
 	// Step 9: Generate reports
@@ -270,6 +353,8 @@ func runInspection(cmd *cobra.Command, args []string) {
 		timezone = inspector.GetTimezone()
 	} else if mysqlInspector != nil {
 		timezone = mysqlInspector.GetTimezone()
+	} else if redisInspector != nil {
+		timezone = redisInspector.GetTimezone()
 	} else {
 		timezone, _ = time.LoadLocation("Asia/Shanghai")
 	}
@@ -288,9 +373,9 @@ func runInspection(cmd *cobra.Command, args []string) {
 		var genErr error
 		switch format {
 		case "excel":
-			genErr = generateCombinedExcel(hostResult, mysqlResult, reportPath, timezone, logger)
+			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, reportPath, timezone, logger)
 		case "html":
-			genErr = generateCombinedHTML(hostResult, mysqlResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
+			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
 		default:
 			logger.Error().Str("format", format).Msg("unsupported format")
 			fmt.Fprintf(os.Stderr, "   ❌ 不支持的格式: %s\n", format)
@@ -320,6 +405,13 @@ func runInspection(cmd *cobra.Command, args []string) {
 		if mysqlResult.Summary.CriticalInstances > 0 {
 			exitCode = 2
 		} else if mysqlResult.Summary.WarningInstances > 0 && exitCode < 1 {
+			exitCode = 1
+		}
+	}
+	if redisResult != nil && redisResult.Summary != nil {
+		if redisResult.Summary.CriticalInstances > 0 {
+			exitCode = 2
+		} else if redisResult.Summary.WarningInstances > 0 && exitCode < 1 {
 			exitCode = 1
 		}
 	}
@@ -450,63 +542,110 @@ func printMySQLSummary(result *model.MySQLInspectionResults) {
 	}
 }
 
-// generateCombinedExcel creates Excel report with Host and MySQL data in same file.
-func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, outputPath string, timezone *time.Location, logger zerolog.Logger) error {
+// printRedisSummary prints the Redis inspection result summary.
+func printRedisSummary(result *model.RedisInspectionResults) {
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	if result.Summary != nil {
+		fmt.Printf("   Redis 实例总数: %d\n", result.Summary.TotalInstances)
+		fmt.Printf("   正常实例: %d\n", result.Summary.NormalInstances)
+		fmt.Printf("   警告实例: %d\n", result.Summary.WarningInstances)
+		fmt.Printf("   严重实例: %d\n", result.Summary.CriticalInstances)
+		fmt.Printf("   失败实例: %d\n", result.Summary.FailedInstances)
+	}
+	fmt.Println()
+	if result.AlertSummary != nil {
+		fmt.Printf("   Redis 告警总数: %d\n", result.AlertSummary.TotalAlerts)
+		fmt.Printf("   警告级别: %d\n", result.AlertSummary.WarningCount)
+		fmt.Printf("   严重级别: %d\n", result.AlertSummary.CriticalCount)
+	}
+}
+
+// generateCombinedExcel creates Excel report with Host, MySQL and Redis data in same file.
+func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, outputPath string, timezone *time.Location, logger zerolog.Logger) error {
 	w := excel.NewWriter(timezone)
 
+	// Only Redis mode
+	if hostResult == nil && mysqlResult == nil && redisResult != nil {
+		return w.WriteRedisInspection(redisResult, outputPath)
+	}
+
 	// Only MySQL mode
-	if hostResult == nil && mysqlResult != nil {
+	if hostResult == nil && mysqlResult != nil && redisResult == nil {
 		return w.WriteMySQLInspection(mysqlResult, outputPath)
 	}
 
 	// Only Host mode
-	if hostResult != nil && mysqlResult == nil {
+	if hostResult != nil && mysqlResult == nil && redisResult == nil {
 		return w.Write(hostResult, outputPath)
 	}
 
-	// Combined mode: write Host first, then append MySQL
+	// Combined mode: write Host first, then append MySQL and/or Redis
 	if hostResult != nil {
 		if err := w.Write(hostResult, outputPath); err != nil {
 			return fmt.Errorf("failed to write host report: %w", err)
 		}
 	}
 	if mysqlResult != nil {
-		if err := w.AppendMySQLInspection(mysqlResult, outputPath); err != nil {
-			return fmt.Errorf("failed to append MySQL report: %w", err)
+		if hostResult != nil {
+			if err := w.AppendMySQLInspection(mysqlResult, outputPath); err != nil {
+				return fmt.Errorf("failed to append MySQL report: %w", err)
+			}
+		} else {
+			if err := w.WriteMySQLInspection(mysqlResult, outputPath); err != nil {
+				return fmt.Errorf("failed to write MySQL report: %w", err)
+			}
+		}
+	}
+	if redisResult != nil {
+		if hostResult != nil || mysqlResult != nil {
+			if err := w.AppendRedisInspection(redisResult, outputPath); err != nil {
+				return fmt.Errorf("failed to append Redis report: %w", err)
+			}
+		} else {
+			if err := w.WriteRedisInspection(redisResult, outputPath); err != nil {
+				return fmt.Errorf("failed to write Redis report: %w", err)
+			}
 		}
 	}
 
 	logger.Debug().
 		Bool("has_host", hostResult != nil).
 		Bool("has_mysql", mysqlResult != nil).
+		Bool("has_redis", redisResult != nil).
 		Str("path", outputPath).
 		Msg("combined Excel report generated")
 
 	return nil
 }
 
-// generateCombinedHTML creates HTML report with Host and MySQL data.
-func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
+// generateCombinedHTML creates HTML report with Host, MySQL and Redis data.
+func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
 	w := html.NewWriter(timezone, templatePath)
 
+	// Only Redis mode
+	if hostResult == nil && mysqlResult == nil && redisResult != nil {
+		return w.WriteRedisInspection(redisResult, outputPath)
+	}
+
 	// Only MySQL mode
-	if hostResult == nil && mysqlResult != nil {
+	if hostResult == nil && mysqlResult != nil && redisResult == nil {
 		return w.WriteMySQLInspection(mysqlResult, outputPath)
 	}
 
 	// Only Host mode
-	if hostResult != nil && mysqlResult == nil {
+	if hostResult != nil && mysqlResult == nil && redisResult == nil {
 		return w.Write(hostResult, outputPath)
 	}
 
 	// Combined mode
-	if err := w.WriteCombined(hostResult, mysqlResult, outputPath); err != nil {
+	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, outputPath); err != nil {
 		return fmt.Errorf("failed to write combined HTML report: %w", err)
 	}
 
 	logger.Debug().
 		Bool("has_host", hostResult != nil).
 		Bool("has_mysql", mysqlResult != nil).
+		Bool("has_redis", redisResult != nil).
 		Str("path", outputPath).
 		Msg("combined HTML report generated")
 
