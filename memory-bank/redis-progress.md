@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段三 - 评估与编排（进行中）
-**进度**: 步骤 9/18 完成
+**进度**: 步骤 10/18 完成
 
 ---
 
@@ -508,6 +508,99 @@
 
 ---
 
+### 步骤 10：实现 Redis 巡检编排服务（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 在 `internal/service/` 目录下创建 `redis_inspector.go` 文件
+- ✅ 定义 `RedisInspector` 结构体（6 个字段：collector, evaluator, config, timezone, version, logger）
+- ✅ 定义 `RedisInspectorOption` 函数选项类型
+- ✅ 实现 `NewRedisInspector` 构造函数（参数验证、时区加载、选项应用）
+- ✅ 实现 `WithRedisVersion` 函数选项
+- ✅ 实现 `GetTimezone()` 访问器方法
+- ✅ 实现 `GetVersion()` 访问器方法
+- ✅ 实现 `Inspect()` 核心巡检流程（10 步流程）
+- ✅ 实现 `buildInspectionResults()` 结果合并方法
+- ✅ 创建 `internal/service/redis_inspector_test.go` 测试文件
+
+**验证**：
+- ✅ 执行 `go build ./internal/service/` 无编译错误
+- ✅ 执行 `go test ./internal/service/ -run TestRedisInspector -v` 全部 10 个测试通过
+- ✅ 能够完成端到端的 Redis 巡检流程
+- ✅ 单实例失败不影响其他实例
+- ✅ 巡检摘要统计正确
+- ✅ 测试覆盖率达到 83%+（全部方法覆盖率 ≥ 83.3%）
+
+**代码结构**：
+
+1. **redis_inspector.go 新文件**（207 行）：
+   - `RedisInspector` 结构体（6 个字段）
+   - `RedisInspectorOption` 函数选项类型
+   - `NewRedisInspector` 构造函数
+   - `WithRedisVersion` 函数选项
+   - `GetTimezone()` 方法
+   - `GetVersion()` 方法
+   - `Inspect()` 方法（核心流程）
+   - `buildInspectionResults()` 方法
+
+2. **redis_inspector_test.go 新文件**（约 1030 行）：
+   - `createRedisTestConfig()` 辅助函数
+   - `createRedisTestMetrics()` 辅助函数
+   - `setupRedisInspectorVMTestServer()` 辅助函数
+   - `TestNewRedisInspector`：构造函数测试（3 个子测试）
+   - `TestNewRedisInspector_NilParameters`：空参数验证（3 个子测试）
+   - `TestRedisInspector_Inspect_Success`：完整巡检流程（6 实例）
+   - `TestRedisInspector_Inspect_NoInstances`：空实例处理
+   - `TestRedisInspector_Inspect_WithWarning`：警告告警（75% 连接使用率）
+   - `TestRedisInspector_Inspect_WithCritical`：严重告警（95% 连接使用率）
+   - `TestRedisInspector_Inspect_MultipleInstances`：混合状态（1 正常 + 1 警告 + 1 严重）
+   - `TestRedisInspector_Inspect_DiscoveryError`：发现错误处理
+   - `TestRedisInspector_Inspect_ContextCanceled`：上下文取消处理
+   - `TestRedisInspector_Inspect_SlaveMasterLinkDown`：主从链接断开告警
+   - `TestRedisInspector_Inspect_ReplicationLagWarning`：复制延迟警告（2MB）
+   - `TestRedisInspector_Inspect_3M3SNormalCluster`：完整 3M3S 集群验证
+
+**测试覆盖率详情**：
+| 方法 | 覆盖率 |
+|------|--------|
+| NewRedisInspector | 100.0% |
+| WithRedisVersion | 100.0% |
+| GetTimezone | 100.0% |
+| GetVersion | 100.0% |
+| Inspect | 87.9% |
+| buildInspectionResults | 83.3% |
+
+**Inspect() 方法流程**（10 步）：
+1. 记录开始时间（Asia/Shanghai）
+2. 创建结果容器（NewRedisInspectionResults）
+3. 发现实例（collector.DiscoverInstances）
+4. 空实例处理（优雅降级，返回空结果）
+5. 获取指标定义（collector.GetMetrics）
+6. 采集指标（collector.CollectMetrics）
+7. 评估阈值（evaluator.EvaluateAll）
+8. 构建结果（buildInspectionResults）
+9. 最终化（Finalize）
+10. 日志记录完成信息
+
+**错误处理策略**：
+| 场景 | 处理方式 |
+|------|----------|
+| 实例发现失败 | 返回 error，中止巡检 |
+| 无实例发现 | 优雅降级，返回空结果（非 error）|
+| 无指标定义 | 返回 error，中止巡检 |
+| 指标采集失败 | 返回 error，中止巡检 |
+| 单实例采集失败 | 该实例标记为 failed，不影响其他实例 |
+
+**关键设计决策**：
+- 完全参照 `mysql_inspector.go` 的实现模式（233 行）
+- 使用 `defaultTimezone` 常量（已定义在 inspector.go）
+- 日志 component 名称：`redis_inspector`
+- 函数选项命名：`WithRedisVersion`（与 MySQL 的 `WithMySQLVersion` 一致）
+- 所有导出类型和函数使用英文注释
+- 构造函数验证：config、collector、evaluator 不能为 nil
+- 时区配置优先级：config > 默认值（Asia/Shanghai）
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -527,7 +620,7 @@
 ### 阶段三：评估与编排（步骤 9-11）
 
 - [x] 步骤 9：实现 Redis 状态评估器（已完成）
-- [ ] 步骤 10：实现 Redis 巡检编排服务
+- [x] 步骤 10：实现 Redis 巡检编排服务（已完成）
 - [ ] 步骤 11：编写 Redis 巡检服务集成测试
 
 ### 阶段四：报告生成（步骤 12-15）
@@ -558,3 +651,4 @@
 | 2025-12-17 | 步骤 7 | 实现 Redis 指标采集完成（6 个方法、10 个测试用例、覆盖率 87.9%） |
 | 2025-12-18 | 步骤 8 | 编写 Redis 采集器单元测试完成（25 个测试、覆盖率 94.8%），阶段二全部完成 |
 | 2025-12-18 | 步骤 9 | 实现 Redis 状态评估器完成（11 个方法、29 个测试、覆盖率 100%），阶段三开始 |
+| 2025-12-18 | 步骤 10 | 实现 Redis 巡检编排服务完成（8 个方法、12 个测试、覆盖率 83%+） |
