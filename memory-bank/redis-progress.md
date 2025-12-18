@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 阶段四 - 报告生成（进行中）
-**进度**: 步骤 12/18 完成
+**进度**: 步骤 13/18 完成
 
 ---
 
@@ -755,6 +755,43 @@
 
 ---
 
+### 步骤 13：扩展 Excel 报告 - Redis 异常汇总（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 验证 "Redis 异常" 工作表已在步骤 12 中实现（`createRedisAlertsSheet` 方法）
+- ✅ 验证异常汇总表正确筛选告警记录
+- ✅ 验证告警详情完整（7 列信息）
+- ✅ 验证所有相关测试通过
+
+**验证**：
+- ✅ 执行 `go test ./internal/report/excel/ -run TestRedisAlertsSheet -v` 全部 3 个测试通过
+- ✅ 执行 `go test ./internal/report/excel/ -run TestWriter_WriteRedisInspection_AlertsSheetExists -v` 通过
+- ✅ 异常汇总表正确筛选告警记录（按严重程度排序）
+- ✅ 告警详情完整（7 列：实例地址、告警级别、指标名称、当前值、警告阈值、严重阈值、告警消息）
+
+**代码结构**：
+- 步骤 13 的功能在步骤 12 实现 `createRedisAlertsSheet` 时一并完成
+- 无新增代码，本步骤为验证确认步骤
+
+**关键验证点**：
+| 验证项 | 结果 |
+|--------|------|
+| 工作表名称为 "Redis 异常" | ✅ 通过 |
+| 7 列完整表头 | ✅ 通过 |
+| 告警按严重程度排序（Critical > Warning）| ✅ 通过 |
+| 空告警处理正确（仅显示表头）| ✅ 通过 |
+| 条件格式正确应用（警告黄色、严重红色）| ✅ 通过 |
+
+**测试覆盖**：
+| 测试用例 | 状态 |
+|----------|------|
+| `TestWriter_WriteRedisInspection_AlertsSheetExists` | ✅ 通过 |
+| `TestWriter_RedisAlertsSheet_Headers` | ✅ 通过 |
+| `TestWriter_RedisAlertsSheet_SortBySeverity` | ✅ 通过 |
+| `TestWriter_RedisAlertsSheet_EmptyAlerts` | ✅ 通过 |
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -780,7 +817,7 @@
 ### 阶段四：报告生成（步骤 12-15）
 
 - [x] 步骤 12：扩展 Excel 报告 - Redis 工作表（已完成）
-- [ ] 步骤 13：扩展 Excel 报告 - Redis 异常汇总
+- [x] 步骤 13：扩展 Excel 报告 - Redis 异常汇总（已完成）
 - [ ] 步骤 14：扩展 HTML 报告 - Redis 区域
 - [ ] 步骤 15：更新示例配置文件
 
@@ -808,3 +845,4 @@
 | 2025-12-18 | 步骤 10 | 实现 Redis 巡检编排服务完成（8 个方法、12 个测试、覆盖率 83%+） |
 | 2025-12-18 | 步骤 11 | 编写 Redis 巡检服务集成测试（验证 12 个测试通过，覆盖率 83%+），阶段三全部完成 |
 | 2025-12-18 | 步骤 12 | 扩展 Excel 报告 - Redis 工作表完成（~410 行 writer.go、~950 行测试、覆盖率 87.3%），阶段四开始 |
+| 2025-12-18 | 步骤 13 | 扩展 Excel 报告 - Redis 异常汇总（验证步骤，功能已在步骤 12 实现，4 个测试通过） |
