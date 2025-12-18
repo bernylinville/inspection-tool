@@ -22,6 +22,8 @@ const (
 	sheetAlerts  = "异常汇总"
 	sheetMySQL       = "MySQL 巡检" // MySQL inspection sheet
 	sheetMySQLAlerts = "MySQL 异常" // MySQL alerts sheet
+	sheetRedis       = "Redis 巡检" // Redis inspection sheet
+	sheetRedisAlerts = "Redis 异常" // Redis alerts sheet
 
 	// Default sheet to remove
 	defaultSheet = "Sheet1"
@@ -988,6 +990,421 @@ func (w *Writer) AppendMySQLInspection(result *model.MySQLInspectionResults, exi
 	// Add MySQL alerts worksheet (reuse existing method)
 	if err := w.createMySQLAlertsSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
+	}
+
+	// Save the file
+	if err := f.Save(); err != nil {
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// Redis Report Helper Functions
+// ============================================================================
+
+// redisStatusText converts Redis instance status to Chinese text.
+func redisStatusText(status model.RedisInstanceStatus) string {
+	switch status {
+	case model.RedisStatusNormal:
+		return "正常"
+	case model.RedisStatusWarning:
+		return "警告"
+	case model.RedisStatusCritical:
+		return "严重"
+	case model.RedisStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// redisRoleText converts Redis role to Chinese text.
+func redisRoleText(role model.RedisRole) string {
+	switch role {
+	case model.RedisRoleMaster:
+		return "主"
+	case model.RedisRoleSlave:
+		return "从"
+	default:
+		return "未知"
+	}
+}
+
+// redisBoolText converts boolean to Chinese text for display (是/否).
+func redisBoolText(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
+}
+
+// formatReplicationLag formats replication lag in bytes to human-readable format.
+func formatReplicationLag(lag int64) string {
+	if lag <= 0 {
+		return "0 B"
+	}
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+	switch {
+	case lag >= GB:
+		return fmt.Sprintf("%.2f GB", float64(lag)/float64(GB))
+	case lag >= MB:
+		return fmt.Sprintf("%.2f MB", float64(lag)/float64(MB))
+	case lag >= KB:
+		return fmt.Sprintf("%.2f KB", float64(lag)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", lag)
+	}
+}
+
+// formatRedisThreshold formats a Redis alert threshold value based on metric type.
+func formatRedisThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "connection_usage":
+		return fmt.Sprintf("%.1f%%", value)
+	case "replication_lag":
+		return formatReplicationLag(int64(value))
+	case "master_link_status":
+		if value > 0 {
+			return "正常"
+		}
+		return "断开"
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// getMasterLinkStatusText returns master link status text based on role.
+func (w *Writer) getMasterLinkStatusText(r *model.RedisInspectionResult) string {
+	if r.Instance == nil || r.Instance.Role.IsMaster() {
+		return "N/A"
+	}
+	return redisBoolText(r.MasterLinkStatus)
+}
+
+// getMasterPortText returns master port text (N/A for master nodes).
+func (w *Writer) getMasterPortText(r *model.RedisInspectionResult) string {
+	if r.Instance == nil || r.Instance.Role.IsMaster() {
+		return "N/A"
+	}
+	if r.MasterPort == 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%d", r.MasterPort)
+}
+
+// getReplicationLagText returns replication lag text (N/A for master nodes).
+func (w *Writer) getReplicationLagText(r *model.RedisInspectionResult) string {
+	if r.Instance == nil || r.Instance.Role.IsMaster() {
+		return "N/A"
+	}
+	return formatReplicationLag(r.ReplicationLag)
+}
+
+// ============================================================================
+// Redis Report Methods
+// ============================================================================
+
+// WriteRedisInspection generates an Excel report for Redis inspection results.
+func (w *Writer) WriteRedisInspection(result *model.RedisInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("Redis inspection result is nil")
+	}
+
+	// Ensure output path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	// Create new Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create Redis sheet
+	if err := w.createRedisSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Redis sheet: %w", err)
+	}
+
+	// Create Redis alerts sheet
+	if err := w.createRedisAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
+	}
+
+	// Remove default Sheet1
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+		// Ignore error if sheet doesn't exist
+	}
+
+	// Set active sheet to Redis
+	idx, _ := f.GetSheetIndex(sheetRedis)
+	f.SetActiveSheet(idx)
+
+	// Save the file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}
+
+// createRedisSheet creates the Redis inspection data worksheet.
+func (w *Writer) createRedisSheet(f *excelize.File, result *model.RedisInspectionResults) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetRedis)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{
+		"巡检时间", "IP地址", "端口", "应用类型", "Redis版本",
+		"是否普通用户启动", "连接状态", "集群模式", "主从链接状态",
+		"节点角色", "Master端口", "复制延迟", "最大连接数", "整体状态",
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 18, // 巡检时间
+		"B": 15, // IP地址
+		"C": 8,  // 端口
+		"D": 8,  // 应用类型
+		"E": 12, // Redis版本
+		"F": 15, // 是否普通用户启动
+		"G": 10, // 连接状态
+		"H": 10, // 集群模式
+		"I": 12, // 主从链接状态
+		"J": 10, // 节点角色
+		"K": 10, // Master端口
+		"L": 12, // 复制延迟
+		"M": 10, // 最大连接数
+		"N": 10, // 整体状态
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetRedis, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetRedis, cell, header)
+		f.SetCellStyle(sheetRedis, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetRedis, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetRedis, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Write Redis instance data
+	for i, r := range result.Results {
+		row := i + 2 // Start from row 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		// A: 巡检时间
+		f.SetCellValue(sheetRedis, "A"+rowStr, result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
+		// B: IP地址
+		if r.Instance != nil {
+			f.SetCellValue(sheetRedis, "B"+rowStr, r.Instance.IP)
+		}
+		// C: 端口
+		if r.Instance != nil {
+			f.SetCellValue(sheetRedis, "C"+rowStr, r.Instance.Port)
+		}
+		// D: 应用类型
+		f.SetCellValue(sheetRedis, "D"+rowStr, "Redis")
+		// E: Redis版本
+		if r.Instance != nil && r.Instance.Version != "" {
+			f.SetCellValue(sheetRedis, "E"+rowStr, r.Instance.Version)
+		} else {
+			f.SetCellValue(sheetRedis, "E"+rowStr, "N/A")
+		}
+		// F: 是否普通用户启动
+		f.SetCellValue(sheetRedis, "F"+rowStr, r.NonRootUser)
+		// G: 连接状态
+		f.SetCellValue(sheetRedis, "G"+rowStr, redisBoolText(r.ConnectionStatus))
+		// H: 集群模式
+		f.SetCellValue(sheetRedis, "H"+rowStr, redisBoolText(r.ClusterEnabled))
+		// I: 主从链接状态
+		f.SetCellValue(sheetRedis, "I"+rowStr, w.getMasterLinkStatusText(r))
+		// J: 节点角色
+		if r.Instance != nil {
+			f.SetCellValue(sheetRedis, "J"+rowStr, redisRoleText(r.Instance.Role))
+		} else {
+			f.SetCellValue(sheetRedis, "J"+rowStr, "未知")
+		}
+		// K: Master端口
+		f.SetCellValue(sheetRedis, "K"+rowStr, w.getMasterPortText(r))
+		// L: 复制延迟
+		f.SetCellValue(sheetRedis, "L"+rowStr, w.getReplicationLagText(r))
+		// M: 最大连接数
+		f.SetCellValue(sheetRedis, "M"+rowStr, r.MaxClients)
+		// N: 整体状态
+		f.SetCellValue(sheetRedis, "N"+rowStr, redisStatusText(r.Status))
+
+		// Apply conditional format to status column
+		statusCell := "N" + rowStr
+		switch r.Status {
+		case model.RedisStatusCritical:
+			f.SetCellStyle(sheetRedis, statusCell, statusCell, criticalStyle)
+		case model.RedisStatusWarning:
+			f.SetCellStyle(sheetRedis, statusCell, statusCell, warningStyle)
+		case model.RedisStatusNormal:
+			f.SetCellStyle(sheetRedis, statusCell, statusCell, normalStyle)
+		}
+	}
+
+	return nil
+}
+
+// createRedisAlertsSheet creates the Redis alerts summary worksheet.
+func (w *Writer) createRedisAlertsSheet(f *excelize.File, result *model.RedisInspectionResults) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetRedisAlerts)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{"实例地址", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
+
+	// Set column widths
+	colWidths := []float64{20, 12, 15, 15, 12, 12, 40}
+	for i, width := range colWidths {
+		col := columnName(i + 1)
+		f.SetColWidth(sheetRedisAlerts, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetRedisAlerts, cell, header)
+		f.SetCellStyle(sheetRedisAlerts, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetRedisAlerts, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetRedisAlerts, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Sort alerts by level (critical first) then by address
+	alerts := make([]*model.RedisAlert, len(result.Alerts))
+	copy(alerts, result.Alerts)
+	sort.Slice(alerts, func(i, j int) bool {
+		if alerts[i].Level != alerts[j].Level {
+			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
+		}
+		return alerts[i].Address < alerts[j].Address
+	})
+
+	// Write alert data
+	for i, alert := range alerts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		f.SetCellValue(sheetRedisAlerts, "A"+rowStr, alert.Address)
+		f.SetCellValue(sheetRedisAlerts, "B"+rowStr, alertLevelText(alert.Level))
+		f.SetCellValue(sheetRedisAlerts, "C"+rowStr, alert.MetricDisplayName)
+		f.SetCellValue(sheetRedisAlerts, "D"+rowStr, alert.FormattedValue)
+		f.SetCellValue(sheetRedisAlerts, "E"+rowStr, formatRedisThreshold(alert.WarningThreshold, alert.MetricName))
+		f.SetCellValue(sheetRedisAlerts, "F"+rowStr, formatRedisThreshold(alert.CriticalThreshold, alert.MetricName))
+		f.SetCellValue(sheetRedisAlerts, "G"+rowStr, alert.Message)
+
+		// Apply style based on alert level
+		var style int
+		if alert.Level == model.AlertLevelCritical {
+			style = criticalStyle
+		} else if alert.Level == model.AlertLevelWarning {
+			style = warningStyle
+		}
+		if style > 0 {
+			f.SetCellStyle(sheetRedisAlerts, "B"+rowStr, "B"+rowStr, style)
+		}
+	}
+
+	return nil
+}
+
+// AppendRedisInspection appends Redis inspection data to an existing Excel file.
+// This method opens an existing file and adds Redis-specific worksheets.
+func (w *Writer) AppendRedisInspection(result *model.RedisInspectionResults, existingPath string) error {
+	if result == nil {
+		return fmt.Errorf("Redis inspection result is nil")
+	}
+
+	// Ensure path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(existingPath), ".xlsx") {
+		existingPath = existingPath + ".xlsx"
+	}
+
+	// Open existing Excel file
+	f, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		return fmt.Errorf("failed to open existing file: %w", err)
+	}
+	defer f.Close()
+
+	// Add Redis inspection worksheet (reuse existing method)
+	if err := w.createRedisSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Redis sheet: %w", err)
+	}
+
+	// Add Redis alerts worksheet (reuse existing method)
+	if err := w.createRedisAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
 	}
 
 	// Save the file
