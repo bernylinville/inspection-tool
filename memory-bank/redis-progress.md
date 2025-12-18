@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段二 - 数据采集（进行中）
-**进度**: 步骤 7/18 完成
+**阶段**: 阶段二 - 数据采集（已完成）
+**进度**: 步骤 8/18 完成
 
 ---
 
@@ -340,6 +340,71 @@
 
 ---
 
+### 步骤 8：编写 Redis 采集器单元测试（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 验证步骤 6-7 中已实现的核心测试用例全部通过（24 个测试）
+- ✅ 补充 `TestRedisCollector_Getters` 测试函数
+- ✅ 测试 `GetConfig()` 方法（覆盖率 0% → 100%）
+- ✅ 测试 `GetMetrics()` 方法（覆盖率 0% → 100%）
+- ✅ 测试 `GetInstanceFilter()` 方法（覆盖率 0% → 100%）
+
+**验证**：
+- ✅ 执行 `go test ./internal/service/ -run TestRedis -v` 全部 25 个测试通过
+- ✅ 测试覆盖率达到 94.8%（远超 70% 目标）
+- ✅ 所有 17 个方法覆盖率均超过 80%
+- ✅ 代码风格与现有测试完全一致
+
+**代码结构**：
+
+1. **redis_collector_test.go 新增内容**（约 70 行，728→798 行）：
+   - `TestRedisCollector_Getters` 测试函数
+   - 3 个子测试：GetConfig、GetMetrics、GetInstanceFilter
+   - 使用 httptest 模拟 VM 服务器
+   - 测试配置、指标、过滤器的返回值验证
+
+**测试覆盖率详情**：
+| 方法 | 覆盖率 |
+|------|--------|
+| NewRedisCollector | 100.0% |
+| buildInstanceFilter | 83.3% |
+| GetConfig | 100.0% |
+| GetMetrics | 100.0% |
+| GetInstanceFilter | 100.0% |
+| IsEmpty | 100.0% |
+| ToVMHostFilter | 100.0% |
+| DiscoverInstances | 93.3% |
+| extractAddress | 100.0% |
+| extractRole | 100.0% |
+| matchesAddressPatterns | 100.0% |
+| setPendingMetrics | 85.7% |
+| collectMetricConcurrent | 84.0% |
+| verifyRoles | 91.7% |
+| calculateReplicationLag | 90.0% |
+| populateResultFields | 95.2% |
+| CollectMetrics | 87.9% |
+
+**步骤 8 核心测试用例清单**：
+| 测试用例 | 对应需求 | 状态 |
+|----------|----------|------|
+| TestRedisDiscoverInstances_Success | 正常发现 Redis 实例 | ✅ |
+| TestRedisCollectMetrics_Success | 正常采集所有指标 | ✅ |
+| TestRedisDiscoverInstances_AddressParsing | 地址解析（IP:Port 格式） | ✅ |
+| TestRedisCollectMetrics_RoleVerification | 节点角色判断（双重验证） | ✅ |
+| TestRedisCollector_verifyRoles | 节点角色判断（辅助方法） | ✅ |
+| TestRedisCollectMetrics_ReplicationLag | 复制延迟计算 | ✅ |
+| TestRedisCollector_calculateReplicationLag | 复制延迟计算（辅助方法） | ✅ |
+| TestRedisDiscoverInstances_WithAddressPatternFilter | 实例过滤 | ✅ |
+| TestRedisCollector_Getters | Getter 方法覆盖 | ✅ |
+
+**关键设计决策**：
+- 核心测试用例已在步骤 6-7 中实现，步骤 8 主要补充 getter 方法测试
+- 使用与现有测试一致的 mock server 模式
+- 测试函数位置：在 `TestRedisCollector_matchesAddressPatterns` 之后，`TestRedisCollectMetrics_Success` 之前
+- 测试配置包含：enabled 状态、集群模式、地址模式、业务组、标签
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -354,7 +419,7 @@
 - [x] 步骤 5：创建 Redis 采集器接口（已完成）
 - [x] 步骤 6：实现 Redis 实例发现（已完成）
 - [x] 步骤 7：实现 Redis 指标采集（已完成）
-- [ ] 步骤 8：编写 Redis 采集器单元测试
+- [x] 步骤 8：编写 Redis 采集器单元测试（已完成）
 
 ### 阶段三：评估与编排（步骤 9-11）
 
@@ -388,3 +453,4 @@
 | 2025-12-17 | 步骤 5 | 创建 Redis 采集器接口完成（2 个结构体、1 个构造函数、1 个辅助方法），阶段二开始 |
 | 2025-12-17 | 步骤 6 | 实现 Redis 实例发现完成（9 个方法、14 个测试用例、覆盖率 93.3%） |
 | 2025-12-17 | 步骤 7 | 实现 Redis 指标采集完成（6 个方法、10 个测试用例、覆盖率 87.9%） |
+| 2025-12-18 | 步骤 8 | 编写 Redis 采集器单元测试完成（25 个测试、覆盖率 94.8%），阶段二全部完成 |

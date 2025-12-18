@@ -725,6 +725,78 @@ func TestRedisCollector_matchesAddressPatterns(t *testing.T) {
 	}
 }
 
+// TestRedisCollector_Getters tests the getter methods of RedisCollector.
+func TestRedisCollector_Getters(t *testing.T) {
+	// Setup mock server
+	server := setupRedisVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[]}}`))
+	})
+	defer server.Close()
+
+	// Create test configuration
+	cfg := &config.RedisInspectionConfig{
+		Enabled:     true,
+		ClusterMode: "3m3s",
+		InstanceFilter: config.RedisFilter{
+			AddressPatterns: []string{"192.18.102.*"},
+			BusinessGroups:  []string{"prod-redis"},
+			Tags:            map[string]string{"env": "production"},
+		},
+	}
+
+	// Create test metrics
+	metrics := []*model.RedisMetricDefinition{
+		{Name: "redis_up", DisplayName: "Connection Status", Query: "redis_up"},
+		{Name: "redis_maxclients", DisplayName: "Max Clients", Query: "redis_maxclients"},
+	}
+
+	// Create collector
+	vmConfig := &config.VictoriaMetricsConfig{Endpoint: server.URL}
+	retryConfig := &config.RetryConfig{MaxRetries: 0}
+	vmClient := vm.NewClient(vmConfig, retryConfig, zerolog.Nop())
+	collector := NewRedisCollector(cfg, vmClient, metrics, zerolog.Nop())
+
+	t.Run("GetConfig returns correct config", func(t *testing.T) {
+		result := collector.GetConfig()
+		if result == nil {
+			t.Fatal("GetConfig returned nil")
+		}
+		if result.Enabled != cfg.Enabled {
+			t.Errorf("expected Enabled=%v, got %v", cfg.Enabled, result.Enabled)
+		}
+		if result.ClusterMode != cfg.ClusterMode {
+			t.Errorf("expected ClusterMode=%s, got %s", cfg.ClusterMode, result.ClusterMode)
+		}
+	})
+
+	t.Run("GetMetrics returns correct metrics", func(t *testing.T) {
+		result := collector.GetMetrics()
+		if result == nil {
+			t.Fatal("GetMetrics returned nil")
+		}
+		if len(result) != 2 {
+			t.Errorf("expected 2 metrics, got %d", len(result))
+		}
+		if result[0].Name != "redis_up" {
+			t.Errorf("expected first metric name redis_up, got %s", result[0].Name)
+		}
+	})
+
+	t.Run("GetInstanceFilter returns correct filter", func(t *testing.T) {
+		result := collector.GetInstanceFilter()
+		if result == nil {
+			t.Fatal("GetInstanceFilter returned nil")
+		}
+		if len(result.AddressPatterns) != 1 {
+			t.Errorf("expected 1 address pattern, got %d", len(result.AddressPatterns))
+		}
+		if result.AddressPatterns[0] != "192.18.102.*" {
+			t.Errorf("expected pattern 192.18.102.*, got %s", result.AddressPatterns[0])
+		}
+	})
+}
+
 // =============================================================================
 // CollectMetrics 相关测试
 // =============================================================================
