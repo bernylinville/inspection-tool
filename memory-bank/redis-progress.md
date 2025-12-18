@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段四 - 报告生成（进行中）
-**进度**: 步骤 13/18 完成
+**阶段**: 阶段四 - 报告生成（完成）
+**进度**: 步骤 15/18 完成
 
 ---
 
@@ -911,6 +911,57 @@
 
 ---
 
+### 步骤 15：更新示例配置文件（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 在 `configs/config.example.yaml` 中添加 Redis 配置示例（约 50 行）
+- ✅ 添加详细注释说明各配置项用途
+- ✅ 配置结构与 MySQL 配置保持一致
+
+**验证**：
+- ✅ 执行 `go build ./internal/config/` 无编译错误
+- ✅ 执行 `go test ./internal/config/ -v` 全部 63 个测试通过
+- ✅ 验证 YAML 格式正确（可被正确解析）
+- ✅ 配置值符合默认值设置（与 loader.go 一致）
+
+**代码结构**：
+
+1. **config.example.yaml 新增内容**（约 50 行，第 219-266 行）：
+   - Redis 配置部分标题和用途说明
+   - `enabled`: 是否启用 Redis 巡检（默认 false）
+   - `cluster_mode`: 集群模式（3m3s/3m6s）
+   - `instance_filter`: 实例筛选条件
+     - `address_patterns`: 地址匹配模式（glob 通配符）
+     - `business_groups`: 业务组筛选（OR 关系）
+     - `tags`: 标签筛选（AND 关系）
+   - `thresholds`: 阈值配置
+     - `connection_usage_warning/critical`: 连接使用率阈值（70%/90%）
+     - `replication_lag_warning/critical`: 复制延迟阈值（1MB/10MB）
+
+**配置示例摘要**：
+```yaml
+redis:
+  enabled: true
+  cluster_mode: "3m3s"
+  instance_filter:
+    address_patterns: []
+    business_groups: []
+    tags: {}
+  thresholds:
+    connection_usage_warning: 70
+    connection_usage_critical: 90
+    replication_lag_warning: 1048576    # 1MB
+    replication_lag_critical: 10485760  # 10MB
+```
+
+**关键设计决策**：
+- 完全参照 MySQL 配置的格式和注释风格
+- 复制延迟阈值使用字节单位（int64），默认 1MB/10MB 为保守值
+- 阈值注释说明无生产经验值，建议根据实际情况调整
+- 配置项注释使用中文，便于国内用户理解
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -938,7 +989,7 @@
 - [x] 步骤 12：扩展 Excel 报告 - Redis 工作表（已完成）
 - [x] 步骤 13：扩展 Excel 报告 - Redis 异常汇总（已完成）
 - [x] 步骤 14：扩展 HTML 报告 - Redis 区域（已完成）
-- [ ] 步骤 15：更新示例配置文件
+- [x] 步骤 15：更新示例配置文件（已完成）
 
 ### 阶段五：CLI 集成与测试（步骤 16-18）
 
@@ -965,3 +1016,5 @@
 | 2025-12-18 | 步骤 11 | 编写 Redis 巡检服务集成测试（验证 12 个测试通过，覆盖率 83%+），阶段三全部完成 |
 | 2025-12-18 | 步骤 12 | 扩展 Excel 报告 - Redis 工作表完成（~410 行 writer.go、~950 行测试、覆盖率 87.3%），阶段四开始 |
 | 2025-12-18 | 步骤 13 | 扩展 Excel 报告 - Redis 异常汇总（验证步骤，功能已在步骤 12 实现，4 个测试通过） |
+| 2025-12-18 | 步骤 14 | 扩展 HTML 报告 - Redis 区域完成（~360 行 writer.go、20 个测试、独立/组合模板支持） |
+| 2025-12-18 | 步骤 15 | 更新示例配置文件完成（~50 行 Redis 配置示例、详细注释），阶段四全部完成 |
