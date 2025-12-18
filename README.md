@@ -10,6 +10,7 @@
 - **灵活配置**：支持自定义阈值、主机筛选、报告格式
 - **易于部署**：单二进制文件，零依赖，支持 Linux/macOS/Windows
 - **MySQL 支持**：支持 MySQL 8.0 MGR 集群巡检，自动发现实例、采集指标、评估告警
+- **Redis 支持**：支持 Redis 6.2 Cluster 集群巡检（3主3从/3主6从），角色识别、复制延迟监控
 
 ## 系统架构
 
@@ -17,30 +18,30 @@
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │    Categraf     │────▶│   夜莺 (N9E)    │────▶│ VictoriaMetrics │
 │   (数据采集)     │     │   (监控平台)     │     │   (时序数据库)   │
-│  Host + MySQL   │     │                 │     │                 │
+│ Host+MySQL+Redis│     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │                        │
                                │ 元信息查询              │ 指标数据查询
-                               │ (Host)                 │ (Host + MySQL)
+                               │ (Host)                 │ (Host+MySQL+Redis)
                                ▼                        ▼
                         ┌─────────────────────────────────────┐
                         │           系统巡检工具                │
-                        │  ┌──────────┐    ┌──────────┐       │
-                        │  │Host 采集 │    │MySQL 采集│       │
-                        │  │  评估    │    │  评估    │       │
-                        │  └──────────┘    └──────────┘       │
-                        │           ↓              ↓          │
-                        │       ┌───────────────────┐         │
-                        │       │    报告生成器      │         │
-                        │       └───────────────────┘         │
-                        └─────────────────────────────────────┘
+                        │  ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+                        │  │Host 采集 │ │MySQL 采集│ │Redis 采集│ │
+                        │  │  评估    │ │  评估    │ │  评估    │ │
+                        │  └──────────┘ └──────────┘ └──────────┘ │
+                        │             ↓      ↓      ↓            │
+                        │       ┌───────────────────┐            │
+                        │       │    报告生成器      │            │
+                        │       └───────────────────┘            │
+                        └─────────────────────────────────────────┘
                                         │
                         ┌───────────────┴───────────────┐
                         ▼                               ▼
                  ┌─────────────┐                ┌─────────────┐
                  │  Excel 报告  │                │  HTML 报告   │
-                 │ (Host+MySQL │                │ (Host+MySQL │
-                 │   合并)     │                │   合并)     │
+                 │(Host+MySQL  │                │(Host+MySQL  │
+                 │  +Redis)    │                │  +Redis)    │
                  └─────────────┘                └─────────────┘
 ```
 
@@ -117,6 +118,11 @@ make build-all
 ./bin/inspect run -c config.yaml --mysql-only          # 仅执行 MySQL 巡检
 ./bin/inspect run -c config.yaml --skip-mysql          # 跳过 MySQL 巡检
 ./bin/inspect run -c config.yaml --mysql-metrics custom-mysql-metrics.yaml  # 自定义 MySQL 指标文件
+
+# Redis 巡检相关
+./bin/inspect run -c config.yaml --redis-only          # 仅执行 Redis 巡检
+./bin/inspect run -c config.yaml --skip-redis          # 跳过 Redis 巡检
+./bin/inspect run -c config.yaml --redis-metrics custom-redis-metrics.yaml  # 自定义 Redis 指标文件
 ```
 
 ### 命令行参数
@@ -131,6 +137,9 @@ make build-all
 | `--mysql-only` | - | 仅执行 MySQL 巡检（跳过 Host 巡检） | `false` |
 | `--skip-mysql` | - | 跳过 MySQL 巡检（仅执行 Host 巡检） | `false` |
 | `--mysql-metrics` | - | MySQL 指标定义文件路径 | `configs/mysql-metrics.yaml` |
+| `--redis-only` | - | 仅执行 Redis 巡检（跳过 Host 和 MySQL 巡检） | `false` |
+| `--skip-redis` | - | 跳过 Redis 巡检 | `false` |
+| `--redis-metrics` | - | Redis 指标定义文件路径 | `configs/redis-metrics.yaml` |
 
 ### 退出码
 
@@ -237,6 +246,44 @@ mysql:
     mgr_member_count_expected: 3
 ```
 
+### Redis 巡检配置
+
+```yaml
+redis:
+  # 启用 Redis 巡检（需要 redis.enabled=true 才会执行）
+  enabled: true
+
+  # 集群模式（必须手动指定）
+  # 可选值: 3m3s (3主3从), 3m6s (3主6从)
+  # - 3m3s: 每个 master 期望 1 个 slave（默认）
+  # - 3m6s: 每个 master 期望 2 个 slave
+  cluster_mode: "3m3s"
+
+  # 实例筛选（可选）
+  instance_filter:
+    # 地址匹配模式（支持通配符 *）
+    address_patterns:
+      - "192.18.102.*"    # 只巡检 192.18.102.* 网段的实例
+    # 业务组筛选（OR 关系）
+    business_groups:
+      - "生产Redis"
+    # 标签筛选（AND 关系）
+    tags:
+      env: "prod"
+
+  # Redis 告警阈值
+  thresholds:
+    # 连接使用率阈值（当前连接数/最大连接数）
+    connection_usage_warning: 70    # > 70% 警告
+    connection_usage_critical: 90   # > 90% 严重
+
+    # 复制延迟阈值（字节）
+    # 计算方式: slave 的 master_repl_offset - slave_repl_offset
+    # 注意: 目前无生产环境经验值，以下为保守默认值
+    replication_lag_warning: 1048576    # 1MB - 警告阈值
+    replication_lag_critical: 10485760  # 10MB - 严重阈值
+```
+
 ### 报告配置
 
 ```yaml
@@ -275,7 +322,7 @@ export INSPECT_LOGGING_LEVEL="debug"
 
 ### Excel 报告
 
-生成包含 5 个工作表的 Excel 文件（Host + MySQL 合并报告）：
+生成包含 7 个工作表的 Excel 文件（Host + MySQL + Redis 合并报告）：
 
 | 工作表 | 内容 |
 |--------|------|
@@ -284,8 +331,10 @@ export INSPECT_LOGGING_LEVEL="debug"
 | 异常汇总 | Host 告警列表，按严重程度排序 |
 | MySQL 巡检 | MySQL 实例的完整巡检数据（IP、端口、版本、连接数等） |
 | MySQL 异常 | MySQL 告警列表，按严重程度排序 |
+| Redis 巡检 | Redis 实例的完整巡检数据（IP、端口、角色、连接数、复制延迟等） |
+| Redis 异常 | Redis 告警列表，按严重程度排序 |
 
-**注意**：如果使用 `--skip-mysql` 或 MySQL 未启用，则不生成 MySQL 相关工作表。
+**注意**：如果使用 `--skip-mysql` 或 MySQL 未启用，则不生成 MySQL 相关工作表；如果使用 `--skip-redis` 或 Redis 未启用，则不生成 Redis 相关工作表。
 
 **条件格式**：
 - 警告级别：黄色背景 (`#FFEB9C`)
@@ -294,9 +343,9 @@ export INSPECT_LOGGING_LEVEL="debug"
 
 ### HTML 报告
 
-响应式单页报告，支持 Host 和 MySQL 合并展示：
+响应式单页报告，支持 Host、MySQL 和 Redis 合并展示：
 
-**Host 巡检区域（蓝色主题）**：
+**Host 巡检区域（紫色主题）**：
 - **摘要卡片**：主机统计、告警统计，颜色编码
 - **主机详情表**：完整指标数据，支持点击表头排序
 - **异常汇总表**：按严重程度排序
@@ -305,6 +354,11 @@ export INSPECT_LOGGING_LEVEL="debug"
 - **摘要卡片**：MySQL 实例统计（总数/正常/警告/严重/失败）
 - **实例详情表**：IP、端口、版本、Server ID、集群模式、同步状态、连接数、Binlog 状态
 - **异常汇总表**：MySQL 告警列表，按严重程度排序
+
+**Redis 巡检区域（红色主题）**：
+- **摘要卡片**：Redis 实例统计（总数/正常/警告/严重/失败）
+- **实例详情表**：IP、端口、版本、节点角色、集群模式、连接状态、连接数、复制延迟
+- **异常汇总表**：Redis 告警列表，按严重程度排序
 
 **通用特性**：
 - **条件样式**：与 Excel 一致的颜色方案
@@ -358,6 +412,30 @@ export INSPECT_LOGGING_LEVEL="debug"
 |------|------|
 | non_root_user | 是否普通用户启动（需额外采集） |
 | slave_running | Slave 是否启动（MGR 模式不适用）|
+
+### Redis 巡检指标
+
+**已实现指标**：
+
+| 分类 | 指标 | 说明 |
+|------|------|------|
+| 连接 | redis_up | 连接状态 (1=正常, 0=连接失败) |
+| 连接 | redis_maxclients | 最大连接数 |
+| 连接 | redis_connected_clients | 当前连接数 |
+| 集群 | redis_cluster_enabled | 集群模式 (1=启用, 0=未启用) |
+| 复制 | redis_master_link_status | 主从链接状态 (仅 slave 节点) |
+| 复制 | redis_master_repl_offset | Master 复制偏移量 |
+| 复制 | redis_slave_repl_offset | Slave 复制偏移量 |
+| 复制 | redis_master_port | 对应的 Master 端口 (仅 slave) |
+| 复制 | redis_connected_slaves | 连接的 Slave 数量 (用于角色判断) |
+| 运行 | redis_uptime_in_seconds | 运行时间（秒） |
+
+**待实现指标**（显示 N/A）：
+
+| 指标 | 说明 |
+|------|------|
+| redis_version | Redis 版本（需扩展 Categraf） |
+| non_root_user | 是否普通用户启动 |
 
 ### 待实现指标（Host）
 
@@ -487,6 +565,57 @@ Categraf 指标命名规则为 `mysql_{measurement}_{field}`：
 | `mysql_innodb_cluster_mgr_state_online` | MGR 在线状态 (自定义) |
 | `mysql_variables_slow_query_log` | 慢查询日志状态 (自定义) |
 | `mysql_variables_binlog_expire_logs_seconds` | Binlog 保留时长 (自定义) |
+
+## Categraf Redis 配置参考
+
+Redis 巡检功能依赖 Categraf 采集的 Redis 监控数据。以下是推荐的 `redis.toml` 配置：
+
+### 基础配置
+
+```toml
+# configs/input.redis/redis.toml
+interval = 15
+
+[[instances]]
+address = "192.18.102.2:7000"
+password = "your-redis-password"
+pool_size = 2
+
+# 慢查询日志采集（可选）
+gather_slowlog = true
+slowlog_max_len = 100
+slowlog_time_window = 30
+```
+
+### 多实例配置
+
+```toml
+# 每台服务器运行 2 个 Redis 实例（端口 7000 和 7001）
+[[instances]]
+address = "192.18.102.2:7000"
+password = "your-password"
+pool_size = 2
+
+[[instances]]
+address = "192.18.102.2:7001"
+password = "your-password"
+pool_size = 2
+```
+
+### 生成的指标名称
+
+| Categraf 指标 | 说明 |
+|---------------|------|
+| `redis_up` | 连接状态 (1=正常, 0=失败) |
+| `redis_cluster_enabled` | 集群模式启用状态 |
+| `redis_master_link_status` | 主从链接状态 (仅 slave) |
+| `redis_connected_clients` | 当前连接数 |
+| `redis_maxclients` | 最大连接数 |
+| `redis_master_repl_offset` | Master 复制偏移量 |
+| `redis_slave_repl_offset` | Slave 复制偏移量 |
+| `redis_master_port` | 对应 Master 端口 |
+| `redis_connected_slaves` | 连接的 Slave 数量 |
+| `redis_uptime_in_seconds` | 运行时间 |
 
 ## 定时任务
 
@@ -630,6 +759,38 @@ curl -G "http://your-vm:8428/api/v1/query" \
   --data-urlencode 'query=mysql_version_info'
 ```
 
+### Q: 如何只执行 Redis 巡检？
+
+使用 `--redis-only` 标志：
+
+```bash
+./bin/inspect run -c config.yaml --redis-only
+```
+
+注意：需要在配置文件中设置 `redis.enabled: true`，否则会报错。
+
+### Q: Redis 节点角色是如何判断的？
+
+采用双重验证机制：
+
+1. **主要方式**：`replica_role` 标签
+   - `replica_role=master` → Master 节点
+   - `replica_role=slave` → Slave 节点
+
+2. **补充验证**：`redis_connected_slaves` 指标
+   - `> 0` → 确认为 Master（有 slave 连接）
+   - `= 0` 且有 `master_link_status` → 确认为 Slave
+
+### Q: 复制延迟是如何计算的？
+
+复制延迟 = `redis_master_repl_offset` - `redis_slave_repl_offset`
+
+仅对 Slave 节点计算，单位为字节。正常情况下应该很小（KB 级），超过 1MB 触发警告，超过 10MB 触发严重告警。
+
+### Q: 为什么 Redis 版本显示 N/A？
+
+当前 Categraf Redis 插件不采集 `redis_version` 信息。需要扩展 Categraf command 配置采集 INFO 命令输出。这是 MVP 的已知限制，后续版本会支持。
+
 ## 开发相关
 
 ### 构建和测试
@@ -663,21 +824,25 @@ inspection-tool/
 │   ├── client/
 │   │   ├── n9e/              # N9E API 客户端
 │   │   └── vm/               # VictoriaMetrics 客户端
-│   ├── model/                # 数据模型（Host + MySQL）
+│   ├── model/                # 数据模型（Host + MySQL + Redis）
 │   ├── service/              # 业务逻辑
 │   │   ├── collector.go      # Host 数据采集
 │   │   ├── evaluator.go      # Host 阈值评估
 │   │   ├── inspector.go      # Host 巡检编排
 │   │   ├── mysql_collector.go    # MySQL 数据采集
 │   │   ├── mysql_evaluator.go    # MySQL 阈值评估
-│   │   └── mysql_inspector.go    # MySQL 巡检编排
+│   │   ├── mysql_inspector.go    # MySQL 巡检编排
+│   │   ├── redis_collector.go    # Redis 数据采集
+│   │   ├── redis_evaluator.go    # Redis 阈值评估
+│   │   └── redis_inspector.go    # Redis 巡检编排
 │   └── report/
-│       ├── excel/            # Excel 报告生成（Host + MySQL）
-│       └── html/             # HTML 报告生成（Host + MySQL）
+│       ├── excel/            # Excel 报告生成（Host + MySQL + Redis）
+│       └── html/             # HTML 报告生成（Host + MySQL + Redis）
 ├── configs/                  # 配置文件示例
 │   ├── config.example.yaml
 │   ├── metrics.yaml          # Host 指标定义
-│   └── mysql-metrics.yaml    # MySQL 指标定义
+│   ├── mysql-metrics.yaml    # MySQL 指标定义
+│   └── redis-metrics.yaml    # Redis 指标定义
 └── templates/html/           # 用户自定义模板目录
 ```
 
@@ -692,6 +857,10 @@ inspection-tool/
 | Service (MySQL) | 88.6% |
 | MySQL Collector | 93.5% |
 | MySQL Evaluator | 95.9% |
+| Service (Redis) | 94.8% |
+| Redis Collector | 94.8% |
+| Redis Evaluator | 100% |
+| Redis Inspector | 83%+ |
 | Excel 报告 | 89.6% |
 | HTML 报告 | 90.8% |
 | **总计** | **85.2%** |
@@ -704,5 +873,6 @@ inspection-tool/
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v0.3.0 | 2025-12-18 | Redis 6.2 Cluster 巡检功能（3主3从/3主6从），合并报告 |
 | v0.2.0 | 2025-12-16 | MySQL 8.0 MGR 巡检功能，合并报告 |
 | v0.1.0 | 2025-12-14 | 初始版本，完成 MVP 功能 |

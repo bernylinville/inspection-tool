@@ -1324,34 +1324,46 @@ func TestRedisCollector_verifyRoles(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		initialRole  model.RedisRole
-		slavesCount  float64
-		expectedRole model.RedisRole
+		name              string
+		initialRole       model.RedisRole
+		slavesCount       float64
+		hasMasterLinkStatus bool
+		expectedRole      model.RedisRole
 	}{
 		{
-			name:         "already master - no change",
-			initialRole:  model.RedisRoleMaster,
-			slavesCount:  0,
-			expectedRole: model.RedisRoleMaster,
+			name:              "already master - no change",
+			initialRole:       model.RedisRoleMaster,
+			slavesCount:       0,
+			hasMasterLinkStatus: false,
+			expectedRole:      model.RedisRoleMaster,
 		},
 		{
-			name:         "already slave - no change",
-			initialRole:  model.RedisRoleSlave,
-			slavesCount:  0,
-			expectedRole: model.RedisRoleSlave,
+			name:              "already slave - no change",
+			initialRole:       model.RedisRoleSlave,
+			slavesCount:       0,
+			hasMasterLinkStatus: false,
+			expectedRole:      model.RedisRoleSlave,
 		},
 		{
-			name:         "unknown with slaves > 0 - becomes master",
-			initialRole:  model.RedisRoleUnknown,
-			slavesCount:  2,
-			expectedRole: model.RedisRoleMaster,
+			name:              "unknown with slaves > 0 - becomes master",
+			initialRole:       model.RedisRoleUnknown,
+			slavesCount:       2,
+			hasMasterLinkStatus: false,
+			expectedRole:      model.RedisRoleMaster,
 		},
 		{
-			name:         "unknown with slaves == 0 - stays unknown",
-			initialRole:  model.RedisRoleUnknown,
-			slavesCount:  0,
-			expectedRole: model.RedisRoleUnknown,
+			name:              "unknown with slaves == 0 and no master_link_status - stays unknown",
+			initialRole:       model.RedisRoleUnknown,
+			slavesCount:       0,
+			hasMasterLinkStatus: false,
+			expectedRole:      model.RedisRoleUnknown,
+		},
+		{
+			name:              "unknown with slaves == 0 and has master_link_status - becomes slave",
+			initialRole:       model.RedisRoleUnknown,
+			slavesCount:       0,
+			hasMasterLinkStatus: true,
+			expectedRole:      model.RedisRoleSlave,
 		},
 	}
 
@@ -1363,6 +1375,12 @@ func TestRedisCollector_verifyRoles(t *testing.T) {
 				Name:     "redis_connected_slaves",
 				RawValue: tt.slavesCount,
 			})
+			if tt.hasMasterLinkStatus {
+				result.SetMetric(&model.RedisMetricValue{
+					Name:     "redis_master_link_status",
+					RawValue: 1,
+				})
+			}
 
 			resultsMap := map[string]*model.RedisInspectionResult{
 				"192.18.102.2:7000": result,

@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段五 - CLI 集成与测试（进行中）
-**进度**: 步骤 16/18 完成
+**阶段**: 阶段五 - CLI 集成与测试（已完成）
+**进度**: 步骤 18/18 完成（全部完成）
 
 ---
 
@@ -1026,6 +1026,142 @@ redis:
 
 ---
 
+### 步骤 17：端到端测试（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 在 `config.yaml` 中添加 Redis 配置（enabled: true, cluster_mode: "3m3s", tags: items: "陕西营销活动"）
+- ✅ 构建项目 (`make build`)
+- ✅ 执行 Redis-only 巡检测试 (`./bin/inspect run -c config.yaml --redis-only`)
+- ✅ 验证实例发现（12 个 Redis 实例）
+- ✅ 验证角色识别（6 master + 6 slave）
+- ✅ 验证主从链接状态（slave: 正常, master: N/A）
+- ✅ 验证复制延迟（slave: 0 B, master: N/A）
+- ✅ 验证 Excel 报告（Redis 巡检 + Redis 异常工作表）
+- ✅ 验证 HTML 报告（Redis 区域）
+- ✅ 执行完整巡检测试 (`./bin/inspect run -c config.yaml`)
+- ✅ 验证组合报告（Host + MySQL + Redis）
+
+**验证**：
+- ✅ Redis 实例正确发现（12 个实例 - 两个集群：192.18.102.x 和 192.18.107.x）
+- ✅ 节点角色正确识别（6 master + 6 slave，通过双重验证）
+- ✅ 主从链接状态正确判断（slave 显示 "正常"，master 显示 "N/A"）
+- ✅ 复制偏移量和延迟正确获取（slave: 0 B，master: N/A）
+- ✅ Excel 报告包含 "Redis 巡检" 和 "Redis 异常" 工作表
+- ✅ HTML 报告包含 Redis 区域（Redis 巡检概览 + Redis 实例详情）
+- ✅ 完整巡检报告包含 7 个工作表（Host 3 + MySQL 2 + Redis 2）
+
+**测试结果摘要**：
+
+1. **Redis-only 巡检**：
+   - 实例总数：12
+   - 正常实例：12
+   - 警告实例：0
+   - 严重实例：0
+   - 失败实例：0
+
+2. **完整巡检（Host + MySQL + Redis）**：
+   - 主机：23（22 正常，1 警告）
+   - MySQL：3（3 正常）
+   - Redis：12（12 正常）
+
+**角色检测日志验证**：
+```
+role determined as master from connected_slaves > 0:
+  - 192.18.102.3:7001, 192.18.102.4:7000, 192.18.102.4:7001
+  - 192.18.107.2:7001, 192.18.107.3:7000, 192.18.107.3:7001
+
+role determined as slave from master_link_status presence:
+  - 192.18.102.2:7000, 192.18.102.2:7001, 192.18.102.3:7000
+  - 192.18.107.2:7000, 192.18.107.4:7000, 192.18.107.4:7001
+```
+
+**生成报告**：
+- Excel: `reports/inspection_report_2025-12-18.xlsx`（7 个工作表）
+- HTML: `reports/inspection_report_2025-12-18.html`（3 个区域）
+
+**关键设计验证**：
+- 双重角色验证机制正常工作（主来源 `replica_role` 不可用时，备用 `connected_slaves` 和 `master_link_status`）
+- Slave 专属字段（主从链接状态、Master 端口、复制延迟）正确显示
+- Master 节点的 Slave 专属字段正确显示 "N/A"
+- 组合报告正确整合三种巡检类型
+
+---
+
+### 步骤 18：更新文档（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 更新 README.md 添加 Redis 巡检说明
+- ✅ 添加 Redis 巡检指标说明（10 个已实现 + 2 个待实现）
+- ✅ 添加 Categraf redis.toml 配置参考（基础配置 + 多实例配置）
+- ✅ 添加 Redis FAQ 部分（4 个常见问题）
+- ✅ 更新项目结构说明（添加 Redis 相关文件）
+- ✅ 更新测试覆盖率表（添加 Redis 模块覆盖率）
+- ✅ 添加版本 v0.3.0 记录
+
+**验证**：
+- ✅ 执行 `go build ./...` 编译成功
+- ✅ 执行 `go test ./...` 全部测试通过
+- ✅ 文档完整描述 Redis 巡检功能
+- ✅ 配置示例可直接使用
+
+**README.md 更新内容**：
+
+1. **特点部分**（第 13 行）：
+   - 添加 Redis 支持说明：支持 Redis 6.2 Cluster 集群巡检（3主3从/3主6从）
+
+2. **系统架构图**（第 17-45 行）：
+   - 更新 Categraf 采集部分添加 Redis
+   - 添加 Redis 采集评估模块
+   - 更新 Excel/HTML 报告说明为 Host+MySQL+Redis 合并
+
+3. **命令行用法**（第 122-142 行）：
+   - 添加 `--redis-only`、`--skip-redis`、`--redis-metrics` 命令示例
+   - 添加 Redis 相关命令行参数表格条目
+
+4. **Redis 巡检配置**（第 249-285 行）：
+   - 添加完整的 Redis 配置示例（enabled、cluster_mode、instance_filter、thresholds）
+   - 添加配置注释说明
+
+5. **报告说明**（第 325-367 行）：
+   - 更新 Excel 报告工作表说明（5 → 7 个工作表）
+   - 添加 HTML 报告 Redis 区域说明（红色主题）
+
+6. **Redis 巡检指标**（第 416-438 行）：
+   - 添加已实现指标表（10 个指标）
+   - 添加待实现指标表（2 个指标）
+
+7. **Categraf Redis 配置参考**（第 569-618 行）：
+   - 添加基础配置示例
+   - 添加多实例配置示例
+   - 添加生成的指标名称说明表
+
+8. **Redis FAQ**（第 762-792 行）：
+   - Q: 如何只执行 Redis 巡检？
+   - Q: Redis 节点角色是如何判断的？
+   - Q: 复制延迟是如何计算的？
+   - Q: 为什么 Redis 版本显示 N/A？
+
+9. **项目结构**（第 828-845 行）：
+   - 添加 redis_collector.go、redis_evaluator.go、redis_inspector.go
+   - 添加 redis-metrics.yaml
+
+10. **测试覆盖率**（第 858-866 行）：
+    - Service (Redis): 94.8%
+    - Redis Collector: 94.8%
+    - Redis Evaluator: 100%
+    - Redis Inspector: 83%+
+
+11. **版本记录**（第 876 行）：
+    - v0.3.0 | 2025-12-18 | Redis 6.2 Cluster 巡检功能（3主3从/3主6从），合并报告
+
+**关键设计决策**：
+- 文档结构与 MySQL 巡检文档保持一致
+- 配置示例包含完整注释说明
+- FAQ 覆盖用户最常见的问题
+- 测试覆盖率信息便于用户了解代码质量
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -1058,8 +1194,8 @@ redis:
 ### 阶段五：CLI 集成与测试（步骤 16-18）
 
 - [x] 步骤 16：扩展 run 命令支持 Redis 巡检（已完成）
-- [ ] 步骤 17：端到端测试
-- [ ] 步骤 18：更新文档
+- [x] 步骤 17：端到端测试（已完成）
+- [x] 步骤 18：更新文档（已完成）
 
 ---
 
@@ -1083,3 +1219,5 @@ redis:
 | 2025-12-18 | 步骤 14 | 扩展 HTML 报告 - Redis 区域完成（~360 行 writer.go、20 个测试、独立/组合模板支持） |
 | 2025-12-18 | 步骤 15 | 更新示例配置文件完成（~50 行 Redis 配置示例、详细注释），阶段四全部完成 |
 | 2025-12-18 | 步骤 16 | 扩展 run 命令支持 Redis 巡检完成（~120 行修改、12 个测试通过），阶段五开始 |
+| 2025-12-18 | 步骤 17 | 端到端测试完成（12 个 Redis 实例、6 master + 6 slave、双重角色验证、完整报告生成） |
+| 2025-12-18 | 步骤 18 | 更新文档完成（README.md 11 处更新、Redis 巡检指标说明、Categraf 配置参考、FAQ 4 题），阶段五及全部开发工作完成 |

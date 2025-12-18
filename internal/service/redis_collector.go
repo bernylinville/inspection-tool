@@ -337,12 +337,12 @@ func (c *RedisCollector) collectMetricConcurrent(
 
 // verifyRoles performs dual-source role verification for all instances.
 // Primary source: replica_role label (already set during DiscoverInstances)
-// Secondary source: redis_connected_slaves > 0 indicates master
+// Secondary source: redis_connected_slaves and redis_master_link_status metrics
 //
 // Logic:
 //   - If role is already master/slave from replica_role, keep it
 //   - If role is unknown and connected_slaves > 0, set to master
-//   - If role is unknown and connected_slaves == 0, keep as unknown (avoid wrong assumption)
+//   - If role is unknown and connected_slaves == 0 and has master_link_status, set to slave
 func (c *RedisCollector) verifyRoles(resultsMap map[string]*model.RedisInspectionResult) {
 	for address, result := range resultsMap {
 		if result.Instance == nil {
@@ -363,6 +363,8 @@ func (c *RedisCollector) verifyRoles(resultsMap map[string]*model.RedisInspectio
 
 		// Secondary verification: check redis_connected_slaves metric
 		connectedSlavesMetric := result.GetMetric("redis_connected_slaves")
+		masterLinkStatusMetric := result.GetMetric("redis_master_link_status")
+
 		if connectedSlavesMetric != nil && !connectedSlavesMetric.IsNA {
 			if connectedSlavesMetric.RawValue > 0 {
 				result.Instance.Role = model.RedisRoleMaster
@@ -370,9 +372,13 @@ func (c *RedisCollector) verifyRoles(resultsMap map[string]*model.RedisInspectio
 					Str("address", address).
 					Float64("connected_slaves", connectedSlavesMetric.RawValue).
 					Msg("role determined as master from connected_slaves > 0")
+			} else if masterLinkStatusMetric != nil && !masterLinkStatusMetric.IsNA {
+				// connected_slaves == 0 and has master_link_status metric -> slave
+				result.Instance.Role = model.RedisRoleSlave
+				c.logger.Info().
+					Str("address", address).
+					Msg("role determined as slave from master_link_status presence")
 			}
-			// Note: connected_slaves == 0 does not necessarily mean slave
-			// (could be a master with no slaves), so we don't change role here
 		}
 	}
 }
