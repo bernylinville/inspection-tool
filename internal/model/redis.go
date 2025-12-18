@@ -520,3 +520,11 @@ type RedisMetricDefinition struct {
 func (m *RedisMetricDefinition) IsPending() bool {
 	return m.Status == "pending" || m.Query == ""
 }
+
+// GetDisplayName returns the display name, falling back to name if not set.
+func (m *RedisMetricDefinition) GetDisplayName() string {
+	if m.DisplayName != "" {
+		return m.DisplayName
+	}
+	return m.Name
+}

@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 阶段二 - 数据采集（已完成）
-**进度**: 步骤 8/18 完成
+**阶段**: 阶段三 - 评估与编排（进行中）
+**进度**: 步骤 9/18 完成
 
 ---
 
@@ -405,6 +405,109 @@
 
 ---
 
+### 步骤 9：实现 Redis 状态评估器（完成日期：2025-12-18）
+
+**操作**：
+- ✅ 在 `internal/model/redis.go` 中添加 `GetDisplayName()` 方法
+- ✅ 在 `internal/service/` 目录下创建 `redis_evaluator.go` 文件
+- ✅ 定义 `RedisEvaluationResult` 结构体（3 个字段）
+- ✅ 定义 `RedisEvaluator` 结构体（3 个字段）
+- ✅ 实现 `NewRedisEvaluator` 构造函数
+- ✅ 实现 `EvaluateAll()` 批量评估方法
+- ✅ 实现 `Evaluate()` 单实例评估方法
+- ✅ 实现 `evaluateConnectionUsage()` 连接使用率评估
+- ✅ 实现 `evaluateMasterLinkStatus()` 主从链接状态评估（仅 slave）
+- ✅ 实现 `evaluateReplicationLag()` 复制延迟评估（仅 slave）
+- ✅ 实现 `determineInstanceStatus()` 状态聚合方法
+- ✅ 实现 `createAlert()` 告警创建方法
+- ✅ 实现 `formatValue()` 值格式化方法
+- ✅ 实现 `generateAlertMessage()` 告警消息生成方法
+- ✅ 实现 `getThresholds()` 阈值获取方法
+- ✅ 创建 `internal/service/redis_evaluator_test.go` 测试文件
+
+**验证**：
+- ✅ 执行 `go build ./internal/model/` 无编译错误
+- ✅ 执行 `go build ./internal/service/` 无编译错误
+- ✅ 连接使用率 75% 被判定为警告
+- ✅ 连接使用率 95% 被判定为严重
+- ✅ 主从链接断开被判定为严重（slave 节点）
+- ✅ 复制延迟超阈值被正确判定
+- ✅ Master 节点跳过复制延迟和链接状态评估
+- ✅ 执行 `go test ./internal/service/ -run TestRedisEvaluator -v` 全部 29 个测试通过
+- ✅ 执行 `go test ./...` 完整测试套件通过
+- ✅ 测试覆盖率达到 100%（远超 70% 目标）
+
+**代码结构**：
+
+1. **redis.go 新增内容**（7 行）：
+   - `GetDisplayName()` 方法：获取指标显示名称，回退到名称字段
+
+2. **redis_evaluator.go 新文件**（约 320 行）：
+   - `RedisEvaluationResult` 结构体（3 个字段：Address, Status, Alerts）
+   - `RedisEvaluator` 结构体（3 个字段：thresholds, metricDefs, logger）
+   - `NewRedisEvaluator` 构造函数
+   - `EvaluateAll()` 方法：批量评估所有实例
+   - `Evaluate()` 方法：单实例评估主流程
+   - `evaluateConnectionUsage()` 方法：连接使用率评估
+   - `evaluateMasterLinkStatus()` 方法：主从链接状态评估
+   - `evaluateReplicationLag()` 方法：复制延迟评估
+   - `determineInstanceStatus()` 方法：状态聚合（Critical > Warning > Normal）
+   - `createAlert()` 方法：集中创建告警对象
+   - `formatValue()` 方法：格式化值显示
+   - `generateAlertMessage()` 方法：生成中文告警消息
+   - `getThresholds()` 方法：获取阈值配置
+
+3. **redis_evaluator_test.go 新文件**（约 550 行）：
+   - `TestNewRedisEvaluator`：测试构造函数
+   - `TestRedisEvaluator_EvaluateAll_Success`：测试批量评估
+   - `TestRedisEvaluator_EvaluateAll_EmptyResults`：测试空结果
+   - `TestRedisEvaluator_Evaluate_ConnectionUsage_*`：连接使用率评估（6 个子测试）
+   - `TestRedisEvaluator_Evaluate_ReplicationLag_*`：复制延迟评估（5 个子测试）
+   - `TestRedisEvaluator_Evaluate_MasterLinkStatus_*`：链接状态评估（2 个子测试）
+   - `TestRedisEvaluator_Evaluate_SkipMasterMetrics`：Master 跳过 Slave 指标
+   - `TestRedisEvaluator_Evaluate_MultipleAlerts_*`：多告警聚合（3 个子测试）
+   - `TestRedisEvaluator_Evaluate_FailedInstance`：失败实例处理
+   - `TestRedisEvaluator_Evaluate_NilInstance`：空实例处理
+   - `TestRedisEvaluator_formatValue`：值格式化（8 个子测试）
+   - `TestRedisEvaluator_getThresholds`：阈值获取（4 个子测试）
+   - `TestRedisEvaluator_generateAlertMessage`：消息生成（6 个子测试）
+   - `TestRedisEvaluator_determineInstanceStatus`：状态聚合（5 个子测试）
+   - `TestRedisEvaluator_createAlert`：告警创建（2 个子测试）
+   - `TestRedisEvaluator_Evaluate_InPlaceUpdate`：原地更新验证
+
+**测试覆盖率详情**：
+| 方法 | 覆盖率 |
+|------|--------|
+| NewRedisEvaluator | 100.0% |
+| EvaluateAll | 100.0% |
+| Evaluate | 100.0% |
+| evaluateConnectionUsage | 100.0% |
+| evaluateMasterLinkStatus | 100.0% |
+| evaluateReplicationLag | 100.0% |
+| determineInstanceStatus | 100.0% |
+| createAlert | 100.0% |
+| formatValue | 100.0% |
+| generateAlertMessage | 100.0% |
+| getThresholds | 100.0% |
+
+**评估规则实现**：
+| 指标 | 警告阈值 | 严重阈值 | 适用节点 |
+|------|----------|----------|----------|
+| 连接使用率 | >=70% | >=90% | 所有节点 |
+| 复制延迟 | >=1MB | >=10MB | 仅 Slave |
+| 主从链接状态 | - | 断开=严重 | 仅 Slave |
+
+**关键设计决策**：
+- 完全参照 MySQL 评估器（`mysql_evaluator.go`）的实现模式
+- 评估特定业务指标（不是所有原始指标）
+- 原地更新 `result.Status` 和 `result.Alerts`
+- 状态聚合：Critical > Warning > Normal
+- 阈值比较使用 `>=`（与 MySQL 评估器一致）
+- Slave 专属指标（复制延迟、链接状态）仅对 Slave 节点评估
+- 格式化值支持：百分比、字节（B/KB/MB/GB）、链接状态
+
+---
+
 ## 待完成步骤
 
 ### 阶段一：数据模型（步骤 1-4）
@@ -423,7 +526,7 @@
 
 ### 阶段三：评估与编排（步骤 9-11）
 
-- [ ] 步骤 9：实现 Redis 状态评估器
+- [x] 步骤 9：实现 Redis 状态评估器（已完成）
 - [ ] 步骤 10：实现 Redis 巡检编排服务
 - [ ] 步骤 11：编写 Redis 巡检服务集成测试
 
@@ -454,3 +557,4 @@
 | 2025-12-17 | 步骤 6 | 实现 Redis 实例发现完成（9 个方法、14 个测试用例、覆盖率 93.3%） |
 | 2025-12-17 | 步骤 7 | 实现 Redis 指标采集完成（6 个方法、10 个测试用例、覆盖率 87.9%） |
 | 2025-12-18 | 步骤 8 | 编写 Redis 采集器单元测试完成（25 个测试、覆盖率 94.8%），阶段二全部完成 |
+| 2025-12-18 | 步骤 9 | 实现 Redis 状态评估器完成（11 个方法、29 个测试、覆盖率 100%），阶段三开始 |
