@@ -716,11 +716,13 @@ type CombinedTemplateData struct {
 	MySQLInstances    []*MySQLInstanceData
 	MySQLAlerts       []*MySQLAlertData
 	// Redis data
-	HasRedis          bool
-	RedisSummary      *model.RedisInspectionSummary
-	RedisAlertSummary *model.RedisAlertSummary
-	RedisInstances    []*RedisInstanceData
-	RedisAlerts       []*RedisAlertData
+	HasRedis                 bool
+	HasMultipleRedisClusters bool                      // Flag for multi-cluster display
+	RedisClusters            []*RedisClusterData       // Cluster data for multi-cluster scenario
+	RedisSummary             *model.RedisInspectionSummary
+	RedisAlertSummary        *model.RedisAlertSummary
+	RedisInstances           []*RedisInstanceData
+	RedisAlerts              []*RedisAlertData
 	// Common
 	Version     string
 	GeneratedAt string
@@ -843,14 +845,25 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 		data.RedisSummary = redisResult.Summary
 		data.RedisAlertSummary = redisResult.AlertSummary
 
-		// Convert Redis instances
-		redisInstances := make([]*RedisInstanceData, 0, len(redisResult.Results))
-		for _, r := range redisResult.Results {
-			redisInstances = append(redisInstances, w.convertRedisInstanceData(r))
+		// Check for multiple clusters
+		if redisResult.HasMultipleClusters() {
+			data.HasMultipleRedisClusters = true
+			// Convert clusters
+			redisClusters := make([]*RedisClusterData, 0, len(redisResult.Clusters))
+			for _, cluster := range redisResult.Clusters {
+				redisClusters = append(redisClusters, w.convertRedisClusterData(cluster))
+			}
+			data.RedisClusters = redisClusters
+		} else {
+			// Single cluster: use flat display
+			redisInstances := make([]*RedisInstanceData, 0, len(redisResult.Results))
+			for _, r := range redisResult.Results {
+				redisInstances = append(redisInstances, w.convertRedisInstanceData(r))
+			}
+			data.RedisInstances = redisInstances
 		}
-		data.RedisInstances = redisInstances
 
-		// Convert Redis alerts
+		// Convert Redis alerts (always needed for combined alerts section)
 		data.RedisAlerts = w.convertRedisAlerts(redisResult.Alerts)
 	}
 
@@ -906,6 +919,16 @@ type RedisAlertData struct {
 	Level             string
 	LevelClass        string
 	Message           string
+}
+
+// RedisClusterData represents a Redis cluster (grouped by network segment) for template.
+type RedisClusterData struct {
+	ID           string // Network segment, e.g., "192.18.102"
+	Name         string // Display name, e.g., "Redis 集群 - 192.18.102"
+	Summary      *model.RedisInspectionSummary
+	AlertSummary *model.RedisAlertSummary
+	Instances    []*RedisInstanceData
+	Alerts       []*RedisAlertData
 }
 
 // ============================================================================
@@ -1162,4 +1185,29 @@ func (w *Writer) convertRedisAlerts(alerts []*model.RedisAlert) []*RedisAlertDat
 		})
 	}
 	return result
+}
+
+// convertRedisClusterData converts a RedisCluster to RedisClusterData for template rendering.
+func (w *Writer) convertRedisClusterData(cluster *model.RedisCluster) *RedisClusterData {
+	if cluster == nil {
+		return nil
+	}
+
+	// Convert instances
+	instances := make([]*RedisInstanceData, 0, len(cluster.Instances))
+	for _, r := range cluster.Instances {
+		instances = append(instances, w.convertRedisInstanceData(r))
+	}
+
+	// Convert alerts
+	alerts := w.convertRedisAlerts(cluster.Alerts)
+
+	return &RedisClusterData{
+		ID:           cluster.ID,
+		Name:         cluster.Name,
+		Summary:      cluster.Summary,
+		AlertSummary: cluster.AlertSummary,
+		Instances:    instances,
+		Alerts:       alerts,
+	}
 }

@@ -1,8 +1,10 @@
 package excel
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -2180,4 +2182,282 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 		},
 		Version: "1.0.0-test",
 	}
+}
+
+// ============================================================================
+// Redis Multi-Cluster Tests (陕西项目场景)
+// ============================================================================
+
+func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
+	// Create Excel file with host data first
+	w := NewWriter(time.UTC)
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create a dummy summary sheet (simulating combined report)
+	f.NewSheet(sheetSummary)
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := t.TempDir()
+	existingPath := filepath.Join(tmpDir, "multi_cluster_test.xlsx")
+	if err := f.SaveAs(existingPath); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Create multi-cluster results
+	result := createTestRedisMultiClusterResults()
+
+	// Append Redis inspection (should create separate sheets for each cluster)
+	err := w.AppendRedisInspection(result, existingPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection failed: %v", err)
+	}
+
+	// Verify by opening the file
+	f2, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		t.Fatalf("failed to open result file: %v", err)
+	}
+	defer f2.Close()
+
+	sheets := f2.GetSheetList()
+
+	// Should have separate sheets for each cluster
+	hasCluster1 := false
+	hasCluster2 := false
+	hasAlertsSheet := false
+	for _, sheet := range sheets {
+		if sheet == "Redis-192.18.102" {
+			hasCluster1 = true
+		}
+		if sheet == "Redis-192.18.107" {
+			hasCluster2 = true
+		}
+		if sheet == sheetRedisAlerts {
+			hasAlertsSheet = true
+		}
+	}
+
+	if !hasCluster1 {
+		t.Error("expected sheet 'Redis-192.18.102' for cluster 1")
+	}
+	if !hasCluster2 {
+		t.Error("expected sheet 'Redis-192.18.107' for cluster 2")
+	}
+	if !hasAlertsSheet {
+		t.Error("expected Redis alerts sheet")
+	}
+}
+
+func TestWriter_AppendRedisInspection_SingleCluster_KeepsOriginalSheet(t *testing.T) {
+	w := NewWriter(time.UTC)
+	f := excelize.NewFile()
+	defer f.Close()
+
+	f.NewSheet(sheetSummary)
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := t.TempDir()
+	existingPath := filepath.Join(tmpDir, "single_cluster_test.xlsx")
+	if err := f.SaveAs(existingPath); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Create single-cluster results (all same network segment)
+	result := createTestRedisInspectionResults()
+
+	err := w.AppendRedisInspection(result, existingPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection failed: %v", err)
+	}
+
+	f2, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		t.Fatalf("failed to open result file: %v", err)
+	}
+	defer f2.Close()
+
+	sheets := f2.GetSheetList()
+
+	// Should have single "Redis 巡检" sheet, not per-cluster sheets
+	hasRedisSheet := false
+	hasClusterSheet := false
+	for _, sheet := range sheets {
+		if sheet == sheetRedis {
+			hasRedisSheet = true
+		}
+		if strings.HasPrefix(sheet, "Redis-") {
+			hasClusterSheet = true
+		}
+	}
+
+	if !hasRedisSheet {
+		t.Error("expected single 'Redis 巡检' sheet for single cluster")
+	}
+	if hasClusterSheet {
+		t.Error("should not have per-cluster sheets for single cluster")
+	}
+}
+
+func TestWriter_RedisClusterSheet_InstanceCount(t *testing.T) {
+	w := NewWriter(time.UTC)
+	f := excelize.NewFile()
+	defer f.Close()
+
+	f.NewSheet(sheetSummary)
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := t.TempDir()
+	existingPath := filepath.Join(tmpDir, "cluster_instance_count.xlsx")
+	if err := f.SaveAs(existingPath); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	result := createTestRedisMultiClusterResults()
+	err := w.AppendRedisInspection(result, existingPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection failed: %v", err)
+	}
+
+	f2, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		t.Fatalf("failed to open result file: %v", err)
+	}
+	defer f2.Close()
+
+	// Count rows in cluster 1 sheet (should be 6 instances + 1 header = 7 rows)
+	rows, err := f2.GetRows("Redis-192.18.102")
+	if err != nil {
+		t.Fatalf("failed to get rows from cluster 1 sheet: %v", err)
+	}
+	// 1 header row + 6 data rows = 7
+	if len(rows) != 7 {
+		t.Errorf("cluster 1 sheet should have 7 rows (1 header + 6 instances), got %d", len(rows))
+	}
+
+	// Count rows in cluster 2 sheet (should be 6 instances + 1 header = 7 rows)
+	rows2, err := f2.GetRows("Redis-192.18.107")
+	if err != nil {
+		t.Fatalf("failed to get rows from cluster 2 sheet: %v", err)
+	}
+	if len(rows2) != 7 {
+		t.Errorf("cluster 2 sheet should have 7 rows (1 header + 6 instances), got %d", len(rows2))
+	}
+}
+
+// createTestRedisMultiClusterResults creates test data with 2 clusters (陕西项目场景)
+// Cluster 1: 192.18.102.x (6 instances: 3 masters + 3 slaves)
+// Cluster 2: 192.18.107.x (6 instances: 3 masters + 3 slaves)
+func createTestRedisMultiClusterResults() *model.RedisInspectionResults {
+	results := &model.RedisInspectionResults{
+		InspectionTime: time.Now(),
+		Results:        make([]*model.RedisInspectionResult, 0, 12),
+	}
+
+	// Cluster 1: 192.18.102.x - 3 masters, 3 slaves
+	for i := 2; i <= 4; i++ {
+		ip := fmt.Sprintf("192.18.102.%d", i)
+		// Master
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7000", ip),
+				IP:              ip,
+				Port:            7000,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleMaster,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MaxClients:       10000,
+			ConnectedClients: 100,
+			ConnectedSlaves:  1,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+		// Slave
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7001", ip),
+				IP:              ip,
+				Port:            7001,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleSlave,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MasterLinkStatus: true,
+			MasterPort:       7000,
+			MaxClients:       10000,
+			ConnectedClients: 50,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+	}
+
+	// Cluster 2: 192.18.107.x - 3 masters, 3 slaves
+	for i := 5; i <= 7; i++ {
+		ip := fmt.Sprintf("192.18.107.%d", i)
+		// Master
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7000", ip),
+				IP:              ip,
+				Port:            7000,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleMaster,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MaxClients:       10000,
+			ConnectedClients: 200,
+			ConnectedSlaves:  1,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+		// Slave
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7001", ip),
+				IP:              ip,
+				Port:            7001,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleSlave,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MasterLinkStatus: true,
+			MasterPort:       7000,
+			MaxClients:       10000,
+			ConnectedClients: 100,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+	}
+
+	// Call GroupByClusters to populate Clusters field
+	results.GroupByClusters()
+
+	results.Summary = &model.RedisInspectionSummary{
+		TotalInstances:    12,
+		NormalInstances:   12,
+		WarningInstances:  0,
+		CriticalInstances: 0,
+		FailedInstances:   0,
+	}
+	results.AlertSummary = &model.RedisAlertSummary{
+		TotalAlerts:   0,
+		WarningCount:  0,
+		CriticalCount: 0,
+	}
+	results.Version = "1.0.0-test"
+
+	return results
 }

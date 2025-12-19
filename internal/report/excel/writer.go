@@ -1380,6 +1380,7 @@ func (w *Writer) createRedisAlertsSheet(f *excelize.File, result *model.RedisIns
 
 // AppendRedisInspection appends Redis inspection data to an existing Excel file.
 // This method opens an existing file and adds Redis-specific worksheets.
+// If multiple clusters are detected, it creates separate sheets for each cluster.
 func (w *Writer) AppendRedisInspection(result *model.RedisInspectionResults, existingPath string) error {
 	if result == nil {
 		return fmt.Errorf("Redis inspection result is nil")
@@ -1397,19 +1398,164 @@ func (w *Writer) AppendRedisInspection(result *model.RedisInspectionResults, exi
 	}
 	defer f.Close()
 
-	// Add Redis inspection worksheet (reuse existing method)
-	if err := w.createRedisSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create Redis sheet: %w", err)
-	}
-
-	// Add Redis alerts worksheet (reuse existing method)
-	if err := w.createRedisAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
+	// Check if multiple clusters exist
+	if result.HasMultipleClusters() {
+		// Create separate sheet for each cluster
+		for _, cluster := range result.Clusters {
+			if err := w.createRedisClusterSheet(f, cluster, result.InspectionTime); err != nil {
+				return fmt.Errorf("failed to create Redis cluster sheet for %s: %w", cluster.ID, err)
+			}
+		}
+		// Create a combined alerts sheet for all clusters
+		if err := w.createRedisAlertsSheet(f, result); err != nil {
+			return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
+		}
+	} else {
+		// Single cluster: use original flat display
+		if err := w.createRedisSheet(f, result); err != nil {
+			return fmt.Errorf("failed to create Redis sheet: %w", err)
+		}
+		if err := w.createRedisAlertsSheet(f, result); err != nil {
+			return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
+		}
 	}
 
 	// Save the file
 	if err := f.Save(); err != nil {
 		return fmt.Errorf("failed to save file: %w", err)
+	}
+
+	return nil
+}
+
+// createRedisClusterSheet creates a Redis inspection worksheet for a specific cluster.
+// Sheet name format: "Redis-{网段ID}", e.g., "Redis-192.18.102"
+func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisCluster, inspectionTime time.Time) error {
+	if cluster == nil {
+		return fmt.Errorf("cluster is nil")
+	}
+
+	// Sheet name: Redis-{网段}
+	sheetName := fmt.Sprintf("Redis-%s", cluster.ID)
+
+	// Create sheet
+	_, err := f.NewSheet(sheetName)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers (same as createRedisSheet)
+	headers := []string{
+		"巡检时间", "IP地址", "端口", "应用类型", "Redis版本",
+		"是否普通用户启动", "连接状态", "集群模式", "主从链接状态",
+		"节点角色", "Master端口", "复制延迟", "最大连接数", "整体状态",
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 18, "B": 15, "C": 8, "D": 8, "E": 12,
+		"F": 15, "G": 10, "H": 10, "I": 12,
+		"J": 10, "K": 10, "L": 12, "M": 10, "N": 10,
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetName, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetName, cell, header)
+		f.SetCellStyle(sheetName, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetName, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetName, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Write Redis instance data for this cluster
+	for i, r := range cluster.Instances {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		// A: 巡检时间
+		f.SetCellValue(sheetName, "A"+rowStr, inspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
+		// B: IP地址
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "B"+rowStr, r.Instance.IP)
+		}
+		// C: 端口
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "C"+rowStr, r.Instance.Port)
+		}
+		// D: 应用类型
+		f.SetCellValue(sheetName, "D"+rowStr, "Redis")
+		// E: Redis版本
+		if r.Instance != nil && r.Instance.Version != "" {
+			f.SetCellValue(sheetName, "E"+rowStr, r.Instance.Version)
+		} else {
+			f.SetCellValue(sheetName, "E"+rowStr, "N/A")
+		}
+		// F: 是否普通用户启动
+		f.SetCellValue(sheetName, "F"+rowStr, r.NonRootUser)
+		// G: 连接状态
+		f.SetCellValue(sheetName, "G"+rowStr, redisBoolText(r.ConnectionStatus))
+		// H: 集群模式
+		f.SetCellValue(sheetName, "H"+rowStr, redisBoolText(r.ClusterEnabled))
+		// I: 主从链接状态
+		f.SetCellValue(sheetName, "I"+rowStr, w.getMasterLinkStatusText(r))
+		// J: 节点角色
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "J"+rowStr, redisRoleText(r.Instance.Role))
+		} else {
+			f.SetCellValue(sheetName, "J"+rowStr, "未知")
+		}
+		// K: Master端口
+		f.SetCellValue(sheetName, "K"+rowStr, w.getMasterPortText(r))
+		// L: 复制延迟
+		f.SetCellValue(sheetName, "L"+rowStr, w.getReplicationLagText(r))
+		// M: 最大连接数
+		f.SetCellValue(sheetName, "M"+rowStr, r.MaxClients)
+		// N: 整体状态
+		f.SetCellValue(sheetName, "N"+rowStr, redisStatusText(r.Status))
+
+		// Apply conditional format to status column
+		statusCell := "N" + rowStr
+		switch r.Status {
+		case model.RedisStatusCritical:
+			f.SetCellStyle(sheetName, statusCell, statusCell, criticalStyle)
+		case model.RedisStatusWarning:
+			f.SetCellStyle(sheetName, statusCell, statusCell, warningStyle)
+		case model.RedisStatusNormal:
+			f.SetCellStyle(sheetName, statusCell, statusCell, normalStyle)
+		}
 	}
 
 	return nil

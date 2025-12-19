@@ -3,6 +3,8 @@ package model
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -411,6 +413,9 @@ type RedisInspectionResults struct {
 	Alerts       []*RedisAlert      `json:"alerts"`        // 所有告警列表
 	AlertSummary *RedisAlertSummary `json:"alert_summary"` // 告警摘要统计
 
+	// 集群分组（多集群场景）
+	Clusters []*RedisCluster `json:"clusters,omitempty"` // 按网段分组的集群列表
+
 	// 元数据
 	Version string `json:"version,omitempty"` // 工具版本号
 }
@@ -500,6 +505,63 @@ func (r *RedisInspectionResults) HasAlerts() bool {
 	return len(r.Alerts) > 0
 }
 
+// GroupByClusters groups the inspection results by network segment.
+// Populates the Clusters field and returns the clusters.
+// Each cluster contains instances from the same network segment (first 3 octets of IP).
+func (r *RedisInspectionResults) GroupByClusters() []*RedisCluster {
+	if len(r.Results) == 0 {
+		return nil
+	}
+
+	clusterMap := make(map[string]*RedisCluster)
+
+	for _, result := range r.Results {
+		if result == nil || result.Instance == nil {
+			continue
+		}
+
+		// 优先使用 IP 字段
+		segment := GetNetworkSegment(result.Instance.IP)
+
+		// 回退：如果 IP 为空，尝试从 Address 提取
+		if segment == "" && result.Instance.Address != "" {
+			segment = GetNetworkSegment(result.Instance.Address)
+		}
+
+		// 最终回退：标记为 unknown
+		if segment == "" {
+			segment = "unknown"
+		}
+
+		cluster, exists := clusterMap[segment]
+		if !exists {
+			cluster = NewRedisCluster(segment)
+			clusterMap[segment] = cluster
+		}
+		cluster.AddResult(result)
+	}
+
+	// Convert map to sorted slice
+	clusters := make([]*RedisCluster, 0, len(clusterMap))
+	for _, cluster := range clusterMap {
+		cluster.Finalize()
+		clusters = append(clusters, cluster)
+	}
+
+	// Sort by cluster ID for consistent ordering
+	sort.Slice(clusters, func(i, j int) bool {
+		return clusters[i].ID < clusters[j].ID
+	})
+
+	r.Clusters = clusters
+	return clusters
+}
+
+// HasMultipleClusters returns true if there are 2+ distinct network segments.
+func (r *RedisInspectionResults) HasMultipleClusters() bool {
+	return len(r.Clusters) > 1
+}
+
 // =============================================================================
 // Redis Metric Definition
 // =============================================================================
@@ -533,4 +595,82 @@ func (m *RedisMetricDefinition) GetDisplayName() string {
 // This struct is used by config.LoadRedisMetrics to parse the YAML configuration.
 type RedisMetricsConfig struct {
 	Metrics []*RedisMetricDefinition `yaml:"redis_metrics" json:"redis_metrics"` // Redis metric definitions list
+}
+
+// =============================================================================
+// Redis 集群分组
+// =============================================================================
+
+// GetNetworkSegment extracts the first 3 octets from an IP address.
+// Example: "192.18.102.2" -> "192.18.102"
+// Also handles "IP:Port" format: "192.18.102.2:7000" -> "192.18.102"
+// Returns empty string if IP is invalid.
+func GetNetworkSegment(ip string) string {
+	// Remove port number if present (handle IP:Port format)
+	if strings.Contains(ip, ":") {
+		ip = strings.Split(ip, ":")[0]
+	}
+
+	parts := strings.Split(ip, ".")
+	if len(parts) < 3 {
+		return ""
+	}
+	return strings.Join(parts[:3], ".")
+}
+
+// RedisCluster represents a group of Redis instances in the same network segment.
+type RedisCluster struct {
+	ID           string                   `json:"id"`                      // Network segment, e.g., "192.18.102"
+	Name         string                   `json:"name"`                    // Display name, e.g., "Redis 集群 - 192.18.102"
+	Instances    []*RedisInspectionResult `json:"instances"`               // Instances in this cluster
+	Alerts       []*RedisAlert            `json:"alerts,omitempty"`        // All alerts in this cluster
+	Summary      *RedisInspectionSummary  `json:"summary,omitempty"`       // Per-cluster summary
+	AlertSummary *RedisAlertSummary       `json:"alert_summary,omitempty"` // Per-cluster alert summary
+}
+
+// NewRedisCluster creates a new RedisCluster with the given network segment ID.
+func NewRedisCluster(id string) *RedisCluster {
+	return &RedisCluster{
+		ID:        id,
+		Name:      fmt.Sprintf("Redis 集群 - %s", id),
+		Instances: make([]*RedisInspectionResult, 0),
+		Alerts:    make([]*RedisAlert, 0),
+	}
+}
+
+// AddResult adds an instance result to the cluster.
+func (c *RedisCluster) AddResult(result *RedisInspectionResult) {
+	if result == nil {
+		return
+	}
+	c.Instances = append(c.Instances, result)
+	c.Alerts = append(c.Alerts, result.Alerts...)
+}
+
+// Finalize calculates summary statistics for the cluster.
+func (c *RedisCluster) Finalize() {
+	c.Summary = NewRedisInspectionSummary(c.Instances)
+	c.AlertSummary = NewRedisAlertSummary(c.Alerts)
+}
+
+// GetMasterCount returns the number of master nodes in this cluster.
+func (c *RedisCluster) GetMasterCount() int {
+	count := 0
+	for _, inst := range c.Instances {
+		if inst != nil && inst.Instance != nil && inst.Instance.Role == RedisRoleMaster {
+			count++
+		}
+	}
+	return count
+}
+
+// GetSlaveCount returns the number of slave nodes in this cluster.
+func (c *RedisCluster) GetSlaveCount() int {
+	count := 0
+	for _, inst := range c.Instances {
+		if inst != nil && inst.Instance != nil && inst.Instance.Role == RedisRoleSlave {
+			count++
+		}
+	}
+	return count
 }

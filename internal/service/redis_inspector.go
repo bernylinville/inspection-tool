@@ -172,8 +172,13 @@ func (i *RedisInspector) Inspect(ctx context.Context) (*model.RedisInspectionRes
 	endTime := time.Now().In(i.timezone)
 	result.Finalize(endTime)
 
+	// Step 10: Group instances by network segment (for multi-cluster display)
+	clusters := result.GroupByClusters()
+
 	i.logger.Info().
 		Int("total_instances", result.Summary.TotalInstances).
+		Int("cluster_count", len(clusters)).
+		Bool("has_multiple_clusters", result.HasMultipleClusters()).
 		Int("normal_instances", result.Summary.NormalInstances).
 		Int("warning_instances", result.Summary.WarningInstances).
 		Int("critical_instances", result.Summary.CriticalInstances).
@@ -181,6 +186,18 @@ func (i *RedisInspector) Inspect(ctx context.Context) (*model.RedisInspectionRes
 		Int("total_alerts", result.AlertSummary.TotalAlerts).
 		Dur("duration", result.Duration).
 		Msg("Redis inspection completed")
+
+	// Log detailed cluster information for debugging
+	for idx, cluster := range clusters {
+		i.logger.Info().
+			Int("cluster_index", idx).
+			Str("cluster_id", cluster.ID).
+			Str("cluster_name", cluster.Name).
+			Int("instance_count", len(cluster.Instances)).
+			Int("master_count", cluster.GetMasterCount()).
+			Int("slave_count", cluster.GetSlaveCount()).
+			Msg("cluster details")
+	}
 
 	return result, nil
 }
