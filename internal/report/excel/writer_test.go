@@ -1,8 +1,10 @@
 package excel
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -1225,4 +1227,1237 @@ func TestFormatMySQLThreshold(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ============================================================================
+// Redis Report Tests
+// ============================================================================
+
+func TestWriter_WriteRedisInspection_NilResult(t *testing.T) {
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(nil, "test.xlsx")
+	if err == nil {
+		t.Error("WriteRedisInspection() with nil result should return error")
+	}
+}
+
+func TestWriter_WriteRedisInspection_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		t.Error("Output file was not created")
+	}
+
+	// Open and verify Excel file
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify Redis sheet exists
+	sheets := f.GetSheetList()
+	found := false
+	for _, s := range sheets {
+		if s == sheetRedis {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Sheet %q not found in Excel file", sheetRedis)
+	}
+
+	// Verify default Sheet1 was removed
+	for _, s := range sheets {
+		if s == "Sheet1" {
+			t.Error("Default Sheet1 should have been removed")
+		}
+	}
+}
+
+func TestWriter_WriteRedisInspection_AddsXlsxExtension(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report") // No extension
+
+	result := createTestRedisInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	// Verify file with .xlsx extension exists
+	expectedPath := outputPath + ".xlsx"
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Error("Output file should have .xlsx extension added")
+	}
+}
+
+func TestWriter_RedisSheet_Headers(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify all 14 headers
+	expectedHeaders := []struct {
+		cell   string
+		header string
+	}{
+		{"A1", "巡检时间"},
+		{"B1", "IP地址"},
+		{"C1", "端口"},
+		{"D1", "应用类型"},
+		{"E1", "Redis版本"},
+		{"F1", "是否普通用户启动"},
+		{"G1", "连接状态"},
+		{"H1", "集群模式"},
+		{"I1", "主从链接状态"},
+		{"J1", "节点角色"},
+		{"K1", "Master端口"},
+		{"L1", "复制延迟"},
+		{"M1", "最大连接数"},
+		{"N1", "整体状态"},
+	}
+
+	for _, eh := range expectedHeaders {
+		value, _ := f.GetCellValue(sheetRedis, eh.cell)
+		if value != eh.header {
+			t.Errorf("Header %s = %q, want %q", eh.cell, value, eh.header)
+		}
+	}
+}
+
+func TestWriter_RedisSheet_DataMapping_Master(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify first row data (row 2, master node)
+	tests := []struct {
+		cell     string
+		expected string
+	}{
+		{"B2", "192.18.102.2"},  // IP地址
+		{"C2", "7000"},         // 端口
+		{"D2", "Redis"},        // 应用类型
+		{"E2", "6.2.6"},        // Redis版本
+		{"F2", "N/A"},          // 是否普通用户启动
+		{"G2", "是"},           // 连接状态
+		{"H2", "是"},           // 集群模式
+		{"I2", "N/A"},          // 主从链接状态 (master shows N/A)
+		{"J2", "主"},           // 节点角色
+		{"K2", "N/A"},          // Master端口 (master shows N/A)
+		{"L2", "N/A"},          // 复制延迟 (master shows N/A)
+		{"M2", "10000"},        // 最大连接数
+		{"N2", "正常"},          // 整体状态
+	}
+
+	for _, tt := range tests {
+		value, _ := f.GetCellValue(sheetRedis, tt.cell)
+		if value != tt.expected {
+			t.Errorf("Cell %s = %q, want %q", tt.cell, value, tt.expected)
+		}
+	}
+}
+
+func TestWriter_RedisSheet_DataMapping_Slave(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify slave row data (row 3)
+	tests := []struct {
+		cell     string
+		expected string
+	}{
+		{"B3", "192.18.102.2"},  // IP地址
+		{"C3", "7001"},         // 端口
+		{"I3", "是"},           // 主从链接状态 (slave shows status)
+		{"J3", "从"},           // 节点角色
+		{"K3", "7000"},         // Master端口
+		{"L3", "0 B"},          // 复制延迟
+		{"N3", "正常"},          // 整体状态
+	}
+
+	for _, tt := range tests {
+		value, _ := f.GetCellValue(sheetRedis, tt.cell)
+		if value != tt.expected {
+			t.Errorf("Cell %s = %q, want %q", tt.cell, value, tt.expected)
+		}
+	}
+}
+
+func TestWriter_RedisSheet_ConditionalFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify status column values
+	expectedStatuses := []struct {
+		cell   string
+		status string
+	}{
+		{"N2", "正常"},
+		{"N3", "正常"},
+		{"N4", "正常"},
+		{"N5", "警告"},
+		{"N6", "警告"},
+		{"N7", "严重"},
+	}
+
+	for _, es := range expectedStatuses {
+		value, _ := f.GetCellValue(sheetRedis, es.cell)
+		if value != es.status {
+			t.Errorf("Status at %s = %q, want %q", es.cell, value, es.status)
+		}
+	}
+}
+
+// ============================================================================
+// Redis Alerts Sheet Tests
+// ============================================================================
+
+func TestWriter_WriteRedisInspection_AlertsSheetExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	// Open and verify Excel file
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify Redis alerts sheet exists
+	sheets := f.GetSheetList()
+	found := false
+	for _, s := range sheets {
+		if s == sheetRedisAlerts {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Sheet %q not found in Excel file, got sheets: %v", sheetRedisAlerts, sheets)
+	}
+}
+
+func TestWriter_RedisAlertsSheet_Headers(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify all 7 headers
+	expectedHeaders := []struct {
+		cell   string
+		header string
+	}{
+		{"A1", "实例地址"},
+		{"B1", "告警级别"},
+		{"C1", "指标名称"},
+		{"D1", "当前值"},
+		{"E1", "警告阈值"},
+		{"F1", "严重阈值"},
+		{"G1", "告警消息"},
+	}
+
+	for _, eh := range expectedHeaders {
+		value, _ := f.GetCellValue(sheetRedisAlerts, eh.cell)
+		if value != eh.header {
+			t.Errorf("Header %s = %q, want %q", eh.cell, value, eh.header)
+		}
+	}
+}
+
+func TestWriter_RedisAlertsSheet_SortBySeverity(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	result := createTestRedisInspectionResults()
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Verify alerts are sorted by severity (critical first)
+	// Row 2: Critical alert
+	level2, _ := f.GetCellValue(sheetRedisAlerts, "B2")
+	if level2 != "严重" {
+		t.Errorf("First alert level = %q, want %q (critical should be first)", level2, "严重")
+	}
+
+	// Row 3 and 4: Warning alerts
+	level3, _ := f.GetCellValue(sheetRedisAlerts, "B3")
+	if level3 != "警告" {
+		t.Errorf("Second alert level = %q, want %q", level3, "警告")
+	}
+}
+
+func TestWriter_RedisAlertsSheet_EmptyAlerts(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
+
+	// Create result with no alerts
+	tz, _ := time.LoadLocation("Asia/Shanghai")
+	result := &model.RedisInspectionResults{
+		InspectionTime: time.Now().In(tz),
+		Duration:       time.Second,
+		Summary: &model.RedisInspectionSummary{
+			TotalInstances:  1,
+			NormalInstances: 1,
+		},
+		Results: []*model.RedisInspectionResult{
+			{
+				Instance: &model.RedisInstance{
+					Address: "192.18.102.2:7000",
+					IP:      "192.18.102.2",
+					Port:    7000,
+					Role:    model.RedisRoleMaster,
+				},
+				Status: model.RedisStatusNormal,
+			},
+		},
+		Alerts:       []*model.RedisAlert{}, // Empty alerts
+		AlertSummary: &model.RedisAlertSummary{},
+	}
+
+	w := NewWriter(nil)
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection() error = %v", err)
+	}
+
+	// Verify file exists and sheet is created (with only headers)
+	f, err := excelize.OpenFile(outputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	// Sheet should exist
+	sheets := f.GetSheetList()
+	found := false
+	for _, s := range sheets {
+		if s == sheetRedisAlerts {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Redis alerts sheet should exist even with empty alerts")
+	}
+
+	// Headers should be present
+	header, _ := f.GetCellValue(sheetRedisAlerts, "A1")
+	if header != "实例地址" {
+		t.Errorf("Header A1 = %q, want %q", header, "实例地址")
+	}
+
+	// Row 2 should be empty (no data)
+	row2, _ := f.GetCellValue(sheetRedisAlerts, "A2")
+	if row2 != "" {
+		t.Errorf("Row 2 should be empty for empty alerts, got %q", row2)
+	}
+}
+
+// ============================================================================
+// Redis Helper Function Tests
+// ============================================================================
+
+func TestRedisStatusText(t *testing.T) {
+	tests := []struct {
+		status model.RedisInstanceStatus
+		want   string
+	}{
+		{model.RedisStatusNormal, "正常"},
+		{model.RedisStatusWarning, "警告"},
+		{model.RedisStatusCritical, "严重"},
+		{model.RedisStatusFailed, "失败"},
+		{model.RedisInstanceStatus("unknown"), "未知"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			if got := redisStatusText(tt.status); got != tt.want {
+				t.Errorf("redisStatusText(%v) = %q, want %q", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRedisRoleText(t *testing.T) {
+	tests := []struct {
+		role model.RedisRole
+		want string
+	}{
+		{model.RedisRoleMaster, "主"},
+		{model.RedisRoleSlave, "从"},
+		{model.RedisRoleUnknown, "未知"},
+		{model.RedisRole("other"), "未知"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			if got := redisRoleText(tt.role); got != tt.want {
+				t.Errorf("redisRoleText(%v) = %q, want %q", tt.role, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRedisBoolText(t *testing.T) {
+	tests := []struct {
+		value bool
+		want  string
+	}{
+		{true, "是"},
+		{false, "否"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := redisBoolText(tt.value); got != tt.want {
+				t.Errorf("redisBoolText(%v) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatReplicationLag(t *testing.T) {
+	tests := []struct {
+		name string
+		lag  int64
+		want string
+	}{
+		{"zero", 0, "0 B"},
+		{"negative", -100, "0 B"},
+		{"bytes", 500, "500 B"},
+		{"kilobytes", 2048, "2.00 KB"},
+		{"megabytes", 5242880, "5.00 MB"},
+		{"gigabytes", 2147483648, "2.00 GB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatReplicationLag(tt.lag); got != tt.want {
+				t.Errorf("formatReplicationLag(%d) = %q, want %q", tt.lag, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatRedisThreshold(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      float64
+		metricName string
+		want       string
+	}{
+		{
+			name:       "connection_usage percentage",
+			value:      70.0,
+			metricName: "connection_usage",
+			want:       "70.0%",
+		},
+		{
+			name:       "replication_lag bytes",
+			value:      1048576,
+			metricName: "replication_lag",
+			want:       "1.00 MB",
+		},
+		{
+			name:       "master_link_status up",
+			value:      1.0,
+			metricName: "master_link_status",
+			want:       "正常",
+		},
+		{
+			name:       "master_link_status down",
+			value:      0.0,
+			metricName: "master_link_status",
+			want:       "断开",
+		},
+		{
+			name:       "default format",
+			value:      1.234,
+			metricName: "unknown_metric",
+			want:       "1.23",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatRedisThreshold(tt.value, tt.metricName); got != tt.want {
+				t.Errorf("formatRedisThreshold(%v, %q) = %q, want %q", tt.value, tt.metricName, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetMasterLinkStatusText(t *testing.T) {
+	w := NewWriter(nil)
+
+	tests := []struct {
+		name   string
+		result *model.RedisInspectionResult
+		want   string
+	}{
+		{
+			name: "master node returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance: &model.RedisInstance{Role: model.RedisRoleMaster},
+			},
+			want: "N/A",
+		},
+		{
+			name: "slave link up",
+			result: &model.RedisInspectionResult{
+				Instance:         &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterLinkStatus: true,
+			},
+			want: "是",
+		},
+		{
+			name: "slave link down",
+			result: &model.RedisInspectionResult{
+				Instance:         &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterLinkStatus: false,
+			},
+			want: "否",
+		},
+		{
+			name: "nil instance returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance: nil,
+			},
+			want: "N/A",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := w.getMasterLinkStatusText(tt.result); got != tt.want {
+				t.Errorf("getMasterLinkStatusText() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetMasterPortText(t *testing.T) {
+	w := NewWriter(nil)
+
+	tests := []struct {
+		name   string
+		result *model.RedisInspectionResult
+		want   string
+	}{
+		{
+			name: "master node returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance: &model.RedisInstance{Role: model.RedisRoleMaster},
+			},
+			want: "N/A",
+		},
+		{
+			name: "slave with master port",
+			result: &model.RedisInspectionResult{
+				Instance:   &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterPort: 7000,
+			},
+			want: "7000",
+		},
+		{
+			name: "slave with zero master port",
+			result: &model.RedisInspectionResult{
+				Instance:   &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterPort: 0,
+			},
+			want: "N/A",
+		},
+		{
+			name: "nil instance returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance: nil,
+			},
+			want: "N/A",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := w.getMasterPortText(tt.result); got != tt.want {
+				t.Errorf("getMasterPortText() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetReplicationLagText(t *testing.T) {
+	w := NewWriter(nil)
+
+	tests := []struct {
+		name   string
+		result *model.RedisInspectionResult
+		want   string
+	}{
+		{
+			name: "master node returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance: &model.RedisInstance{Role: model.RedisRoleMaster},
+			},
+			want: "N/A",
+		},
+		{
+			name: "slave with lag",
+			result: &model.RedisInspectionResult{
+				Instance:       &model.RedisInstance{Role: model.RedisRoleSlave},
+				ReplicationLag: 2097152, // 2MB
+			},
+			want: "2.00 MB",
+		},
+		{
+			name: "slave with zero lag",
+			result: &model.RedisInspectionResult{
+				Instance:       &model.RedisInstance{Role: model.RedisRoleSlave},
+				ReplicationLag: 0,
+			},
+			want: "0 B",
+		},
+		{
+			name: "nil instance returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance: nil,
+			},
+			want: "N/A",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := w.getReplicationLagText(tt.result); got != tt.want {
+				t.Errorf("getReplicationLagText() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Redis Append Tests
+// ============================================================================
+
+func TestWriter_AppendRedisInspection_NilResult(t *testing.T) {
+	w := NewWriter(nil)
+	err := w.AppendRedisInspection(nil, "test.xlsx")
+	if err == nil {
+		t.Error("AppendRedisInspection() with nil result should return error")
+	}
+}
+
+func TestWriter_AppendRedisInspection_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// First create a host inspection report
+	hostOutputPath := filepath.Join(tmpDir, "combined_report.xlsx")
+	hostResult := createTestInspectionResult()
+	w := NewWriter(nil)
+	err := w.Write(hostResult, hostOutputPath)
+	if err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	// Then append Redis inspection
+	redisResult := createTestRedisInspectionResults()
+	err = w.AppendRedisInspection(redisResult, hostOutputPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection() error = %v", err)
+	}
+
+	// Verify file contains both host and Redis sheets
+	f, err := excelize.OpenFile(hostOutputPath)
+	if err != nil {
+		t.Fatalf("Failed to open Excel file: %v", err)
+	}
+	defer f.Close()
+
+	sheets := f.GetSheetList()
+
+	// Should have host sheets
+	hostSheets := []string{sheetSummary, sheetDetail, sheetAlerts}
+	for _, hs := range hostSheets {
+		found := false
+		for _, s := range sheets {
+			if s == hs {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Host sheet %q not found after append", hs)
+		}
+	}
+
+	// Should have Redis sheets
+	redisSheets := []string{sheetRedis, sheetRedisAlerts}
+	for _, rs := range redisSheets {
+		found := false
+		for _, s := range sheets {
+			if s == rs {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Redis sheet %q not found after append", rs)
+		}
+	}
+}
+
+// Helper function to create test Redis inspection results
+func createTestRedisInspectionResults() *model.RedisInspectionResults {
+	tz, _ := time.LoadLocation("Asia/Shanghai")
+	inspectionTime := time.Date(2025, 12, 18, 10, 0, 0, 0, tz)
+
+	// Create alerts for warning and critical instances
+	warningAlert1 := &model.RedisAlert{
+		Address:           "192.18.102.3:7000",
+		MetricName:        "connection_usage",
+		MetricDisplayName: "连接使用率",
+		CurrentValue:      75.0,
+		FormattedValue:    "75.0%",
+		WarningThreshold:  70.0,
+		CriticalThreshold: 90.0,
+		Level:             model.AlertLevelWarning,
+		Message:           "连接使用率 75.0% 超过警告阈值 70.0%",
+	}
+
+	warningAlert2 := &model.RedisAlert{
+		Address:           "192.18.102.3:7001",
+		MetricName:        "connection_usage",
+		MetricDisplayName: "连接使用率",
+		CurrentValue:      80.0,
+		FormattedValue:    "80.0%",
+		WarningThreshold:  70.0,
+		CriticalThreshold: 90.0,
+		Level:             model.AlertLevelWarning,
+		Message:           "连接使用率 80.0% 超过警告阈值 70.0%",
+	}
+
+	criticalAlert := &model.RedisAlert{
+		Address:           "192.18.102.4:7001",
+		MetricName:        "master_link_status",
+		MetricDisplayName: "主从链接状态",
+		CurrentValue:      0,
+		FormattedValue:    "断开",
+		WarningThreshold:  0,
+		CriticalThreshold: 1,
+		Level:             model.AlertLevelCritical,
+		Message:           "主从链接断开",
+	}
+
+	return &model.RedisInspectionResults{
+		InspectionTime: inspectionTime,
+		Duration:       3 * time.Second,
+		Summary: &model.RedisInspectionSummary{
+			TotalInstances:    6,
+			NormalInstances:   3,
+			WarningInstances:  2,
+			CriticalInstances: 1,
+		},
+		Results: []*model.RedisInspectionResult{
+			// Normal master instance
+			{
+				Instance: &model.RedisInstance{
+					Address:        "192.18.102.2:7000",
+					IP:             "192.18.102.2",
+					Port:           7000,
+					ApplicationType: "Redis",
+					Version:        "6.2.6",
+					Role:           model.RedisRoleMaster,
+					ClusterEnabled: true,
+				},
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MaxClients:       10000,
+				ConnectedClients: 500,
+				ConnectedSlaves:  1,
+				NonRootUser:      "N/A",
+				Status:           model.RedisStatusNormal,
+			},
+			// Normal slave instance
+			{
+				Instance: &model.RedisInstance{
+					Address:        "192.18.102.2:7001",
+					IP:             "192.18.102.2",
+					Port:           7001,
+					ApplicationType: "Redis",
+					Version:        "6.2.6",
+					Role:           model.RedisRoleSlave,
+					ClusterEnabled: true,
+				},
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MasterLinkStatus: true,
+				MasterPort:       7000,
+				ReplicationLag:   0,
+				MaxClients:       10000,
+				ConnectedClients: 100,
+				NonRootUser:      "N/A",
+				Status:           model.RedisStatusNormal,
+			},
+			// Normal master instance
+			{
+				Instance: &model.RedisInstance{
+					Address:        "192.18.102.4:7000",
+					IP:             "192.18.102.4",
+					Port:           7000,
+					ApplicationType: "Redis",
+					Version:        "6.2.6",
+					Role:           model.RedisRoleMaster,
+					ClusterEnabled: true,
+				},
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MaxClients:       10000,
+				ConnectedClients: 300,
+				ConnectedSlaves:  1,
+				NonRootUser:      "N/A",
+				Status:           model.RedisStatusNormal,
+			},
+			// Warning master instance (high connection usage)
+			{
+				Instance: &model.RedisInstance{
+					Address:        "192.18.102.3:7000",
+					IP:             "192.18.102.3",
+					Port:           7000,
+					ApplicationType: "Redis",
+					Version:        "6.2.6",
+					Role:           model.RedisRoleMaster,
+					ClusterEnabled: true,
+				},
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MaxClients:       10000,
+				ConnectedClients: 7500,
+				ConnectedSlaves:  1,
+				NonRootUser:      "N/A",
+				Status:           model.RedisStatusWarning,
+				Alerts:           []*model.RedisAlert{warningAlert1},
+			},
+			// Warning slave instance (high connection usage)
+			{
+				Instance: &model.RedisInstance{
+					Address:        "192.18.102.3:7001",
+					IP:             "192.18.102.3",
+					Port:           7001,
+					ApplicationType: "Redis",
+					Version:        "6.2.6",
+					Role:           model.RedisRoleSlave,
+					ClusterEnabled: true,
+				},
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MasterLinkStatus: true,
+				MasterPort:       7000,
+				ReplicationLag:   0,
+				MaxClients:       10000,
+				ConnectedClients: 8000,
+				NonRootUser:      "N/A",
+				Status:           model.RedisStatusWarning,
+				Alerts:           []*model.RedisAlert{warningAlert2},
+			},
+			// Critical slave instance (master link down)
+			{
+				Instance: &model.RedisInstance{
+					Address:        "192.18.102.4:7001",
+					IP:             "192.18.102.4",
+					Port:           7001,
+					ApplicationType: "Redis",
+					Version:        "6.2.6",
+					Role:           model.RedisRoleSlave,
+					ClusterEnabled: true,
+				},
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MasterLinkStatus: false,
+				MasterPort:       7000,
+				ReplicationLag:   10485760, // 10MB
+				MaxClients:       10000,
+				ConnectedClients: 200,
+				NonRootUser:      "N/A",
+				Status:           model.RedisStatusCritical,
+				Alerts:           []*model.RedisAlert{criticalAlert},
+			},
+		},
+		Alerts: []*model.RedisAlert{warningAlert1, warningAlert2, criticalAlert},
+		AlertSummary: &model.RedisAlertSummary{
+			TotalAlerts:   3,
+			WarningCount:  2,
+			CriticalCount: 1,
+		},
+		Version: "1.0.0-test",
+	}
+}
+
+// ============================================================================
+// Redis Multi-Cluster Tests (陕西项目场景)
+// ============================================================================
+
+func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
+	// Create Excel file with host data first
+	w := NewWriter(time.UTC)
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create a dummy summary sheet (simulating combined report)
+	f.NewSheet(sheetSummary)
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := t.TempDir()
+	existingPath := filepath.Join(tmpDir, "multi_cluster_test.xlsx")
+	if err := f.SaveAs(existingPath); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Create multi-cluster results
+	result := createTestRedisMultiClusterResults()
+
+	// Append Redis inspection (should create separate sheets for each cluster)
+	err := w.AppendRedisInspection(result, existingPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection failed: %v", err)
+	}
+
+	// Verify by opening the file
+	f2, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		t.Fatalf("failed to open result file: %v", err)
+	}
+	defer f2.Close()
+
+	sheets := f2.GetSheetList()
+
+	// Should have separate sheets for each cluster
+	hasCluster1 := false
+	hasCluster2 := false
+	hasAlertsSheet := false
+	for _, sheet := range sheets {
+		if sheet == "Redis-192.18.102" {
+			hasCluster1 = true
+		}
+		if sheet == "Redis-192.18.107" {
+			hasCluster2 = true
+		}
+		if sheet == sheetRedisAlerts {
+			hasAlertsSheet = true
+		}
+	}
+
+	if !hasCluster1 {
+		t.Error("expected sheet 'Redis-192.18.102' for cluster 1")
+	}
+	if !hasCluster2 {
+		t.Error("expected sheet 'Redis-192.18.107' for cluster 2")
+	}
+	if !hasAlertsSheet {
+		t.Error("expected Redis alerts sheet")
+	}
+}
+
+func TestWriter_AppendRedisInspection_SingleCluster_KeepsOriginalSheet(t *testing.T) {
+	w := NewWriter(time.UTC)
+	f := excelize.NewFile()
+	defer f.Close()
+
+	f.NewSheet(sheetSummary)
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := t.TempDir()
+	existingPath := filepath.Join(tmpDir, "single_cluster_test.xlsx")
+	if err := f.SaveAs(existingPath); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Create single-cluster results (all same network segment)
+	result := createTestRedisInspectionResults()
+
+	err := w.AppendRedisInspection(result, existingPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection failed: %v", err)
+	}
+
+	f2, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		t.Fatalf("failed to open result file: %v", err)
+	}
+	defer f2.Close()
+
+	sheets := f2.GetSheetList()
+
+	// Should have single "Redis 巡检" sheet, not per-cluster sheets
+	hasRedisSheet := false
+	hasClusterSheet := false
+	for _, sheet := range sheets {
+		if sheet == sheetRedis {
+			hasRedisSheet = true
+		}
+		if strings.HasPrefix(sheet, "Redis-") {
+			hasClusterSheet = true
+		}
+	}
+
+	if !hasRedisSheet {
+		t.Error("expected single 'Redis 巡检' sheet for single cluster")
+	}
+	if hasClusterSheet {
+		t.Error("should not have per-cluster sheets for single cluster")
+	}
+}
+
+func TestWriter_RedisClusterSheet_InstanceCount(t *testing.T) {
+	w := NewWriter(time.UTC)
+	f := excelize.NewFile()
+	defer f.Close()
+
+	f.NewSheet(sheetSummary)
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := t.TempDir()
+	existingPath := filepath.Join(tmpDir, "cluster_instance_count.xlsx")
+	if err := f.SaveAs(existingPath); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	result := createTestRedisMultiClusterResults()
+	err := w.AppendRedisInspection(result, existingPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection failed: %v", err)
+	}
+
+	f2, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		t.Fatalf("failed to open result file: %v", err)
+	}
+	defer f2.Close()
+
+	// Count rows in cluster 1 sheet (should be 6 instances + 1 header = 7 rows)
+	rows, err := f2.GetRows("Redis-192.18.102")
+	if err != nil {
+		t.Fatalf("failed to get rows from cluster 1 sheet: %v", err)
+	}
+	// 1 header row + 6 data rows = 7
+	if len(rows) != 7 {
+		t.Errorf("cluster 1 sheet should have 7 rows (1 header + 6 instances), got %d", len(rows))
+	}
+
+	// Count rows in cluster 2 sheet (should be 6 instances + 1 header = 7 rows)
+	rows2, err := f2.GetRows("Redis-192.18.107")
+	if err != nil {
+		t.Fatalf("failed to get rows from cluster 2 sheet: %v", err)
+	}
+	if len(rows2) != 7 {
+		t.Errorf("cluster 2 sheet should have 7 rows (1 header + 6 instances), got %d", len(rows2))
+	}
+}
+
+// createTestRedisMultiClusterResults creates test data with 2 clusters (陕西项目场景)
+// Cluster 1: 192.18.102.x (6 instances: 3 masters + 3 slaves)
+// Cluster 2: 192.18.107.x (6 instances: 3 masters + 3 slaves)
+func createTestRedisMultiClusterResults() *model.RedisInspectionResults {
+	results := &model.RedisInspectionResults{
+		InspectionTime: time.Now(),
+		Results:        make([]*model.RedisInspectionResult, 0, 12),
+	}
+
+	// Cluster 1: 192.18.102.x - 3 masters, 3 slaves
+	for i := 2; i <= 4; i++ {
+		ip := fmt.Sprintf("192.18.102.%d", i)
+		// Master
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7000", ip),
+				IP:              ip,
+				Port:            7000,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleMaster,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MaxClients:       10000,
+			ConnectedClients: 100,
+			ConnectedSlaves:  1,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+		// Slave
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7001", ip),
+				IP:              ip,
+				Port:            7001,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleSlave,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MasterLinkStatus: true,
+			MasterPort:       7000,
+			MaxClients:       10000,
+			ConnectedClients: 50,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+	}
+
+	// Cluster 2: 192.18.107.x - 3 masters, 3 slaves
+	for i := 5; i <= 7; i++ {
+		ip := fmt.Sprintf("192.18.107.%d", i)
+		// Master
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7000", ip),
+				IP:              ip,
+				Port:            7000,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleMaster,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MaxClients:       10000,
+			ConnectedClients: 200,
+			ConnectedSlaves:  1,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+		// Slave
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address:         fmt.Sprintf("%s:7001", ip),
+				IP:              ip,
+				Port:            7001,
+				ApplicationType: "Redis",
+				Version:         "6.2.6",
+				Role:            model.RedisRoleSlave,
+				ClusterEnabled:  true,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MasterLinkStatus: true,
+			MasterPort:       7000,
+			MaxClients:       10000,
+			ConnectedClients: 100,
+			NonRootUser:      "N/A",
+			Status:           model.RedisStatusNormal,
+		})
+	}
+
+	// Call GroupByClusters to populate Clusters field
+	results.GroupByClusters()
+
+	results.Summary = &model.RedisInspectionSummary{
+		TotalInstances:    12,
+		NormalInstances:   12,
+		WarningInstances:  0,
+		CriticalInstances: 0,
+		FailedInstances:   0,
+	}
+	results.AlertSummary = &model.RedisAlertSummary{
+		TotalAlerts:   0,
+		WarningCount:  0,
+		CriticalCount: 0,
+	}
+	results.Version = "1.0.0-test"
+
+	return results
 }

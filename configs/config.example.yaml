@@ -215,3 +215,52 @@ mysql:
     #   - 成员数 = expected - 1: 警告 (掉 1 个节点)
     #   - 成员数 < expected - 1: 严重 (掉 2 个及以上节点)
     mgr_member_count_expected: 3
+
+# -----------------------------------------------------------------------------
+# Redis 集群巡检配置
+# -----------------------------------------------------------------------------
+# 用途: Redis 6.2 Cluster 集群巡检（支持 3主3从/3主6从）
+# 数据来源: VictoriaMetrics（通过 Categraf 采集的 redis_* 指标）
+redis:
+  # 是否启用 Redis 巡检 (默认: false)
+  enabled: true
+
+  # 集群模式 (必须手动指定)
+  # 可选值: 3m3s (3主3从), 3m6s (3主6从)
+  # - 3m3s: 每个 master 期望 1 个 slave（默认）
+  # - 3m6s: 每个 master 期望 2 个 slave
+  cluster_mode: "3m3s"
+
+  # 实例筛选条件 (可选)
+  # 不配置则查询所有 Redis 实例
+  instance_filter:
+    # 地址匹配模式 (支持通配符 *)
+    # 示例: "192.18.102.*" 匹配该网段所有实例
+    # 示例: "*:7000" 匹配所有 7000 端口实例
+    address_patterns:
+      # - "192.18.102.*"
+
+    # 业务组筛选 (OR 关系)
+    # 匹配任意一个业务组的实例都会被纳入巡检
+    business_groups:
+      # - "生产Redis"
+
+    # 标签筛选 (AND 关系)
+    # 与业务组条件之间是 AND 关系
+    tags:
+      # env: "prod"
+
+  # 阈值配置
+  thresholds:
+    # 连接使用率阈值 (单位: %)
+    # 计算方式: (当前连接数 / 最大连接数) * 100
+    connection_usage_warning: 70   # 连接使用率 > 70% 触发警告
+    connection_usage_critical: 90  # 连接使用率 > 90% 触发严重告警
+
+    # 复制延迟阈值 (单位: 字节)
+    # 计算方式: slave 的 master_repl_offset - slave_repl_offset
+    # 注意: 目前无生产环境经验值，以下为保守默认值
+    # 建议根据实际业务负载和网络情况调整
+    # 正常情况下复制延迟应该很小（KB级）
+    replication_lag_warning: 1048576    # 1MB - 保守警告阈值
+    replication_lag_critical: 10485760  # 10MB - 保守严重阈值

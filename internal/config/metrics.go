@@ -115,3 +115,56 @@ func CountActiveMySQLMetrics(metrics []*model.MySQLMetricDefinition) int {
 	}
 	return count
 }
+
+// LoadRedisMetrics reads Redis metric definitions from the specified YAML file.
+// It returns a slice of RedisMetricDefinition pointers for use with RedisCollector and RedisEvaluator.
+func LoadRedisMetrics(metricsPath string) ([]*model.RedisMetricDefinition, error) {
+	if metricsPath == "" {
+		return nil, fmt.Errorf("Redis metrics file path is required")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(metricsPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("Redis metrics file not found: %s", metricsPath)
+	}
+
+	// Read file content
+	data, err := os.ReadFile(metricsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Redis metrics file: %w", err)
+	}
+
+	// Parse YAML
+	var cfg model.RedisMetricsConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse Redis metrics file: %w", err)
+	}
+
+	// Validate metrics
+	if len(cfg.Metrics) == 0 {
+		return nil, fmt.Errorf("no Redis metrics defined in file: %s", metricsPath)
+	}
+
+	// Validate each metric definition
+	for i, m := range cfg.Metrics {
+		if m.Name == "" {
+			return nil, fmt.Errorf("Redis metric at index %d has no name", i)
+		}
+		if m.DisplayName == "" {
+			return nil, fmt.Errorf("Redis metric %q has no display_name", m.Name)
+		}
+	}
+
+	return cfg.Metrics, nil
+}
+
+// CountActiveRedisMetrics returns the count of active (non-pending) Redis metrics.
+func CountActiveRedisMetrics(metrics []*model.RedisMetricDefinition) int {
+	count := 0
+	for _, m := range metrics {
+		if !m.IsPending() {
+			count++
+		}
+	}
+	return count
+}

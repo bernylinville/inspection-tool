@@ -6,3 +6,4 @@ reports/
 .roo/
 .spec-workflow/
 .DS_Store
+*.out

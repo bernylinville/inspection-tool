@@ -1,6 +1,7 @@
 package html
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1027,4 +1028,986 @@ func createTestMySQLInspectionResultsWithAlerts() *model.MySQLInspectionResults 
 	result.AlertSummary.CriticalCount = 1
 
 	return result
+}
+
+// ============================================================================
+// Redis HTML Report Tests
+// ============================================================================
+
+func TestWriter_WriteRedisInspection_NilResult(t *testing.T) {
+	w := NewWriter(nil, "")
+	err := w.WriteRedisInspection(nil, "test.html")
+	if err == nil {
+		t.Error("expected error for nil result")
+	}
+	if !strings.Contains(err.Error(), "nil") {
+		t.Errorf("expected error message to mention nil, got: %s", err.Error())
+	}
+}
+
+func TestWriter_WriteRedisInspection_Success(t *testing.T) {
+	// Create temp directory
+	tempDir := t.TempDir()
+	outputPath := filepath.Join(tempDir, "redis_report.html")
+
+	// Create writer
+	w := NewWriter(nil, "")
+
+	// Create test result
+	result := createTestRedisInspectionResults()
+
+	// Write report
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection failed: %v", err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		t.Error("output file was not created")
+	}
+
+	// Read and verify content
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	// Check for key content
+	contentStr := string(content)
+	expectedContent := []string{
+		"<!DOCTYPE html>",
+		"Redis 巡检报告",
+		"192.18.102.2",
+		"7000",
+		"Redis 巡检概览",
+		"Redis 实例详情",
+	}
+
+	for _, expected := range expectedContent {
+		if !strings.Contains(contentStr, expected) {
+			t.Errorf("expected content to contain '%s'", expected)
+		}
+	}
+}
+
+func TestWriter_WriteRedisInspection_AddsHtmlExtension(t *testing.T) {
+	tempDir := t.TempDir()
+	outputPath := filepath.Join(tempDir, "redis_report") // No extension
+
+	w := NewWriter(nil, "")
+	result := createTestRedisInspectionResults()
+
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection failed: %v", err)
+	}
+
+	// Verify .html extension was added
+	expectedPath := outputPath + ".html"
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Error("file with .html extension was not created")
+	}
+}
+
+func TestWriter_WriteRedisInspection_WithAlerts(t *testing.T) {
+	tempDir := t.TempDir()
+	outputPath := filepath.Join(tempDir, "redis_report_alerts.html")
+
+	w := NewWriter(nil, "")
+	result := createTestRedisInspectionResultsWithAlerts()
+
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection failed: %v", err)
+	}
+
+	// Read and verify content
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	contentStr := string(content)
+	expectedContent := []string{
+		"Redis 异常汇总",
+		"连接使用率",
+		"85.0%",
+		"严重",
+	}
+
+	for _, expected := range expectedContent {
+		if !strings.Contains(contentStr, expected) {
+			t.Errorf("expected content to contain '%s'", expected)
+		}
+	}
+}
+
+func TestWriter_WriteRedisInspection_EmptyResult(t *testing.T) {
+	tempDir := t.TempDir()
+	outputPath := filepath.Join(tempDir, "redis_empty_report.html")
+
+	w := NewWriter(nil, "")
+	result := &model.RedisInspectionResults{
+		InspectionTime: time.Now(),
+		Duration:       time.Second,
+		Summary: &model.RedisInspectionSummary{
+			TotalInstances:    0,
+			NormalInstances:   0,
+			WarningInstances:  0,
+			CriticalInstances: 0,
+			FailedInstances:   0,
+		},
+		AlertSummary: &model.RedisAlertSummary{
+			TotalAlerts:   0,
+			WarningCount:  0,
+			CriticalCount: 0,
+		},
+		Results: []*model.RedisInspectionResult{},
+		Alerts:  []*model.RedisAlert{},
+	}
+
+	err := w.WriteRedisInspection(result, outputPath)
+	if err != nil {
+		t.Fatalf("WriteRedisInspection failed for empty result: %v", err)
+	}
+
+	// Verify file exists and contains basic structure
+	content, _ := os.ReadFile(outputPath)
+	if !strings.Contains(string(content), "Redis 巡检概览") {
+		t.Error("empty result should still contain basic structure")
+	}
+}
+
+func TestPrepareRedisTemplateData(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	w := NewWriter(loc, "")
+	result := createTestRedisInspectionResultsWithAlerts()
+
+	data := w.prepareRedisTemplateData(result)
+
+	if data.Title != "Redis 巡检报告" {
+		t.Errorf("expected title 'Redis 巡检报告', got '%s'", data.Title)
+	}
+
+	if len(data.Instances) != 2 {
+		t.Errorf("expected 2 instances, got %d", len(data.Instances))
+	}
+
+	if len(data.Alerts) != 2 {
+		t.Errorf("expected 2 alerts, got %d", len(data.Alerts))
+	}
+
+	// Check alerts are sorted (critical first)
+	if data.Alerts[0].Level != "严重" {
+		t.Error("alerts should be sorted with critical first")
+	}
+}
+
+func TestConvertRedisInstanceData_Master(t *testing.T) {
+	w := NewWriter(nil, "")
+	instance := &model.RedisInstance{
+		Address: "192.18.102.2:7000",
+		IP:      "192.18.102.2",
+		Port:    7000,
+		Version: "",
+		Role:    model.RedisRoleMaster,
+	}
+	result := &model.RedisInspectionResult{
+		Instance:         instance,
+		ConnectionStatus: true,
+		ClusterEnabled:   true,
+		MaxClients:       10000,
+		ConnectedClients: 100,
+		ConnectedSlaves:  2,
+		MasterLinkStatus: true,
+		MasterPort:       0,
+		ReplicationLag:   0,
+		Status:           model.RedisStatusNormal,
+		Alerts:           []*model.RedisAlert{},
+	}
+
+	data := w.convertRedisInstanceData(result)
+
+	if data.IP != "192.18.102.2" {
+		t.Errorf("expected IP '192.18.102.2', got '%s'", data.IP)
+	}
+	if data.Port != 7000 {
+		t.Errorf("expected port 7000, got %d", data.Port)
+	}
+	if data.Version != "N/A" {
+		t.Errorf("expected version 'N/A', got '%s'", data.Version)
+	}
+	if data.Role != "主" {
+		t.Errorf("expected role '主', got '%s'", data.Role)
+	}
+	if data.ClusterEnabled != "启用" {
+		t.Errorf("expected cluster enabled '启用', got '%s'", data.ClusterEnabled)
+	}
+	if data.ConnectionStatus != "正常" {
+		t.Errorf("expected connection status '正常', got '%s'", data.ConnectionStatus)
+	}
+	// Master node should show N/A for slave-specific fields
+	if data.MasterLinkStatus != "N/A" {
+		t.Errorf("expected master link status 'N/A' for master node, got '%s'", data.MasterLinkStatus)
+	}
+	if data.MasterPort != "N/A" {
+		t.Errorf("expected master port 'N/A' for master node, got '%s'", data.MasterPort)
+	}
+	if data.ReplicationLag != "N/A" {
+		t.Errorf("expected replication lag 'N/A' for master node, got '%s'", data.ReplicationLag)
+	}
+	if data.Status != "正常" {
+		t.Errorf("expected status '正常', got '%s'", data.Status)
+	}
+	if data.StatusClass != "status-normal" {
+		t.Errorf("expected status class 'status-normal', got '%s'", data.StatusClass)
+	}
+}
+
+func TestConvertRedisInstanceData_Slave(t *testing.T) {
+	w := NewWriter(nil, "")
+	instance := &model.RedisInstance{
+		Address: "192.18.102.2:7001",
+		IP:      "192.18.102.2",
+		Port:    7001,
+		Version: "",
+		Role:    model.RedisRoleSlave,
+	}
+	result := &model.RedisInspectionResult{
+		Instance:         instance,
+		ConnectionStatus: true,
+		ClusterEnabled:   true,
+		MaxClients:       10000,
+		ConnectedClients: 50,
+		ConnectedSlaves:  0,
+		MasterLinkStatus: true,
+		MasterPort:       7000,
+		ReplicationLag:   1024,
+		Status:           model.RedisStatusNormal,
+		Alerts:           []*model.RedisAlert{},
+	}
+
+	data := w.convertRedisInstanceData(result)
+
+	if data.Role != "从" {
+		t.Errorf("expected role '从', got '%s'", data.Role)
+	}
+	// Slave node should show actual values for slave-specific fields
+	if data.MasterLinkStatus != "正常" {
+		t.Errorf("expected master link status '正常', got '%s'", data.MasterLinkStatus)
+	}
+	if data.MasterPort != "7000" {
+		t.Errorf("expected master port '7000', got '%s'", data.MasterPort)
+	}
+	if data.ReplicationLag != "1.00 KB" {
+		t.Errorf("expected replication lag '1.00 KB', got '%s'", data.ReplicationLag)
+	}
+}
+
+func TestConvertRedisAlerts(t *testing.T) {
+	w := NewWriter(nil, "")
+	alerts := []*model.RedisAlert{
+		{
+			Address:           "192.18.102.2:7000",
+			MetricName:        "connection_usage",
+			MetricDisplayName: "连接使用率",
+			CurrentValue:      75.0,
+			FormattedValue:    "75.0%",
+			WarningThreshold:  70,
+			CriticalThreshold: 90,
+			Level:             model.AlertLevelWarning,
+			Message:           "连接使用率达到警告阈值",
+		},
+		{
+			Address:           "192.18.102.3:7000",
+			MetricName:        "connection_usage",
+			MetricDisplayName: "连接使用率",
+			CurrentValue:      95.0,
+			FormattedValue:    "95.0%",
+			WarningThreshold:  70,
+			CriticalThreshold: 90,
+			Level:             model.AlertLevelCritical,
+			Message:           "连接使用率达到严重阈值",
+		},
+	}
+
+	converted := w.convertRedisAlerts(alerts)
+
+	// Should be sorted with critical first
+	if len(converted) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(converted))
+	}
+	if converted[0].Level != "严重" {
+		t.Error("critical alert should be first")
+	}
+	if converted[1].Level != "警告" {
+		t.Error("warning alert should be second")
+	}
+}
+
+func TestRedisStatusText(t *testing.T) {
+	tests := []struct {
+		status   model.RedisInstanceStatus
+		expected string
+	}{
+		{model.RedisStatusNormal, "正常"},
+		{model.RedisStatusWarning, "警告"},
+		{model.RedisStatusCritical, "严重"},
+		{model.RedisStatusFailed, "失败"},
+		{model.RedisInstanceStatus("unknown"), "未知"},
+	}
+
+	for _, tt := range tests {
+		result := redisStatusText(tt.status)
+		if result != tt.expected {
+			t.Errorf("redisStatusText(%s) = %s, expected %s", tt.status, result, tt.expected)
+		}
+	}
+}
+
+func TestRedisStatusClass(t *testing.T) {
+	tests := []struct {
+		status   model.RedisInstanceStatus
+		expected string
+	}{
+		{model.RedisStatusNormal, "status-normal"},
+		{model.RedisStatusWarning, "status-warning"},
+		{model.RedisStatusCritical, "status-critical"},
+		{model.RedisStatusFailed, "status-failed"},
+	}
+
+	for _, tt := range tests {
+		result := redisStatusClass(tt.status)
+		if result != tt.expected {
+			t.Errorf("redisStatusClass(%s) = %s, expected %s", tt.status, result, tt.expected)
+		}
+	}
+}
+
+func TestRedisRoleText(t *testing.T) {
+	tests := []struct {
+		role     model.RedisRole
+		expected string
+	}{
+		{model.RedisRoleMaster, "主"},
+		{model.RedisRoleSlave, "从"},
+		{model.RedisRoleUnknown, "未知"},
+		{model.RedisRole("other"), "未知"},
+	}
+
+	for _, tt := range tests {
+		result := redisRoleText(tt.role)
+		if result != tt.expected {
+			t.Errorf("redisRoleText(%s) = %s, expected %s", tt.role, result, tt.expected)
+		}
+	}
+}
+
+func TestGetRedisLinkStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		result   *model.RedisInspectionResult
+		expected string
+	}{
+		{
+			name: "Master node returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance:         &model.RedisInstance{Role: model.RedisRoleMaster},
+				MasterLinkStatus: true,
+			},
+			expected: "N/A",
+		},
+		{
+			name: "Slave link up",
+			result: &model.RedisInspectionResult{
+				Instance:         &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterLinkStatus: true,
+			},
+			expected: "正常",
+		},
+		{
+			name: "Slave link down",
+			result: &model.RedisInspectionResult{
+				Instance:         &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterLinkStatus: false,
+			},
+			expected: "异常",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getRedisLinkStatus(tt.result)
+			if result != tt.expected {
+				t.Errorf("getRedisLinkStatus() = %s, expected %s", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetRedisReplicationLag(t *testing.T) {
+	tests := []struct {
+		name     string
+		result   *model.RedisInspectionResult
+		expected string
+	}{
+		{
+			name: "Master node returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance:       &model.RedisInstance{Role: model.RedisRoleMaster},
+				ReplicationLag: 1024,
+			},
+			expected: "N/A",
+		},
+		{
+			name: "Slave zero lag",
+			result: &model.RedisInspectionResult{
+				Instance:       &model.RedisInstance{Role: model.RedisRoleSlave},
+				ReplicationLag: 0,
+			},
+			expected: "0 B",
+		},
+		{
+			name: "Slave with lag",
+			result: &model.RedisInspectionResult{
+				Instance:       &model.RedisInstance{Role: model.RedisRoleSlave},
+				ReplicationLag: 1024 * 1024,
+			},
+			expected: "1.00 MB",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getRedisReplicationLag(tt.result)
+			if result != tt.expected {
+				t.Errorf("getRedisReplicationLag() = %s, expected %s", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetRedisMasterPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		result   *model.RedisInspectionResult
+		expected string
+	}{
+		{
+			name: "Master node returns N/A",
+			result: &model.RedisInspectionResult{
+				Instance:   &model.RedisInstance{Role: model.RedisRoleMaster},
+				MasterPort: 7000,
+			},
+			expected: "N/A",
+		},
+		{
+			name: "Slave with zero master port",
+			result: &model.RedisInspectionResult{
+				Instance:   &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterPort: 0,
+			},
+			expected: "N/A",
+		},
+		{
+			name: "Slave with valid master port",
+			result: &model.RedisInspectionResult{
+				Instance:   &model.RedisInstance{Role: model.RedisRoleSlave},
+				MasterPort: 7000,
+			},
+			expected: "7000",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getRedisMasterPort(tt.result)
+			if result != tt.expected {
+				t.Errorf("getRedisMasterPort() = %s, expected %s", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatRedisConnectionUsage(t *testing.T) {
+	tests := []struct {
+		name     string
+		result   *model.RedisInspectionResult
+		expected string
+	}{
+		{
+			name: "Zero max clients returns N/A",
+			result: &model.RedisInspectionResult{
+				MaxClients:       0,
+				ConnectedClients: 100,
+			},
+			expected: "N/A",
+		},
+		{
+			name: "Normal usage",
+			result: &model.RedisInspectionResult{
+				MaxClients:       10000,
+				ConnectedClients: 1000,
+			},
+			expected: "10.0%",
+		},
+		{
+			name: "High usage",
+			result: &model.RedisInspectionResult{
+				MaxClients:       1000,
+				ConnectedClients: 900,
+			},
+			expected: "90.0%",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatRedisConnectionUsage(tt.result)
+			if result != tt.expected {
+				t.Errorf("formatRedisConnectionUsage() = %s, expected %s", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatRedisThreshold(t *testing.T) {
+	tests := []struct {
+		value      float64
+		metricName string
+		expected   string
+	}{
+		{70.0, "connection_usage", "70.0%"},
+		{1048576.0, "replication_lag", "1.00 MB"},
+		{1.0, "master_link_status", "正常"},
+		{0.0, "master_link_status", "异常"},
+		{1.23, "other_metric", "1.23"},
+	}
+
+	for _, tt := range tests {
+		result := formatRedisThreshold(tt.value, tt.metricName)
+		if result != tt.expected {
+			t.Errorf("formatRedisThreshold(%v, %s) = %s, expected %s", tt.value, tt.metricName, result, tt.expected)
+		}
+	}
+}
+
+func TestWriter_WriteCombined_WithRedis(t *testing.T) {
+	tempDir := t.TempDir()
+	outputPath := filepath.Join(tempDir, "combined_with_redis.html")
+
+	w := NewWriter(nil, "")
+	hostResult := createTestResult()
+	mysqlResult := createTestMySQLInspectionResults()
+	redisResult := createTestRedisInspectionResults()
+
+	err := w.WriteCombined(hostResult, mysqlResult, redisResult, outputPath)
+	if err != nil {
+		t.Fatalf("WriteCombined with Redis failed: %v", err)
+	}
+
+	// Read and verify content
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	contentStr := string(content)
+	expectedContent := []string{
+		"系统巡检报告",
+		"主机巡检",
+		"MySQL 数据库巡检",
+		"Redis 数据库巡检",
+		"Redis 巡检概览",
+		"Redis 实例详情",
+		"192.18.102.2",
+		"7000",
+	}
+
+	for _, expected := range expectedContent {
+		if !strings.Contains(contentStr, expected) {
+			t.Errorf("expected content to contain '%s'", expected)
+		}
+	}
+}
+
+func TestWriter_WriteCombined_OnlyRedis(t *testing.T) {
+	tempDir := t.TempDir()
+	outputPath := filepath.Join(tempDir, "only_redis.html")
+
+	w := NewWriter(nil, "")
+	redisResult := createTestRedisInspectionResults()
+
+	err := w.WriteCombined(nil, nil, redisResult, outputPath)
+	if err != nil {
+		t.Fatalf("WriteCombined with only Redis failed: %v", err)
+	}
+
+	// Read and verify content
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Should contain Redis section
+	if !strings.Contains(contentStr, "Redis 数据库巡检") {
+		t.Error("expected Redis section in report")
+	}
+
+	// Should NOT contain Host or MySQL sections
+	if strings.Contains(contentStr, "主机巡检") {
+		t.Error("should not contain Host section when only Redis is provided")
+	}
+	if strings.Contains(contentStr, "MySQL 数据库巡检") {
+		t.Error("should not contain MySQL section when only Redis is provided")
+	}
+}
+
+// Redis test helper functions
+
+func createTestRedisInspectionResults() *model.RedisInspectionResults {
+	instance1 := &model.RedisInstance{
+		Address: "192.18.102.2:7000",
+		IP:      "192.18.102.2",
+		Port:    7000,
+		Version: "",
+		Role:    model.RedisRoleMaster,
+	}
+	instance2 := &model.RedisInstance{
+		Address: "192.18.102.2:7001",
+		IP:      "192.18.102.2",
+		Port:    7001,
+		Version: "",
+		Role:    model.RedisRoleSlave,
+	}
+
+	return &model.RedisInspectionResults{
+		InspectionTime: time.Now(),
+		Duration:       5 * time.Second,
+		Summary: &model.RedisInspectionSummary{
+			TotalInstances:    2,
+			NormalInstances:   2,
+			WarningInstances:  0,
+			CriticalInstances: 0,
+			FailedInstances:   0,
+		},
+		AlertSummary: &model.RedisAlertSummary{
+			TotalAlerts:   0,
+			WarningCount:  0,
+			CriticalCount: 0,
+		},
+		Results: []*model.RedisInspectionResult{
+			{
+				Instance:         instance1,
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MaxClients:       10000,
+				ConnectedClients: 100,
+				ConnectedSlaves:  2,
+				MasterLinkStatus: true,
+				MasterPort:       0,
+				ReplicationLag:   0,
+				Status:           model.RedisStatusNormal,
+				Alerts:           []*model.RedisAlert{},
+			},
+			{
+				Instance:         instance2,
+				ConnectionStatus: true,
+				ClusterEnabled:   true,
+				MaxClients:       10000,
+				ConnectedClients: 50,
+				ConnectedSlaves:  0,
+				MasterLinkStatus: true,
+				MasterPort:       7000,
+				ReplicationLag:   0,
+				Status:           model.RedisStatusNormal,
+				Alerts:           []*model.RedisAlert{},
+			},
+		},
+		Alerts:  []*model.RedisAlert{},
+		Version: "1.0.0",
+	}
+}
+
+func createTestRedisInspectionResultsWithAlerts() *model.RedisInspectionResults {
+	result := createTestRedisInspectionResults()
+
+	// Add alerts
+	alert1 := &model.RedisAlert{
+		Address:           "192.18.102.2:7000",
+		MetricName:        "connection_usage",
+		MetricDisplayName: "连接使用率",
+		CurrentValue:      85.0,
+		FormattedValue:    "85.0%",
+		WarningThreshold:  70,
+		CriticalThreshold: 90,
+		Level:             model.AlertLevelWarning,
+		Message:           "连接使用率达到警告阈值",
+	}
+	alert2 := &model.RedisAlert{
+		Address:           "192.18.102.3:7000",
+		MetricName:        "connection_usage",
+		MetricDisplayName: "连接使用率",
+		CurrentValue:      95.0,
+		FormattedValue:    "95.0%",
+		WarningThreshold:  70,
+		CriticalThreshold: 90,
+		Level:             model.AlertLevelCritical,
+		Message:           "连接使用率达到严重阈值",
+	}
+
+	result.Alerts = []*model.RedisAlert{alert1, alert2}
+	result.Results[0].Alerts = []*model.RedisAlert{alert1}
+	result.Results[0].Status = model.RedisStatusWarning
+
+	result.Summary.NormalInstances = 1
+	result.Summary.WarningInstances = 1
+	result.Summary.CriticalInstances = 0
+	result.AlertSummary.TotalAlerts = 2
+	result.AlertSummary.WarningCount = 1
+	result.AlertSummary.CriticalCount = 1
+
+	return result
+}
+
+// ============================================================================
+// Redis Multi-Cluster Tests (陕西项目场景)
+// ============================================================================
+
+func TestWriter_WriteCombined_MultipleRedisClusters(t *testing.T) {
+	w := NewWriter(time.UTC, "")
+
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "multi_cluster_report.html")
+
+	// Create multi-cluster results
+	redisResult := createTestRedisMultiClusterResults()
+
+	err := w.WriteCombined(nil, nil, redisResult, outputPath)
+	if err != nil {
+		t.Fatalf("WriteCombined failed: %v", err)
+	}
+
+	// Read generated file
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	contentStr := string(content)
+
+	// Should contain both cluster sections
+	if !strings.Contains(contentStr, "Redis 集群 - 192.18.102") {
+		t.Error("expected cluster 192.18.102 section in report")
+	}
+	if !strings.Contains(contentStr, "Redis 集群 - 192.18.107") {
+		t.Error("expected cluster 192.18.107 section in report")
+	}
+
+	// Should have cluster-specific tables (check for redis-cluster-table-0, redis-cluster-table-1)
+	if !strings.Contains(contentStr, "redis-cluster-table-0") {
+		t.Error("expected first cluster table ID in report")
+	}
+	if !strings.Contains(contentStr, "redis-cluster-table-1") {
+		t.Error("expected second cluster table ID in report")
+	}
+}
+
+func TestWriter_WriteCombined_SingleClusterNoMultiClusterSections(t *testing.T) {
+	w := NewWriter(time.UTC, "")
+
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, "single_cluster_report.html")
+
+	// Create single-cluster results (all same network segment)
+	redisResult := createTestRedisInspectionResults()
+
+	err := w.WriteCombined(nil, nil, redisResult, outputPath)
+	if err != nil {
+		t.Fatalf("WriteCombined failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	contentStr := string(content)
+
+	// Should have single Redis table (not cluster-specific)
+	if !strings.Contains(contentStr, "redis-table") {
+		t.Error("expected single redis-table ID for single cluster")
+	}
+
+	// Should NOT have cluster-specific table IDs
+	if strings.Contains(contentStr, "redis-cluster-table-") {
+		t.Error("should not have cluster-specific table IDs for single cluster")
+	}
+
+	// Should NOT have cluster section headers
+	if strings.Contains(contentStr, "Redis 集群 - ") {
+		t.Error("should not have cluster section headers for single cluster")
+	}
+}
+
+func TestWriter_ConvertRedisClusterData(t *testing.T) {
+	w := NewWriter(time.UTC, "")
+
+	cluster := &model.RedisCluster{
+		ID:   "192.18.102",
+		Name: "Redis 集群 - 192.18.102",
+		Summary: &model.RedisInspectionSummary{
+			TotalInstances:    6,
+			NormalInstances:   5,
+			WarningInstances:  1,
+			CriticalInstances: 0,
+			FailedInstances:   0,
+		},
+		AlertSummary: &model.RedisAlertSummary{
+			TotalAlerts:   1,
+			WarningCount:  1,
+			CriticalCount: 0,
+		},
+		Instances: []*model.RedisInspectionResult{
+			{
+				Instance: &model.RedisInstance{
+					Address: "192.18.102.2:7000",
+					IP:      "192.18.102.2",
+					Port:    7000,
+					Role:    model.RedisRoleMaster,
+				},
+				Status: model.RedisStatusNormal,
+			},
+		},
+		Alerts: []*model.RedisAlert{},
+	}
+
+	clusterData := w.convertRedisClusterData(cluster)
+
+	if clusterData == nil {
+		t.Fatal("convertRedisClusterData returned nil")
+	}
+	if clusterData.ID != "192.18.102" {
+		t.Errorf("expected ID '192.18.102', got %q", clusterData.ID)
+	}
+	if clusterData.Name != "Redis 集群 - 192.18.102" {
+		t.Errorf("expected Name 'Redis 集群 - 192.18.102', got %q", clusterData.Name)
+	}
+	if len(clusterData.Instances) != 1 {
+		t.Errorf("expected 1 instance, got %d", len(clusterData.Instances))
+	}
+	if clusterData.Summary.TotalInstances != 6 {
+		t.Errorf("expected TotalInstances 6, got %d", clusterData.Summary.TotalInstances)
+	}
+}
+
+func TestWriter_ConvertRedisClusterData_Nil(t *testing.T) {
+	w := NewWriter(time.UTC, "")
+
+	clusterData := w.convertRedisClusterData(nil)
+
+	if clusterData != nil {
+		t.Error("expected nil for nil input")
+	}
+}
+
+// createTestRedisMultiClusterResults creates test data with 2 clusters (陕西项目场景)
+func createTestRedisMultiClusterResults() *model.RedisInspectionResults {
+	results := &model.RedisInspectionResults{
+		InspectionTime: time.Now(),
+		Duration:       5 * time.Second,
+		Results:        make([]*model.RedisInspectionResult, 0, 12),
+	}
+
+	// Cluster 1: 192.18.102.x - 3 masters, 3 slaves
+	for i := 2; i <= 4; i++ {
+		ip := fmt.Sprintf("192.18.102.%d", i)
+		// Master
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address: fmt.Sprintf("%s:7000", ip),
+				IP:      ip,
+				Port:    7000,
+				Role:    model.RedisRoleMaster,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MaxClients:       10000,
+			ConnectedClients: 100,
+			ConnectedSlaves:  1,
+			Status:           model.RedisStatusNormal,
+		})
+		// Slave
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address: fmt.Sprintf("%s:7001", ip),
+				IP:      ip,
+				Port:    7001,
+				Role:    model.RedisRoleSlave,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MasterLinkStatus: true,
+			MasterPort:       7000,
+			MaxClients:       10000,
+			ConnectedClients: 50,
+			Status:           model.RedisStatusNormal,
+		})
+	}
+
+	// Cluster 2: 192.18.107.x - 3 masters, 3 slaves
+	for i := 5; i <= 7; i++ {
+		ip := fmt.Sprintf("192.18.107.%d", i)
+		// Master
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address: fmt.Sprintf("%s:7000", ip),
+				IP:      ip,
+				Port:    7000,
+				Role:    model.RedisRoleMaster,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MaxClients:       10000,
+			ConnectedClients: 200,
+			ConnectedSlaves:  1,
+			Status:           model.RedisStatusNormal,
+		})
+		// Slave
+		results.Results = append(results.Results, &model.RedisInspectionResult{
+			Instance: &model.RedisInstance{
+				Address: fmt.Sprintf("%s:7001", ip),
+				IP:      ip,
+				Port:    7001,
+				Role:    model.RedisRoleSlave,
+			},
+			ConnectionStatus: true,
+			ClusterEnabled:   true,
+			MasterLinkStatus: true,
+			MasterPort:       7000,
+			MaxClients:       10000,
+			ConnectedClients: 100,
+			Status:           model.RedisStatusNormal,
+		})
+	}
+
+	// Call GroupByClusters to populate Clusters field
+	results.GroupByClusters()
+
+	results.Summary = &model.RedisInspectionSummary{
+		TotalInstances:    12,
+		NormalInstances:   12,
+		WarningInstances:  0,
+		CriticalInstances: 0,
+		FailedInstances:   0,
+	}
+	results.AlertSummary = &model.RedisAlertSummary{
+		TotalAlerts:   0,
+		WarningCount:  0,
+		CriticalCount: 0,
+	}
+	results.Version = "1.0.0-test"
+
+	return results
 }

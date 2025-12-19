@@ -81,6 +81,10 @@ func Validate(cfg *Config) error {
 		validationErrors = append(validationErrors, errs...)
 	}
 
+	if errs := validateRedisThresholds(cfg); len(errs) > 0 {
+		validationErrors = append(validationErrors, errs...)
+	}
+
 	if len(validationErrors) > 0 {
 		return validationErrors
 	}
@@ -172,6 +176,48 @@ func validateMySQLThresholds(cfg *Config) ValidationErrors {
 			Tag:     "required_when_enabled",
 			Value:   "",
 			Message: "cluster_mode is required when MySQL inspection is enabled",
+		})
+	}
+
+	return errors
+}
+
+// validateRedisThresholds validates Redis threshold configuration.
+func validateRedisThresholds(cfg *Config) ValidationErrors {
+	var errors ValidationErrors
+
+	// Skip validation if Redis inspection is disabled
+	if !cfg.Redis.Enabled {
+		return errors
+	}
+
+	// Validate connection usage thresholds (warning < critical)
+	if cfg.Redis.Thresholds.ConnectionUsageWarning >= cfg.Redis.Thresholds.ConnectionUsageCritical {
+		errors = append(errors, &ValidationError{
+			Field:   "redis.thresholds.connection_usage",
+			Tag:     "threshold_order",
+			Value:   fmt.Sprintf("warning=%v, critical=%v", cfg.Redis.Thresholds.ConnectionUsageWarning, cfg.Redis.Thresholds.ConnectionUsageCritical),
+			Message: fmt.Sprintf("warning threshold (%.2f) must be less than critical threshold (%.2f)", cfg.Redis.Thresholds.ConnectionUsageWarning, cfg.Redis.Thresholds.ConnectionUsageCritical),
+		})
+	}
+
+	// Validate replication lag thresholds (warning < critical)
+	if cfg.Redis.Thresholds.ReplicationLagWarning >= cfg.Redis.Thresholds.ReplicationLagCritical {
+		errors = append(errors, &ValidationError{
+			Field:   "redis.thresholds.replication_lag",
+			Tag:     "threshold_order",
+			Value:   fmt.Sprintf("warning=%v, critical=%v", cfg.Redis.Thresholds.ReplicationLagWarning, cfg.Redis.Thresholds.ReplicationLagCritical),
+			Message: fmt.Sprintf("warning threshold (%d) must be less than critical threshold (%d)", cfg.Redis.Thresholds.ReplicationLagWarning, cfg.Redis.Thresholds.ReplicationLagCritical),
+		})
+	}
+
+	// Validate cluster_mode is set when enabled
+	if cfg.Redis.ClusterMode == "" {
+		errors = append(errors, &ValidationError{
+			Field:   "redis.cluster_mode",
+			Tag:     "required_when_enabled",
+			Value:   "",
+			Message: "cluster_mode is required when Redis inspection is enabled",
 		})
 	}
 
