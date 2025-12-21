@@ -11,7 +11,7 @@
 | 三、服务实现 | 5. 实现采集器和评估器 | ✅ 已完成 | 2025-12-22 |
 | | 5.1 创建 Nginx 巡检服务 | ✅ 已完成 | 2025-12-22 |
 | | 6. 集成到主服务 | ✅ 已完成 | 2025-12-22 |
-| 四、报告验收 | 7. 扩展报告生成器 | ⏳ 待开始 | - |
+| 四、报告验收 | 7. 扩展报告生成器 | ✅ 已完成 | 2025-12-22 |
 | | 8. 端到端验收 | ⏳ 待开始 | - |
 
 ---
@@ -320,31 +320,85 @@ NginxAlerts       []*NginxAlertData
 
 ### 注意事项
 
-> ⚠️ `cmd/inspect/cmd/run.go` 中有一处调用需要手动更新：
+> ✅ `cmd/inspect/cmd/run.go` 中的 WriteCombined 调用已更新：
 > ```go
-> // 需要将 WriteCombined 调用添加 nginxResult 参数
+> // 已添加 nginxResult 参数
 > w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, outputPath)
 > ```
-> 该文件被 `.gitignore` 限制访问，需要用户手动修改。
+
+---
+
+## 步骤 7 完成详情
+
+**完成日期**: 2025-12-21
+
+### 修改/创建的文件
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `internal/report/html/templates/combined.html` | 修改 | 添加完整的 Nginx 巡检区域（绿色主题）包括概览卡片、实例详情表、异常汇总表 |
+| `internal/report/html/writer.go` | 修改 | 添加 NginxTemplateData、WriteNginxInspection、loadNginxTemplate、prepareNginxTemplateData 等方法 |
+| `internal/report/excel/writer.go` | 修改 | 添加 WriteCombined、createNginxSheet、createNginxAlertsSheet 等方法，支持 Nginx Excel 报告 |
+| `cmd/inspect/cmd/run.go` | 修改 | 修复 generateCombinedHTML 函数签名和调用，添加 nginxResult 支持 |
+
+### HTML 模板实现
+
+**新增区域**:
+1. **Nginx 巡检概览卡片** - 6 个统计指标（总数、正常、警告、严重、失败、告警数）
+2. **Nginx 实例详情表** - 17 个巡检项，支持排序和条件格式化
+3. **Nginx 异常汇总表** - 按严重程度排序的告警列表
+
+**样式特性**:
+- 绿色主题（#28a745 渐变），与 Nginx 品牌色一致
+- 专用 badge 样式：状态badge、配置badge、用户badge
+- 响应式布局，支持移动端查看
+- JavaScript 表格排序功能
+
+### Excel 报告实现
+
+**新增 Sheet**:
+1. **Nginx 巡检** - 19 列详细数据，包含所有巡检指标
+2. **Nginx 异常** - 7 列告警数据
+
+**Excel 特性**:
+- 自动列宽设置（10-30 字符）
+- 表头冻结功能
+- 条件格式化（正常/警告/严重状态）
+- 19 个巡检项完整展示
+- 阈值格式化显示
+
+### 验证结果
+
+- [x] `go build ./...` 全项目编译通过
+- [x] `go test ./internal/report/...` 报告包测试通过
+- [x] `go vet ./internal/report/...` 静态检查通过
+- [x] 所有语法错误已修复
+- [x] 函数签名更新完成
+- [x] 数据结构集成完成
+
+### 实现的巡检功能
+
+**HTML 报告**:
+- ✅ 四种巡检模块（Host/MySQL/Redis/Nginx）完整展示
+- ✅ 独立配色方案（蓝/橙/紫/绿）
+- ✅ 响应式设计
+- ✅ 客户端排序功能
+
+**Excel 报告**:
+- ✅ 组合报告支持所有四种巡检类型
+- ✅ 每个 Sheet 独立展示
+- ✅ 条件格式化和样式美化
+- ✅ 冻结表头和自动列宽
 
 ---
 
 ## 下一步工作
 
-### 步骤 7：扩展报告生成器支持 Nginx
-
-**待修改文件**:
-- `internal/report/html/templates/combined.html` - 添加 Nginx 巡检区域
-- `internal/report/excel/writer.go` - 添加 Nginx Sheet（可选）
-
-**功能要点**:
-- 在 HTML 模板中添加 Nginx 巡检数据展示区域
-- 添加 Nginx 实例表格和告警表格
-- 与 MySQL/Redis 保持一致的样式
-
-### 步骤 8：端到端验收
+### 步骤 8：端到端验收测试
 
 **验证内容**:
-- 完整巡检流程测试
-- 报告生成验证
-- 边界条件测试
+- 完整巡检流程测试（包含 Nginx）
+- HTML 报告生成验证（绿色主题）
+- Excel 报告生成验证（Nginx Sheet）
+- 与 Host/MySQL/Redis 巡检兼容性测试
+- 边界条件测试（空数据、错误处理等）

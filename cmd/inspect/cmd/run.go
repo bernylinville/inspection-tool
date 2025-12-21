@@ -290,6 +290,7 @@ func runInspection(cmd *cobra.Command, args []string) {
 	var hostResult *model.InspectionResult
 	var mysqlResult *model.MySQLInspectionResults
 	var redisResult *model.RedisInspectionResults
+	var nginxResult *model.NginxInspectionResults
 
 	// Execute Host inspection
 	if runHostInspection {
@@ -375,7 +376,7 @@ func runInspection(cmd *cobra.Command, args []string) {
 		case "excel":
 			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, reportPath, timezone, logger)
 		case "html":
-			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
+			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, nginxResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
 		default:
 			logger.Error().Str("format", format).Msg("unsupported format")
 			fmt.Fprintf(os.Stderr, "   ❌ 不支持的格式: %s\n", format)
@@ -618,27 +619,32 @@ func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *mode
 	return nil
 }
 
-// generateCombinedHTML creates HTML report with Host, MySQL and Redis data.
-func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
+// generateCombinedHTML creates HTML report with Host, MySQL, Redis and Nginx data.
+func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
 	w := html.NewWriter(timezone, templatePath)
 
 	// Only Redis mode
-	if hostResult == nil && mysqlResult == nil && redisResult != nil {
+	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil {
 		return w.WriteRedisInspection(redisResult, outputPath)
 	}
 
 	// Only MySQL mode
-	if hostResult == nil && mysqlResult != nil && redisResult == nil {
+	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil {
 		return w.WriteMySQLInspection(mysqlResult, outputPath)
 	}
 
+	// Only Nginx mode
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult != nil {
+		return w.WriteNginxInspection(nginxResult, outputPath)
+	}
+
 	// Only Host mode
-	if hostResult != nil && mysqlResult == nil && redisResult == nil {
+	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
 		return w.Write(hostResult, outputPath)
 	}
 
 	// Combined mode
-	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, outputPath); err != nil {
+	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, outputPath); err != nil {
 		return fmt.Errorf("failed to write combined HTML report: %w", err)
 	}
 
@@ -646,6 +652,7 @@ func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model
 		Bool("has_host", hostResult != nil).
 		Bool("has_mysql", mysqlResult != nil).
 		Bool("has_redis", redisResult != nil).
+		Bool("has_nginx", nginxResult != nil).
 		Str("path", outputPath).
 		Msg("combined HTML report generated")
 

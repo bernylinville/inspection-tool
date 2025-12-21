@@ -917,6 +917,23 @@ type RedisTemplateData struct {
 	GeneratedAt    string
 }
 
+// ============================================================================
+// Nginx Template Data Structures
+// ============================================================================
+
+// NginxTemplateData holds Nginx inspection data for template rendering.
+type NginxTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.NginxInspectionSummary
+	AlertSummary   *model.NginxAlertSummary
+	Instances      []*NginxInstanceData
+	Alerts         []*NginxAlertData
+	Version        string
+	GeneratedAt    string
+}
+
 // RedisInstanceData represents Redis instance data formatted for template.
 type RedisInstanceData struct {
 	Address          string
@@ -1110,6 +1127,41 @@ func (w *Writer) WriteRedisInspection(result *model.RedisInspectionResults, outp
 	// Execute template
 	if err := tmpl.Execute(file, data); err != nil {
 		return fmt.Errorf("failed to execute Redis template: %w", err)
+	}
+
+	return nil
+}
+
+// WriteNginxInspection generates an HTML report for Nginx inspection results.
+func (w *Writer) WriteNginxInspection(result *model.NginxInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("Nginx inspection result is nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load Nginx template
+	tmpl, err := w.loadNginxTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Nginx template: %w", err)
+	}
+
+	// Prepare template data
+	data := w.prepareNginxTemplateData(result)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute Nginx template: %w", err)
 	}
 
 	return nil
@@ -1432,4 +1484,53 @@ func (w *Writer) convertNginxAlerts(alerts []*model.NginxAlert) []*NginxAlertDat
 		})
 	}
 	return result
+}
+
+// loadNginxTemplate loads the Nginx HTML template.
+func (w *Writer) loadNginxTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":               formatSize,
+		"formatDuration":           formatDuration,
+		"statusClass":              statusClass,
+		"alertClass":               alertLevelClass,
+		"nginxStatusText":          nginxStatusText,
+		"nginxBoolToText":          nginxBoolToText,
+		"nginxConfiguredText":      nginxConfiguredText,
+		"nginxUpText":              nginxUpText,
+		"formatNginxConnectionUsage": formatNginxConnectionUsage,
+		"formatNginxThreshold":     formatNginxThreshold,
+	}
+
+	// Load embedded Nginx template
+	tmpl, err := template.New("nginx.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/nginx.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded nginx template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareNginxTemplateData prepares data for the Nginx template.
+func (w *Writer) prepareNginxTemplateData(result *model.NginxInspectionResults) *NginxTemplateData {
+	data := &NginxTemplateData{
+		Title:          "Nginx 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+
+	// Convert instances
+	instances := make([]*NginxInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertNginxInstanceData(r))
+	}
+	data.Instances = instances
+
+	// Convert alerts
+	data.Alerts = w.convertNginxAlerts(result.Alerts)
+
+	return data
 }
