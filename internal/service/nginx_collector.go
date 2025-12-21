@@ -165,8 +165,12 @@ func (c *NginxCollector) DiscoverInstances(ctx context.Context) ([]*model.NginxI
 		// 3.1 Extract hostname
 		hostname := result.Labels["agent_hostname"]
 		if hostname == "" {
-			c.logger.Warn().Interface("labels", result.Labels).Msg("missing agent_hostname label")
-			continue
+			// Fallback to ident label if agent_hostname is missing
+			hostname = result.Labels["ident"]
+			if hostname == "" {
+				c.logger.Warn().Interface("labels", result.Labels).Msg("missing both agent_hostname and ident labels")
+				continue
+			}
 		}
 
 		// 3.2 Apply hostname pattern filter
@@ -253,7 +257,11 @@ func (c *NginxCollector) getContainerMap(ctx context.Context, vmFilter *vm.HostF
 	}
 
 	for _, result := range results {
+		// First try agent_hostname, fallback to ident
 		hostname := result.Labels["agent_hostname"]
+		if hostname == "" {
+			hostname = result.Labels["ident"]
+		}
 		container := result.Labels["container"]
 		if hostname != "" && container != "" {
 			containerMap[hostname] = container
@@ -483,7 +491,11 @@ func (c *NginxCollector) collectMetricConcurrent(
 
 	matchedCount := 0
 	for _, result := range results {
+		// First try agent_hostname, fallback to ident
 		hostname := result.Labels["agent_hostname"]
+		if hostname == "" {
+			hostname = result.Labels["ident"]
+		}
 		if hostname == "" {
 			continue
 		}
@@ -553,7 +565,11 @@ func (c *NginxCollector) collectLabelExtractMetric(
 
 	matchedCount := 0
 	for _, result := range results {
+		// First try agent_hostname, fallback to ident
 		hostname := result.Labels["agent_hostname"]
+		if hostname == "" {
+			hostname = result.Labels["ident"]
+		}
 		if hostname == "" {
 			continue
 		}
@@ -707,7 +723,11 @@ func (c *NginxCollector) CollectUpstreamStatus(
 
 	// Step 4: Process status results
 	for _, result := range statusResults {
+		// First try agent_hostname, fallback to ident
 		hostname := result.Labels["agent_hostname"]
+		if hostname == "" {
+			hostname = result.Labels["ident"]
+		}
 		if hostname == "" {
 			continue
 		}
@@ -760,7 +780,11 @@ func (c *NginxCollector) buildUpstreamValueMap(results []vm.QueryResult) map[str
 	valueMap := make(map[string]float64)
 
 	for _, result := range results {
+		// First try agent_hostname, fallback to ident
 		hostname := result.Labels["agent_hostname"]
+		if hostname == "" {
+			hostname = result.Labels["ident"]
+		}
 		upstreamName := result.Labels["upstream"]
 		backendAddr := result.Labels["name"]
 

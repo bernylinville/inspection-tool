@@ -1956,3 +1956,76 @@ func formatNginxThreshold(value float64) string {
 	}
 	return fmt.Sprintf("%.1f", value)
 }
+
+// WriteNginxInspection generates an Excel report for Nginx inspection results.
+func (w *Writer) WriteNginxInspection(result *model.NginxInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("Nginx inspection result is nil")
+	}
+
+	// Ensure output path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	// Create new Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create Nginx sheet
+	if err := w.createNginxSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx sheet: %w", err)
+	}
+
+	// Create Nginx alerts sheet
+	if err := w.createNginxAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
+	}
+
+	// Remove default Sheet1
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+		// Ignore error if sheet doesn't exist
+	}
+
+	// Set active sheet to Nginx
+	idx, _ := f.GetSheetIndex(sheetNginx)
+	f.SetActiveSheet(idx)
+
+	// Save the file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}
+
+// AppendNginxInspection appends Nginx inspection data to an existing Excel file.
+func (w *Writer) AppendNginxInspection(result *model.NginxInspectionResults, existingPath string) error {
+	if result == nil {
+		return fmt.Errorf("Nginx inspection result is nil")
+	}
+
+	// Open existing Excel file
+	f, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		return fmt.Errorf("failed to open existing Excel file: %w", err)
+	}
+	defer f.Close()
+
+	// Create Nginx sheet
+	if err := w.createNginxSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx sheet: %w", err)
+	}
+
+	// Create Nginx alerts sheet
+	if err := w.createNginxAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
+	}
+
+	// Save the file
+	if err := f.Save(); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}

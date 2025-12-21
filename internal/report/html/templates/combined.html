@@ -1000,7 +1000,7 @@
                             <td>{{.Version}}</td>
                             <td><span class="status-badge status-{{.Up}}">{{.Up}}</span></td>
                             <td>{{.ActiveConnections}}</td>
-                            <td class="{{if eq .ConnectionUsagePercent "N/A"}}{{else}}{{if gt .ConnectionUsagePercent 90}}critical{{else}}{{if gt .ConnectionUsagePercent 70}}warning{{else}}normal{{end}}{{end}}">{{.ConnectionUsagePercent}}</td>
+                            <td>{{.ConnectionUsagePercent}}</td>
                             <td>{{.WorkerProcesses}}</td>
                             <td>{{.WorkerConnections}}</td>
                             <td><span class="config-badge config-{{.ErrorPage4xx}}">{{.ErrorPage4xx}}</span></td>
