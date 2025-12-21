@@ -5,3 +5,4 @@ inspect
 .spec-workflow/
 .DS_Store
 *.out
+.serena/
