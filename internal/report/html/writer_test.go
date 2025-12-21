@@ -1602,7 +1602,7 @@ func TestWriter_WriteCombined_WithRedis(t *testing.T) {
 	mysqlResult := createTestMySQLInspectionResults()
 	redisResult := createTestRedisInspectionResults()
 
-	err := w.WriteCombined(hostResult, mysqlResult, redisResult, outputPath)
+	err := w.WriteCombined(hostResult, mysqlResult, redisResult, nil, outputPath)
 	if err != nil {
 		t.Fatalf("WriteCombined with Redis failed: %v", err)
 	}
@@ -1639,7 +1639,7 @@ func TestWriter_WriteCombined_OnlyRedis(t *testing.T) {
 	w := NewWriter(nil, "")
 	redisResult := createTestRedisInspectionResults()
 
-	err := w.WriteCombined(nil, nil, redisResult, outputPath)
+	err := w.WriteCombined(nil, nil, redisResult, nil, outputPath)
 	if err != nil {
 		t.Fatalf("WriteCombined with only Redis failed: %v", err)
 	}
@@ -1786,7 +1786,7 @@ func TestWriter_WriteCombined_MultipleRedisClusters(t *testing.T) {
 	// Create multi-cluster results
 	redisResult := createTestRedisMultiClusterResults()
 
-	err := w.WriteCombined(nil, nil, redisResult, outputPath)
+	err := w.WriteCombined(nil, nil, redisResult, nil, outputPath)
 	if err != nil {
 		t.Fatalf("WriteCombined failed: %v", err)
 	}
@@ -1824,7 +1824,7 @@ func TestWriter_WriteCombined_SingleClusterNoMultiClusterSections(t *testing.T) 
 	// Create single-cluster results (all same network segment)
 	redisResult := createTestRedisInspectionResults()
 
-	err := w.WriteCombined(nil, nil, redisResult, outputPath)
+	err := w.WriteCombined(nil, nil, redisResult, nil, outputPath)
 	if err != nil {
 		t.Fatalf("WriteCombined failed: %v", err)
 	}

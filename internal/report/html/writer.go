@@ -717,21 +717,27 @@ type CombinedTemplateData struct {
 	MySQLAlerts       []*MySQLAlertData
 	// Redis data
 	HasRedis                 bool
-	HasMultipleRedisClusters bool                      // Flag for multi-cluster display
-	RedisClusters            []*RedisClusterData       // Cluster data for multi-cluster scenario
+	HasMultipleRedisClusters bool                // Flag for multi-cluster display
+	RedisClusters            []*RedisClusterData // Cluster data for multi-cluster scenario
 	RedisSummary             *model.RedisInspectionSummary
 	RedisAlertSummary        *model.RedisAlertSummary
 	RedisInstances           []*RedisInstanceData
 	RedisAlerts              []*RedisAlertData
+	// Nginx data
+	HasNginx          bool
+	NginxSummary      *model.NginxInspectionSummary
+	NginxAlertSummary *model.NginxAlertSummary
+	NginxInstances    []*NginxInstanceData
+	NginxAlerts       []*NginxAlertData
 	// Common
 	Version     string
 	GeneratedAt string
 }
 
-// WriteCombined generates an HTML report combining Host, MySQL, and Redis inspection results.
-func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, outputPath string) error {
+// WriteCombined generates an HTML report combining Host, MySQL, Redis, and Nginx inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string) error {
 	// At least one result must be present
-	if hostResult == nil && mysqlResult == nil && redisResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
 		return fmt.Errorf("all inspection results are nil")
 	}
 
@@ -747,7 +753,7 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 	}
 
 	// Prepare combined template data
-	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult)
+	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult, nginxResult)
 
 	// Create output file
 	file, err := os.Create(outputPath)
@@ -783,7 +789,7 @@ func (w *Writer) loadCombinedTemplate() (*template.Template, error) {
 }
 
 // prepareCombinedTemplateData prepares data for the combined template.
-func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults) *CombinedTemplateData {
+func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults) *CombinedTemplateData {
 	data := &CombinedTemplateData{
 		Title:       "系统巡检报告",
 		GeneratedAt: time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
@@ -865,6 +871,30 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 
 		// Convert Redis alerts (always needed for combined alerts section)
 		data.RedisAlerts = w.convertRedisAlerts(redisResult.Alerts)
+	}
+
+	// Fill Nginx data if available
+	if nginxResult != nil {
+		data.HasNginx = true
+		data.NginxSummary = nginxResult.Summary
+		data.NginxAlertSummary = nginxResult.AlertSummary
+
+		// If no other result provided inspection time, use Nginx's
+		if data.InspectionTime == "" {
+			data.InspectionTime = nginxResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+			data.Duration = formatDuration(nginxResult.Duration)
+			data.Version = nginxResult.Version
+		}
+
+		// Convert Nginx instances
+		nginxInstances := make([]*NginxInstanceData, 0, len(nginxResult.Results))
+		for _, r := range nginxResult.Results {
+			nginxInstances = append(nginxInstances, w.convertNginxInstanceData(r))
+		}
+		data.NginxInstances = nginxInstances
+
+		// Convert Nginx alerts
+		data.NginxAlerts = w.convertNginxAlerts(nginxResult.Alerts)
 	}
 
 	return data
@@ -1210,4 +1240,196 @@ func (w *Writer) convertRedisClusterData(cluster *model.RedisCluster) *RedisClus
 		Instances:    instances,
 		Alerts:       alerts,
 	}
+}
+
+// ============================================================================
+// Nginx Report Data Structures
+// ============================================================================
+
+// NginxInstanceData represents Nginx instance data formatted for template.
+type NginxInstanceData struct {
+	Identifier             string
+	Hostname               string
+	IP                     string
+	Port                   int
+	Container              string
+	ApplicationType        string
+	Version                string
+	InstallPath            string
+	ErrorLogPath           string
+	Up                     string // "运行" / "停止"
+	ActiveConnections      int
+	WorkerProcesses        int
+	WorkerConnections      int
+	ConnectionUsagePercent string // 格式化百分比
+	ErrorPage4xx           string // "已配置" / "未配置"
+	ErrorPage5xx           string // "已配置" / "未配置"
+	LastErrorTime          string // 格式化时间
+	NonRootUser            string // "是" / "否"
+	Status                 string // "正常" / "警告" / "严重" / "失败"
+	StatusClass            string // CSS class
+	AlertCount             int
+}
+
+// NginxAlertData represents Nginx alert data formatted for template.
+type NginxAlertData struct {
+	Identifier        string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// ============================================================================
+// Nginx Report Helper Functions
+// ============================================================================
+
+// nginxStatusText converts Nginx instance status to Chinese text.
+func nginxStatusText(status model.NginxInstanceStatus) string {
+	switch status {
+	case model.NginxStatusNormal:
+		return "正常"
+	case model.NginxStatusWarning:
+		return "警告"
+	case model.NginxStatusCritical:
+		return "严重"
+	case model.NginxStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// nginxStatusClass returns the CSS class for Nginx instance status.
+func nginxStatusClass(status model.NginxInstanceStatus) string {
+	switch status {
+	case model.NginxStatusNormal:
+		return "status-normal"
+	case model.NginxStatusWarning:
+		return "status-warning"
+	case model.NginxStatusCritical:
+		return "status-critical"
+	case model.NginxStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// nginxBoolToText converts nginx boolean metric to Chinese text.
+func nginxBoolToText(value bool) string {
+	if value {
+		return "是"
+	}
+	return "否"
+}
+
+// nginxConfiguredText returns configuration status text.
+func nginxConfiguredText(configured bool) string {
+	if configured {
+		return "已配置"
+	}
+	return "未配置"
+}
+
+// nginxUpText returns Nginx running status text.
+func nginxUpText(up bool) string {
+	if up {
+		return "运行"
+	}
+	return "停止"
+}
+
+// formatNginxConnectionUsage formats connection usage percentage.
+func formatNginxConnectionUsage(usagePercent float64) string {
+	if usagePercent < 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.1f%%", usagePercent)
+}
+
+// formatNginxThreshold formats a Nginx alert threshold value based on metric type.
+func formatNginxThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "connection_usage":
+		return fmt.Sprintf("%.1f%%", value)
+	case "last_error_minutes":
+		return fmt.Sprintf("%.0f分钟", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// ============================================================================
+// Nginx Report Methods
+// ============================================================================
+
+// convertNginxInstanceData converts a NginxInspectionResult to NginxInstanceData for template rendering.
+func (w *Writer) convertNginxInstanceData(r *model.NginxInspectionResult) *NginxInstanceData {
+	if r == nil || r.Instance == nil {
+		return &NginxInstanceData{
+			Status:      "失败",
+			StatusClass: "status-failed",
+		}
+	}
+
+	return &NginxInstanceData{
+		Identifier:             r.GetIdentifier(),
+		Hostname:               r.Instance.Hostname,
+		IP:                     r.Instance.IP,
+		Port:                   r.Instance.Port,
+		Container:              r.Instance.Container,
+		ApplicationType:        r.Instance.ApplicationType,
+		Version:                r.Instance.Version,
+		InstallPath:            r.Instance.InstallPath,
+		ErrorLogPath:           r.Instance.ErrorLogPath,
+		Up:                     nginxUpText(r.Up),
+		ActiveConnections:      r.ActiveConnections,
+		WorkerProcesses:        r.WorkerProcesses,
+		WorkerConnections:      r.WorkerConnections,
+		ConnectionUsagePercent: formatNginxConnectionUsage(r.ConnectionUsagePercent),
+		ErrorPage4xx:           nginxConfiguredText(r.ErrorPage4xxConfigured),
+		ErrorPage5xx:           nginxConfiguredText(r.ErrorPage5xxConfigured),
+		LastErrorTime:          r.FormatLastErrorTime(w.timezone),
+		NonRootUser:            nginxBoolToText(r.NonRootUser),
+		Status:                 nginxStatusText(r.Status),
+		StatusClass:            nginxStatusClass(r.Status),
+		AlertCount:             len(r.Alerts),
+	}
+}
+
+// convertNginxAlerts converts and sorts Nginx alerts for template rendering.
+func (w *Writer) convertNginxAlerts(alerts []*model.NginxAlert) []*NginxAlertData {
+	// Make a copy for sorting
+	sortedAlerts := make([]*model.NginxAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+
+	// Sort by level (critical first) then by identifier
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Identifier < sortedAlerts[j].Identifier
+	})
+
+	// Convert to NginxAlertData
+	result := make([]*NginxAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &NginxAlertData{
+			Identifier:        alert.Identifier,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatNginxThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatNginxThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
 }

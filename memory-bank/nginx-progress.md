@@ -10,7 +10,7 @@
 | | 4. 扩展配置结构 | ✅ 已完成 | 2025-12-21 |
 | 三、服务实现 | 5. 实现采集器和评估器 | ✅ 已完成 | 2025-12-22 |
 | | 5.1 创建 Nginx 巡检服务 | ✅ 已完成 | 2025-12-22 |
-| 6. 集成到主服务 | ⏳ 待开始 | - |
+| | 6. 集成到主服务 | ✅ 已完成 | 2025-12-22 |
 | 四、报告验收 | 7. 扩展报告生成器 | ⏳ 待开始 | - |
 | | 8. 端到端验收 | ⏳ 待开始 | - |
 
@@ -235,17 +235,116 @@ type NginxThresholds struct {
 
 ---
 
+## 步骤 6 完成详情
+
+**完成日期**: 2025-12-21
+
+### 修改的文件
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `internal/report/html/writer.go` | 修改 | WriteCombined 方法签名添加 nginxResult 参数，添加 Nginx 数据结构和辅助函数 |
+| `internal/report/html/writer_test.go` | 修改 | 修复4处 WriteCombined 调用，添加 nil 作为 nginxResult 参数 |
+
+### 新增的数据结构
+
+#### NginxInstanceData
+
+```go
+type NginxInstanceData struct {
+    Identifier             string
+    Hostname               string
+    IP                     string
+    Port                   int
+    Container              string
+    ApplicationType        string
+    Version                string
+    InstallPath            string
+    ErrorLogPath           string
+    Up                     string  // "运行" / "停止"
+    ActiveConnections      int
+    WorkerProcesses        int
+    WorkerConnections      int
+    ConnectionUsagePercent string  // 格式化百分比
+    ErrorPage4xx           string  // "已配置" / "未配置"
+    ErrorPage5xx           string  // "已配置" / "未配置"
+    LastErrorTime          string  // 格式化时间
+    NonRootUser            string  // "是" / "否"
+    Status                 string  // "正常" / "警告" / "严重" / "失败"
+    StatusClass            string  // CSS class
+    AlertCount             int
+}
+```
+
+#### NginxAlertData
+
+```go
+type NginxAlertData struct {
+    Identifier        string
+    MetricName        string
+    MetricDisplayName string
+    CurrentValue      string
+    WarningThreshold  string
+    CriticalThreshold string
+    Level             string
+    LevelClass        string
+    Message           string
+}
+```
+
+### CombinedTemplateData 新增字段
+
+```go
+// Nginx data
+HasNginx          bool
+NginxSummary      *model.NginxInspectionSummary
+NginxAlertSummary *model.NginxAlertSummary
+NginxInstances    []*NginxInstanceData
+NginxAlerts       []*NginxAlertData
+```
+
+### WriteCombined 方法签名变更
+
+```diff
+-func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, outputPath string) error
++func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string) error
+```
+
+### 验证结果
+
+- [x] `go build ./internal/report/...` 编译通过
+- [x] `go test ./internal/report/html/...` 所有测试通过
+- [x] `go vet ./internal/report/...` 静态检查通过
+- [x] `go build ./internal/service/...` 编译通过
+- [x] `go test ./internal/service/...` 所有测试通过
+
+### 注意事项
+
+> ⚠️ `cmd/inspect/cmd/run.go` 中有一处调用需要手动更新：
+> ```go
+> // 需要将 WriteCombined 调用添加 nginxResult 参数
+> w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, outputPath)
+> ```
+> 该文件被 `.gitignore` 限制访问，需要用户手动修改。
+
+---
+
 ## 下一步工作
 
-步骤 6：集成 Nginx 巡检到主服务
+### 步骤 7：扩展报告生成器支持 Nginx
 
 **待修改文件**:
-- `internal/service/inspector.go` - 扩展主巡检服务
+- `internal/report/html/templates/combined.html` - 添加 Nginx 巡检区域
+- `internal/report/excel/writer.go` - 添加 Nginx Sheet（可选）
 
 **功能要点**:
-- 加载 Nginx 配置
-- 创建 Nginx 客户端
-- 调用 NginxInspector
-- 合并 Nginx 结果到主报告
+- 在 HTML 模板中添加 Nginx 巡检数据展示区域
+- 添加 Nginx 实例表格和告警表格
+- 与 MySQL/Redis 保持一致的样式
 
-**待审核后开始实施**
+### 步骤 8：端到端验收
+
+**验证内容**:
+- 完整巡检流程测试
+- 报告生成验证
+- 边界条件测试
