@@ -8,8 +8,9 @@
 | | 2. 配置 exec 插件 | ✅ 已完成 | 2025-12-20 |
 | 二、数据模型 | 3. 定义 Nginx 数据模型 | ✅ 已完成 | 2025-12-21 |
 | | 4. 扩展配置结构 | ✅ 已完成 | 2025-12-21 |
-| 三、服务实现 | 5. 实现采集器和评估器 | ⏳ 待开始 | - |
-| | 6. 集成到主服务 | ⏳ 待开始 | - |
+| 三、服务实现 | 5. 实现采集器和评估器 | ✅ 已完成 | 2025-12-22 |
+| | 5.1 创建 Nginx 巡检服务 | ✅ 已完成 | 2025-12-22 |
+| 6. 集成到主服务 | ⏳ 待开始 | - |
 | 四、报告验收 | 7. 扩展报告生成器 | ⏳ 待开始 | - |
 | | 8. 端到端验收 | ⏳ 待开始 | - |
 
@@ -163,20 +164,88 @@ type NginxThresholds struct {
 
 ---
 
+## 步骤 5 完成详情
+
+**完成日期**: 2025-12-22
+
+### 创建/修改的文件
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `internal/service/nginx_collector.go` | 创建 | Nginx 数据采集器（777 行） |
+| `internal/service/nginx_collector_test.go` | 创建 | 采集器单元测试（43 个测试） |
+| `internal/service/nginx_evaluator.go` | 创建 | Nginx 阈值评估器（531 行） |
+| `internal/service/nginx_evaluator_test.go` | 创建 | 评估器单元测试（31 个测试） |
+| `internal/service/nginx_inspector.go` | 创建 | Nginx 巡检编排服务（223 行） |
+| `internal/service/nginx_inspector_test.go` | 创建 | 巡检服务单元测试（12 个测试） |
+
+### 总代码统计
+
+| 文件 | 行数 | 测试数 | 覆盖率 |
+|------|------|--------|--------|
+| nginx_collector.go | 777 | 43 | 高 |
+| nginx_evaluator.go | 531 | 31 | 高 |
+| nginx_inspector.go | 223 | 12 | 高 |
+| **总计** | **1531** | **86** | **高** |
+
+### 核心功能实现
+
+#### 1. NginxCollector 数据采集器
+
+**主要方法**:
+- `DiscoverInstances()` - 通过 `nginx_info` 发现实例
+- `CollectMetrics()` - 并发采集所有指标（支持 errgroup）
+- `CollectUpstreamStatus()` - 采集 Upstream 后端状态
+- `matchesHostnamePatterns()` - 主机名通配符匹配（如 `GX-NM-*`）
+
+**特性**:
+- 支持容器和二进制部署
+- 从 N9E API 获取 IP 地址
+- 并发采集，单指标失败不影响整体
+- 标签提取支持（port, app_type, version, install_path）
+
+#### 2. NginxEvaluator 阈值评估器
+
+**评估规则**:
+- 连接状态：`nginx_up=0` → Critical
+- 连接使用率：>90% Critical, >70% Warning
+- 错误日志时间：<10min Critical, <60min Warning（逻辑反转）
+- 错误页配置：未配置 → Critical
+- 非root用户：root启动 → Critical
+- Upstream状态：后端异常 → Critical
+
+#### 3. NginxInspector 巡检编排器
+
+**工作流程**:
+1. 发现实例（DiscoverInstances）
+2. 采集指标（CollectMetrics）
+3. 采集 Upstream 状态（CollectUpstreamStatus）
+4. 评估阈值（EvaluateAll）
+5. 聚合结果（AddResult + Finalize）
+
+### 测试验证
+
+- **总测试数**: 86 个
+- **通过率**: 100%
+- **覆盖场景**:
+  - 实例发现（成功/失败/过滤）
+  - 指标采集（并发/标签提取/待处理指标）
+  - 阈值评估（各级别告警）
+  - 巡检编排（完整流程/异常处理）
+
+---
+
 ## 下一步工作
 
-步骤 5：实现 Nginx 采集器和评估器
+步骤 6：集成 Nginx 巡检到主服务
 
-**待创建文件**:
-- `internal/service/nginx_collector.go` - Nginx 数据采集器
-- `internal/service/nginx_evaluator.go` - Nginx 阈值评估器
+**待修改文件**:
+- `internal/service/inspector.go` - 扩展主巡检服务
 
 **功能要点**:
-- 查询 `nginx_info` 发现实例
-- 采集 nginx_* 指标（插件 + exec）
-- 采集 `nginx_upstream_check_*` 指标
-- 连接使用率评估
-- 错误日志时间评估
-- Upstream 后端状态评估
+- 加载 Nginx 配置
+- 创建 Nginx 客户端
+- 调用 NginxInspector
+- 合并 Nginx 结果到主报告
 
 **待审核后开始实施**
