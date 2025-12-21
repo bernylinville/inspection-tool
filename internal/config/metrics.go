@@ -168,3 +168,56 @@ func CountActiveRedisMetrics(metrics []*model.RedisMetricDefinition) int {
 	}
 	return count
 }
+
+// LoadNginxMetrics reads Nginx metric definitions from the specified YAML file.
+// It returns a slice of NginxMetricDefinition pointers for use with NginxCollector and NginxEvaluator.
+func LoadNginxMetrics(metricsPath string) ([]*model.NginxMetricDefinition, error) {
+	if metricsPath == "" {
+		return nil, fmt.Errorf("Nginx metrics file path is required")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(metricsPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("Nginx metrics file not found: %s", metricsPath)
+	}
+
+	// Read file content
+	data, err := os.ReadFile(metricsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Nginx metrics file: %w", err)
+	}
+
+	// Parse YAML
+	var cfg model.NginxMetricsConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse Nginx metrics file: %w", err)
+	}
+
+	// Validate metrics
+	if len(cfg.Metrics) == 0 {
+		return nil, fmt.Errorf("no Nginx metrics defined in file: %s", metricsPath)
+	}
+
+	// Validate each metric definition
+	for i, m := range cfg.Metrics {
+		if m.Name == "" {
+			return nil, fmt.Errorf("Nginx metric at index %d has no name", i)
+		}
+		if m.DisplayName == "" {
+			return nil, fmt.Errorf("Nginx metric %q has no display_name", m.Name)
+		}
+	}
+
+	return cfg.Metrics, nil
+}
+
+// CountActiveNginxMetrics returns the count of active (non-pending) Nginx metrics.
+func CountActiveNginxMetrics(metrics []*model.NginxMetricDefinition) int {
+	count := 0
+	for _, m := range metrics {
+		if !m.IsPending() {
+			count++
+		}
+	}
+	return count
+}

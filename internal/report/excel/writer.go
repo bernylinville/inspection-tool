@@ -24,6 +24,8 @@ const (
 	sheetMySQLAlerts = "MySQL 异常" // MySQL alerts sheet
 	sheetRedis       = "Redis 巡检" // Redis inspection sheet
 	sheetRedisAlerts = "Redis 异常" // Redis alerts sheet
+	sheetNginx       = "Nginx 巡检" // Nginx inspection sheet
+	sheetNginxAlerts = "Nginx 异常" // Nginx alerts sheet
 
 	// Default sheet to remove
 	defaultSheet = "Sheet1"
@@ -1556,6 +1558,473 @@ func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisC
 		case model.RedisStatusNormal:
 			f.SetCellStyle(sheetName, statusCell, statusCell, normalStyle)
 		}
+	}
+
+	return nil
+}
+
+// WriteCombined generates an Excel report combining Host, MySQL, Redis, and Nginx inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string) error {
+	// At least one result must be present
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
+		return fmt.Errorf("all inspection results are nil")
+	}
+
+	// Ensure output path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	// Create new Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create Host sheets if available
+	if hostResult != nil {
+		if err := w.createSummarySheet(f, hostResult); err != nil {
+			return fmt.Errorf("failed to create summary sheet: %w", err)
+		}
+		if err := w.createDetailSheet(f, hostResult); err != nil {
+			return fmt.Errorf("failed to create detail sheet: %w", err)
+		}
+		if err := w.createAlertsSheet(f, hostResult); err != nil {
+			return fmt.Errorf("failed to create alerts sheet: %w", err)
+		}
+	}
+
+	// Create MySQL sheets if available
+	if mysqlResult != nil {
+		if err := w.createMySQLSheet(f, mysqlResult); err != nil {
+			return fmt.Errorf("failed to create MySQL sheet: %w", err)
+		}
+		if err := w.createMySQLAlertsSheet(f, mysqlResult); err != nil {
+			return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
+		}
+	}
+
+	// Create Redis sheets if available
+	if redisResult != nil {
+		if err := w.createRedisSheet(f, redisResult); err != nil {
+			return fmt.Errorf("failed to create Redis sheet: %w", err)
+		}
+		if err := w.createRedisAlertsSheet(f, redisResult); err != nil {
+			return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
+		}
+	}
+
+	// Create Nginx sheets if available
+	if nginxResult != nil {
+		if err := w.createNginxSheet(f, nginxResult); err != nil {
+			return fmt.Errorf("failed to create Nginx sheet: %w", err)
+		}
+		if err := w.createNginxAlertsSheet(f, nginxResult); err != nil {
+			return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
+		}
+	}
+
+	// Remove default Sheet1
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+		// Ignore error if sheet doesn't exist
+	}
+
+	// Set active sheet to summary (or first available sheet)
+	activeSheet := sheetSummary
+	if hostResult == nil {
+		if mysqlResult != nil {
+			activeSheet = sheetMySQL
+		} else if redisResult != nil {
+			activeSheet = sheetRedis
+		} else if nginxResult != nil {
+			activeSheet = sheetNginx
+		}
+	}
+	idx, _ := f.GetSheetIndex(activeSheet)
+	f.SetActiveSheet(idx)
+
+	// Save the file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}
+
+// createNginxSheet creates the Nginx inspection sheet.
+func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectionResults) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetNginx)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{
+		"巡检时间", "主机标识符", "主机名", "IP地址", "应用类型", "端口/容器", "版本", "安装路径",
+		"错误日志路径", "运行状态", "活跃连接数", "连接使用率", "Worker进程数", "Worker连接数",
+		"4xx错误页", "5xx错误页", "最近错误时间", "非root用户", "整体状态",
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 20, // 巡检时间
+		"B": 18, // 主机标识符
+		"C": 15, // 主机名
+		"D": 15, // IP地址
+		"E": 10, // 应用类型
+		"F": 12, // 端口/容器
+		"G": 15, // 版本
+		"H": 25, // 安装路径
+		"I": 30, // 错误日志路径
+		"J": 10, // 运行状态
+		"K": 12, // 活跃连接数
+		"L": 12, // 连接使用率
+		"M": 12, // Worker进程数
+		"N": 15, // Worker连接数
+		"O": 12, // 4xx错误页
+		"P": 12, // 5xx错误页
+		"Q": 20, // 最近错误时间
+		"R": 12, // 非root用户
+		"S": 10, // 整体状态
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetNginx, col, col, width)
+	}
+
+	// Write headers
+	sheetName := sheetNginx
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		f.SetCellValue(sheetName, cell, header)
+		f.SetCellStyle(sheetName, cell, cell, headerStyle)
+	}
+
+	// Freeze header row
+	f.SetPanes(sheetName, &excelize.Panes{
+		Freeze:      true,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Write Nginx instance data
+	for i, r := range result.Results {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		// A: 巡检时间
+		f.SetCellValue(sheetName, "A"+rowStr, result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
+		// B: 主机标识符
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "B"+rowStr, r.Instance.Identifier)
+		}
+		// C: 主机名
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "C"+rowStr, r.Instance.Hostname)
+		}
+		// D: IP地址
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "D"+rowStr, r.Instance.IP)
+		}
+		// E: 应用类型
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "E"+rowStr, r.Instance.ApplicationType)
+		}
+		// F: 端口/容器
+		if r.Instance != nil {
+			if r.Instance.Container != "" {
+				f.SetCellValue(sheetName, "F"+rowStr, r.Instance.Container)
+			} else {
+				f.SetCellValue(sheetName, "F"+rowStr, fmt.Sprintf(":%d", r.Instance.Port))
+			}
+		}
+		// G: 版本
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "G"+rowStr, r.Instance.Version)
+		}
+		// H: 安装路径
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "H"+rowStr, r.Instance.InstallPath)
+		}
+		// I: 错误日志路径
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "I"+rowStr, r.Instance.ErrorLogPath)
+		}
+		// J: 运行状态
+		if r.Up {
+			f.SetCellValue(sheetName, "J"+rowStr, "运行")
+		} else {
+			f.SetCellValue(sheetName, "J"+rowStr, "停止")
+		}
+		// K: 活跃连接数
+		f.SetCellValue(sheetName, "K"+rowStr, r.ActiveConnections)
+		// L: 连接使用率
+		if r.ConnectionUsagePercent >= 0 {
+			f.SetCellValue(sheetName, "L"+rowStr, fmt.Sprintf("%.1f%%", r.ConnectionUsagePercent))
+			// Apply conditional format
+			usageCell := "L" + rowStr
+			if r.ConnectionUsagePercent > 90 {
+				f.SetCellStyle(sheetName, usageCell, usageCell, criticalStyle)
+			} else if r.ConnectionUsagePercent > 70 {
+				f.SetCellStyle(sheetName, usageCell, usageCell, warningStyle)
+			} else {
+				f.SetCellStyle(sheetName, usageCell, usageCell, normalStyle)
+			}
+		} else {
+			f.SetCellValue(sheetName, "L"+rowStr, "N/A")
+		}
+		// M: Worker进程数
+		f.SetCellValue(sheetName, "M"+rowStr, r.WorkerProcesses)
+		// N: Worker连接数
+		f.SetCellValue(sheetName, "N"+rowStr, r.WorkerConnections)
+		// O: 4xx错误页
+		if r.ErrorPage4xxConfigured {
+			f.SetCellValue(sheetName, "O"+rowStr, "已配置")
+		} else {
+			f.SetCellValue(sheetName, "O"+rowStr, "未配置")
+		}
+		// P: 5xx错误页
+		if r.ErrorPage5xxConfigured {
+			f.SetCellValue(sheetName, "P"+rowStr, "已配置")
+		} else {
+			f.SetCellValue(sheetName, "P"+rowStr, "未配置")
+		}
+		// Q: 最近错误时间
+		if r.LastErrorTimestamp > 0 {
+			f.SetCellValue(sheetName, "Q"+rowStr, time.Unix(r.LastErrorTimestamp, 0).In(w.timezone).Format("2006-01-02 15:04:05"))
+		} else {
+			f.SetCellValue(sheetName, "Q"+rowStr, "无错误")
+		}
+		// R: 非root用户
+		if r.NonRootUser {
+			f.SetCellValue(sheetName, "R"+rowStr, "是")
+		} else {
+			f.SetCellValue(sheetName, "R"+rowStr, "否")
+		}
+		// S: 整体状态
+		f.SetCellValue(sheetName, "S"+rowStr, nginxStatusText(r.Status))
+
+		// Apply conditional format to status column
+		statusCell := "S" + rowStr
+		switch r.Status {
+		case model.NginxStatusCritical:
+			f.SetCellStyle(sheetName, statusCell, statusCell, criticalStyle)
+		case model.NginxStatusWarning:
+			f.SetCellStyle(sheetName, statusCell, statusCell, warningStyle)
+		case model.NginxStatusNormal:
+			f.SetCellStyle(sheetName, statusCell, statusCell, normalStyle)
+		}
+	}
+
+	return nil
+}
+
+// createNginxAlertsSheet creates the Nginx alerts sheet.
+func (w *Writer) createNginxAlertsSheet(f *excelize.File, result *model.NginxInspectionResults) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetNginxAlerts)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers
+	headers := []string{
+		"主机标识符", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息",
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 18, // 主机标识符
+		"B": 10, // 告警级别
+		"C": 20, // 指标名称
+		"D": 15, // 当前值
+		"E": 12, // 警告阈值
+		"F": 12, // 严重阈值
+		"G": 50, // 告警消息
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetNginxAlerts, col, col, width)
+	}
+
+	// Write headers
+	sheetName := sheetNginxAlerts
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		f.SetCellValue(sheetName, cell, header)
+		f.SetCellStyle(sheetName, cell, cell, headerStyle)
+	}
+
+	// Freeze header row
+	f.SetPanes(sheetName, &excelize.Panes{
+		Freeze:      true,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Write alert data
+	for i, alert := range result.Alerts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		// A: 主机标识符
+		f.SetCellValue(sheetName, "A"+rowStr, alert.Identifier)
+		// B: 告警级别
+		f.SetCellValue(sheetName, "B"+rowStr, alert.Level)
+		// C: 指标名称
+		f.SetCellValue(sheetName, "C"+rowStr, alert.MetricDisplayName)
+		// D: 当前值
+		f.SetCellValue(sheetName, "D"+rowStr, alert.FormattedValue)
+		// E: 警告阈值
+		f.SetCellValue(sheetName, "E"+rowStr, formatNginxThreshold(alert.WarningThreshold))
+		// F: 严重阈值
+		f.SetCellValue(sheetName, "F"+rowStr, formatNginxThreshold(alert.CriticalThreshold))
+		// G: 告警消息
+		f.SetCellValue(sheetName, "G"+rowStr, alert.Message)
+
+		// Apply conditional format to alert level column
+		levelCell := "B" + rowStr
+		switch alert.Level {
+		case model.AlertLevelCritical:
+			f.SetCellStyle(sheetName, levelCell, levelCell, criticalStyle)
+		case model.AlertLevelWarning:
+			f.SetCellStyle(sheetName, levelCell, levelCell, warningStyle)
+		}
+	}
+
+	return nil
+}
+
+// nginxStatusText converts NginxInstanceStatus to Chinese text.
+func nginxStatusText(status model.NginxInstanceStatus) string {
+	switch status {
+	case model.NginxStatusNormal:
+		return "正常"
+	case model.NginxStatusWarning:
+		return "警告"
+	case model.NginxStatusCritical:
+		return "严重"
+	case model.NginxStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// formatNginxThreshold formats threshold value for display.
+func formatNginxThreshold(value float64) string {
+	if value == 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.1f", value)
+}
+
+// WriteNginxInspection generates an Excel report for Nginx inspection results.
+func (w *Writer) WriteNginxInspection(result *model.NginxInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("Nginx inspection result is nil")
+	}
+
+	// Ensure output path has .xlsx extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	// Create new Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create Nginx sheet
+	if err := w.createNginxSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx sheet: %w", err)
+	}
+
+	// Create Nginx alerts sheet
+	if err := w.createNginxAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
+	}
+
+	// Remove default Sheet1
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+		// Ignore error if sheet doesn't exist
+	}
+
+	// Set active sheet to Nginx
+	idx, _ := f.GetSheetIndex(sheetNginx)
+	f.SetActiveSheet(idx)
+
+	// Save the file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}
+
+// AppendNginxInspection appends Nginx inspection data to an existing Excel file.
+func (w *Writer) AppendNginxInspection(result *model.NginxInspectionResults, existingPath string) error {
+	if result == nil {
+		return fmt.Errorf("Nginx inspection result is nil")
+	}
+
+	// Open existing Excel file
+	f, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		return fmt.Errorf("failed to open existing Excel file: %w", err)
+	}
+	defer f.Close()
+
+	// Create Nginx sheet
+	if err := w.createNginxSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx sheet: %w", err)
+	}
+
+	// Create Nginx alerts sheet
+	if err := w.createNginxAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
+	}
+
+	// Save the file
+	if err := f.Save(); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
 
 	return nil

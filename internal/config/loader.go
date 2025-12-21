@@ -105,4 +105,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("redis.thresholds.connection_usage_critical", 90.0)
 	v.SetDefault("redis.thresholds.replication_lag_warning", 1048576)   // 1MB
 	v.SetDefault("redis.thresholds.replication_lag_critical", 10485760) // 10MB
+
+	// Nginx inspection defaults
+	v.SetDefault("nginx.enabled", false)
+	v.SetDefault("nginx.thresholds.connection_usage_warning", 70.0)
+	v.SetDefault("nginx.thresholds.connection_usage_critical", 90.0)
+	v.SetDefault("nginx.thresholds.last_error_warning_minutes", 60)
+	v.SetDefault("nginx.thresholds.last_error_critical_minutes", 10)
 }

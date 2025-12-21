@@ -13,6 +13,7 @@ type Config struct {
 	HTTP        HTTPConfig            `mapstructure:"http"`
 	MySQL       MySQLInspectionConfig `mapstructure:"mysql"`
 	Redis       RedisInspectionConfig `mapstructure:"redis"`
+	Nginx       NginxInspectionConfig `mapstructure:"nginx"`
 }
 
 // DatasourcesConfig contains configurations for data sources.
@@ -141,4 +142,30 @@ type RedisThresholds struct {
 	ConnectionUsageCritical float64 `mapstructure:"connection_usage_critical" validate:"gte=0,lte=100"` // Default: 90
 	ReplicationLagWarning   int64   `mapstructure:"replication_lag_warning" validate:"gte=0"`           // Default: 1MB (1048576)
 	ReplicationLagCritical  int64   `mapstructure:"replication_lag_critical" validate:"gte=0"`          // Default: 10MB (10485760)
+}
+
+// =============================================================================
+// Nginx Inspection Configuration
+// =============================================================================
+
+// NginxInspectionConfig contains configurations for Nginx inspection.
+type NginxInspectionConfig struct {
+	Enabled        bool            `mapstructure:"enabled"`
+	InstanceFilter NginxFilter     `mapstructure:"instance_filter"`
+	Thresholds     NginxThresholds `mapstructure:"thresholds"`
+}
+
+// NginxFilter defines Nginx instance filtering criteria.
+type NginxFilter struct {
+	HostnamePatterns []string          `mapstructure:"hostname_patterns"` // Hostname patterns (glob, e.g., "GX-NM-*")
+	BusinessGroups   []string          `mapstructure:"business_groups"`   // Business groups (OR relation)
+	Tags             map[string]string `mapstructure:"tags"`              // Tags (AND relation)
+}
+
+// NginxThresholds contains threshold configurations for Nginx alerts.
+type NginxThresholds struct {
+	ConnectionUsageWarning   float64 `mapstructure:"connection_usage_warning" validate:"gte=0,lte=100"`  // Default: 70
+	ConnectionUsageCritical  float64 `mapstructure:"connection_usage_critical" validate:"gte=0,lte=100"` // Default: 90
+	LastErrorWarningMinutes  int     `mapstructure:"last_error_warning_minutes" validate:"gte=0"`        // Default: 60
+	LastErrorCriticalMinutes int     `mapstructure:"last_error_critical_minutes" validate:"gte=0"`       // Default: 10
 }

@@ -85,6 +85,10 @@ func Validate(cfg *Config) error {
 		validationErrors = append(validationErrors, errs...)
 	}
 
+	if errs := validateNginxThresholds(cfg); len(errs) > 0 {
+		validationErrors = append(validationErrors, errs...)
+	}
+
 	if len(validationErrors) > 0 {
 		return validationErrors
 	}
@@ -219,6 +223,40 @@ func validateRedisThresholds(cfg *Config) ValidationErrors {
 			Value:   "",
 			Message: "cluster_mode is required when Redis inspection is enabled",
 		})
+	}
+
+	return errors
+}
+
+// validateNginxThresholds validates Nginx threshold configuration.
+func validateNginxThresholds(cfg *Config) ValidationErrors {
+	var errors ValidationErrors
+
+	// Skip validation if Nginx inspection is disabled
+	if !cfg.Nginx.Enabled {
+		return errors
+	}
+
+	// Validate connection usage thresholds (warning < critical)
+	if cfg.Nginx.Thresholds.ConnectionUsageWarning >= cfg.Nginx.Thresholds.ConnectionUsageCritical {
+		errors = append(errors, &ValidationError{
+			Field:   "nginx.thresholds.connection_usage",
+			Tag:     "threshold_order",
+			Value:   fmt.Sprintf("warning=%v, critical=%v", cfg.Nginx.Thresholds.ConnectionUsageWarning, cfg.Nginx.Thresholds.ConnectionUsageCritical),
+			Message: fmt.Sprintf("warning threshold (%.2f) must be less than critical threshold (%.2f)", cfg.Nginx.Thresholds.ConnectionUsageWarning, cfg.Nginx.Thresholds.ConnectionUsageCritical),
+		})
+	}
+
+	// Validate last error thresholds (warning > critical, because larger minutes = less severe)
+	if cfg.Nginx.Thresholds.LastErrorWarningMinutes > 0 && cfg.Nginx.Thresholds.LastErrorCriticalMinutes > 0 {
+		if cfg.Nginx.Thresholds.LastErrorWarningMinutes <= cfg.Nginx.Thresholds.LastErrorCriticalMinutes {
+			errors = append(errors, &ValidationError{
+				Field:   "nginx.thresholds.last_error",
+				Tag:     "threshold_order",
+				Value:   fmt.Sprintf("warning=%v, critical=%v", cfg.Nginx.Thresholds.LastErrorWarningMinutes, cfg.Nginx.Thresholds.LastErrorCriticalMinutes),
+				Message: fmt.Sprintf("warning threshold (%d minutes) must be greater than critical threshold (%d minutes) for error log timing", cfg.Nginx.Thresholds.LastErrorWarningMinutes, cfg.Nginx.Thresholds.LastErrorCriticalMinutes),
+			})
+		}
 	}
 
 	return errors

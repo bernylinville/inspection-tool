@@ -75,6 +75,10 @@
             background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
         }
 
+        .section-header.nginx-section {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
         .section-header h2 {
             font-size: 20px;
             font-weight: 600;
@@ -141,6 +145,10 @@
             border-bottom-color: #dc3545;
         }
 
+        .section-title.nginx {
+            border-bottom-color: #28a745;
+        }
+
         /* Tables */
         .table-container {
             background: white;
@@ -195,6 +203,14 @@
 
         th.redis-header:hover {
             background: #c82333;
+        }
+
+        th.nginx-header {
+            background: #28a745;
+        }
+
+        th.nginx-header:hover {
+            background: #218838;
         }
 
         th.sortable::after {
@@ -293,6 +309,40 @@
         .badge-warning { background: #ffeb9c; color: #9c6500; }
         .badge-critical { background: #ffc7ce; color: #9c0006; }
         .badge-failed { background: #d9d9d9; color: #666; }
+
+        /* Nginx specific badges */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-badge.status-运行 { background: #c6efce; color: #006100; }
+        .status-badge.status-停止 { background: #ffc7ce; color: #9c0006; }
+
+        .config-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .config-badge.config-已配置 { background: #c6efce; color: #006100; }
+        .config-badge.config-未配置 { background: #ffc7ce; color: #9c0006; }
+
+        .user-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .user-badge.user-是 { background: #c6efce; color: #006100; }
+        .user-badge.user-否 { background: #ffc7ce; color: #9c0006; }
 
         /* Footer */
         .footer {
@@ -875,6 +925,132 @@
         {{end}}
         {{end}}
 
+        {{if .HasNginx}}
+        <!-- ============================================================ -->
+        <!-- Nginx Inspection Section -->
+        <!-- ============================================================ -->
+        <div class="section-header nginx-section">
+            <h2>🟢 Nginx 巡检</h2>
+        </div>
+
+        <!-- Nginx Summary Section -->
+        <section class="summary-section">
+            <h3 class="section-title nginx">Nginx 巡检概览</h3>
+            <div class="summary-cards">
+                <div class="card card-total">
+                    <div class="card-value">{{.NginxSummary.TotalInstances}}</div>
+                    <div class="card-label">实例总数</div>
+                </div>
+                <div class="card card-normal">
+                    <div class="card-value">{{.NginxSummary.NormalInstances}}</div>
+                    <div class="card-label">正常实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.NginxSummary.WarningInstances}}</div>
+                    <div class="card-label">警告实例</div>
+                </div>
+                <div class="card card-critical">
+                    <div class="card-value">{{.NginxSummary.CriticalInstances}}</div>
+                    <div class="card-label">严重实例</div>
+                </div>
+                <div class="card card-failed">
+                    <div class="card-value">{{.NginxSummary.FailedInstances}}</div>
+                    <div class="card-label">失败实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.NginxAlertSummary.TotalAlerts}}</div>
+                    <div class="card-label">告警总数</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Nginx Details Section -->
+        <section class="details-section">
+            <h3 class="section-title nginx">Nginx 实例详情</h3>
+            <div class="table-container">
+                <table id="nginx-table" class="table nginx-table">
+                    <thead>
+                        <tr>
+                            <th class="nginx-header sortable" data-column="identifier">标识符</th>
+                            <th class="nginx-header sortable" data-column="hostname">主机名</th>
+                            <th class="nginx-header sortable" data-column="ip">IP地址</th>
+                            <th class="nginx-header sortable" data-column="app_type">应用类型</th>
+                            <th class="nginx-header sortable" data-column="endpoint">端口/容器</th>
+                            <th class="nginx-header sortable" data-column="version">版本</th>
+                            <th class="nginx-header sortable" data-column="status">运行状态</th>
+                            <th class="nginx-header sortable" data-column="connections">连接数</th>
+                            <th class="nginx-header sortable" data-column="connection_usage">连接使用率</th>
+                            <th class="nginx-header sortable" data-column="worker_processes">Worker进程</th>
+                            <th class="nginx-header sortable" data-column="worker_connections">Worker连接数</th>
+                            <th class="nginx-header sortable" data-column="error_page_4xx">4xx错误页</th>
+                            <th class="nginx-header sortable" data-column="error_page_5xx">5xx错误页</th>
+                            <th class="nginx-header sortable" data-column="last_error">最近错误</th>
+                            <th class="nginx-header sortable" data-column="non_root_user">非root用户</th>
+                            <th class="nginx-header sortable" data-column="status">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .NginxInstances}}
+                        <tr>
+                            <td>{{.Identifier}}</td>
+                            <td>{{.Hostname}}</td>
+                            <td>{{.IP}}</td>
+                            <td>{{.ApplicationType}}</td>
+                            <td>{{if .Container}}{{.Container}}{{else}}{{.Port}}{{end}}</td>
+                            <td>{{.Version}}</td>
+                            <td><span class="status-badge status-{{.Up}}">{{.Up}}</span></td>
+                            <td>{{.ActiveConnections}}</td>
+                            <td>{{.ConnectionUsagePercent}}</td>
+                            <td>{{.WorkerProcesses}}</td>
+                            <td>{{.WorkerConnections}}</td>
+                            <td><span class="config-badge config-{{.ErrorPage4xx}}">{{.ErrorPage4xx}}</span></td>
+                            <td><span class="config-badge config-{{.ErrorPage5xx}}">{{.ErrorPage5xx}}</span></td>
+                            <td>{{.LastErrorTime}}</td>
+                            <td><span class="user-badge user-{{.NonRootUser}}">{{.NonRootUser}}</span></td>
+                            <td><span class="badge badge-{{.StatusClass}}">{{.Status}}</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Nginx Alerts Section -->
+        {{if .NginxAlerts}}
+        <section class="alerts-section">
+            <h3 class="section-title nginx">Nginx 异常汇总</h3>
+            <div class="table-container">
+                <table id="nginx-alerts-table" class="table nginx-table">
+                    <thead>
+                        <tr>
+                            <th class="nginx-header">标识符</th>
+                            <th class="nginx-header">告警级别</th>
+                            <th class="nginx-header">指标名称</th>
+                            <th class="nginx-header">当前值</th>
+                            <th class="nginx-header">警告阈值</th>
+                            <th class="nginx-header">严重阈值</th>
+                            <th class="nginx-header">告警消息</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .NginxAlerts}}
+                        <tr>
+                            <td>{{.Identifier}}</td>
+                            <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
+                            <td>{{.MetricDisplayName}}</td>
+                            <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
+                            <td>{{.WarningThreshold}}</td>
+                            <td>{{.CriticalThreshold}}</td>
+                            <td>{{.Message}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {{end}}
+        {{end}}
+
         <!-- Footer -->
         <footer class="footer">
             <p>报告生成时间: {{.GeneratedAt}} | {{if .Version}}版本: {{.Version}} | {{end}}系统巡检工具</p>
@@ -976,6 +1152,8 @@
                 setupTableSorting('hosts-table', 2);
                 setupTableSorting('mysql-table', 9);
                 setupTableSorting('redis-table', 13);
+                setupTableSorting('nginx-table', 15); // Default sort by status column
+                setupTableSorting('nginx-alerts-table', 0); // Default sort by identifier
             });
         })();
     </script>

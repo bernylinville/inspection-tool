@@ -1,0 +1,117 @@
+# =============================================================================
+# Nginx 巡检工具 - 指标定义文件
+# =============================================================================
+#
+# 本文件定义了所有 Nginx 巡检指标的 PromQL 查询表达式和元数据。
+# 基于 Categraf 采集的 Nginx 监控数据，支持二进制部署和容器部署。
+#
+# 指标字段说明:
+#   name:           指标唯一标识符（用于代码引用）
+#   display_name:   中文显示名称（用于报告展示）
+#   query:          PromQL 查询表达式
+#   category:       分类（connection、info、config、security、log、upstream）
+#   label_extract:  从指标标签提取值（可选，支持数组）
+#   format:         格式化类型（可选：timestamp）
+#   status:         状态（可选：pending 表示待实现）
+#   note:           备注说明
+#
+# =============================================================================
+
+nginx_metrics:
+  # ---------------------------------------------------------------------------
+  # 连接状态指标 (来自 nginx 插件 + exec 脚本)
+  # ---------------------------------------------------------------------------
+  - name: nginx_up
+    display_name: "运行状态"
+    query: "nginx_up"
+    category: connection
+    note: "1=运行中, 0=停止"
+
+  - name: nginx_active
+    display_name: "活跃连接数"
+    query: "nginx_active"
+    category: connection
+    note: "当前活跃的客户端连接数"
+
+  # ---------------------------------------------------------------------------
+  # 实例信息指标 (来自 exec 脚本)
+  # ---------------------------------------------------------------------------
+  - name: nginx_info
+    display_name: "实例信息"
+    query: "nginx_info"
+    category: info
+    label_extract:
+      - port
+      - app_type
+      - install_path
+      - version
+    note: "从标签提取端口、应用类型、安装路径、版本信息"
+
+  # ---------------------------------------------------------------------------
+  # 配置类指标 (来自 exec 脚本)
+  # ---------------------------------------------------------------------------
+  - name: nginx_worker_processes
+    display_name: "Worker 进程数"
+    query: "nginx_worker_processes"
+    category: config
+    note: "nginx.conf 配置的 worker_processes 数量"
+
+  - name: nginx_worker_connections
+    display_name: "单 Worker 最大连接数"
+    query: "nginx_worker_connections"
+    category: config
+    note: "nginx.conf 配置的 worker_connections 数量"
+
+  - name: nginx_error_page_4xx
+    display_name: "4xx 错误页配置"
+    query: "nginx_error_page_4xx"
+    category: config
+    note: "1=已配置 4xx 错误页重定向, 0=未配置"
+
+  - name: nginx_error_page_5xx
+    display_name: "5xx 错误页配置"
+    query: "nginx_error_page_5xx"
+    category: config
+    note: "1=已配置 5xx 错误页重定向, 0=未配置"
+
+  # ---------------------------------------------------------------------------
+  # 安全类指标 (来自 exec 脚本)
+  # ---------------------------------------------------------------------------
+  - name: nginx_non_root_user
+    display_name: "非 root 用户启动"
+    query: "nginx_non_root_user"
+    category: security
+    note: "1=非 root 用户启动（安全）, 0=root 用户启动（存在风险）"
+
+  # ---------------------------------------------------------------------------
+  # 日志类指标 (来自 exec 脚本)
+  # ---------------------------------------------------------------------------
+  - name: nginx_last_error_timestamp
+    display_name: "最近错误日志时间"
+    query: "nginx_last_error_timestamp"
+    category: log
+    format: timestamp
+    label_extract:
+      - error_log_path
+    note: "Unix 时间戳，0 表示从未有错误日志；从 error_log_path 标签提取日志路径"
+
+  # ---------------------------------------------------------------------------
+  # Upstream 健康检查指标 (来自 nginx_upstream_check 插件)
+  # ---------------------------------------------------------------------------
+  - name: nginx_upstream_check_status_code
+    display_name: "Upstream 后端状态"
+    query: "nginx_upstream_check_status_code"
+    category: upstream
+    note: "1=后端正常, 0=后端异常；标签包含 upstream (名称) 和 name (后端地址)"
+
+  - name: nginx_upstream_check_rise
+    display_name: "Upstream 连续成功次数"
+    query: "nginx_upstream_check_rise"
+    category: upstream
+    note: "后端健康检查连续成功的次数"
+
+  - name: nginx_upstream_check_fall
+    display_name: "Upstream 连续失败次数"
+    query: "nginx_upstream_check_fall"
+    category: upstream
+    note: "后端健康检查连续失败的次数"

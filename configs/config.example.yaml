@@ -264,3 +264,47 @@ redis:
     # 正常情况下复制延迟应该很小（KB级）
     replication_lag_warning: 1048576    # 1MB - 保守警告阈值
     replication_lag_critical: 10485760  # 10MB - 保守严重阈值
+
+# -----------------------------------------------------------------------------
+# Nginx 巡检配置
+# -----------------------------------------------------------------------------
+# 用途: Nginx/OpenResty 巡检（支持二进制部署和容器部署）
+# 数据来源: VictoriaMetrics（通过 Categraf nginx 插件 + exec 脚本采集的 nginx_* 指标）
+nginx:
+  # 是否启用 Nginx 巡检 (默认: false)
+  enabled: true
+
+  # 实例筛选条件 (可选)
+  # 不配置则查询所有 Nginx 实例
+  instance_filter:
+    # 主机名匹配模式 (支持通配符 *)
+    # 示例: "GX-NM-*" 匹配所有以 GX-NM- 开头的主机
+    # 示例: "*-NGX-*" 匹配主机名包含 -NGX- 的主机
+    hostname_patterns:
+      # - "GX-NM-*"
+      # - "*-NGX-*"
+
+    # 业务组筛选 (OR 关系)
+    # 匹配任意一个业务组的实例都会被纳入巡检
+    business_groups:
+      # - "生产Nginx"
+      # - "OpenResty集群"
+
+    # 标签筛选 (AND 关系)
+    # 与业务组条件之间是 AND 关系
+    tags:
+      # env: "prod"
+      # component: "nginx"
+
+  # 阈值配置
+  thresholds:
+    # 连接使用率阈值 (单位: %)
+    # 计算方式: active_connections / (worker_processes * worker_connections) * 100
+    connection_usage_warning: 70   # 连接使用率 > 70% 触发警告
+    connection_usage_critical: 90  # 连接使用率 > 90% 触发严重告警
+
+    # 最近错误日志时间阈值 (单位: 分钟)
+    # 检测 error.log 最后一条错误日志距今的时间
+    # 注意: 时间越短越严重，因此 warning > critical
+    last_error_warning_minutes: 60   # 1小时内有错误触发警告
+    last_error_critical_minutes: 10  # 10分钟内有错误触发严重告警
