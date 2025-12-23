@@ -112,9 +112,9 @@ data_format = "prometheus"
 
 ---
 
-## 阶段一：Categraf 采集配置部署（步骤 1-2）
+## 阶段一：Categraf 采集配置部署（步骤 1-2）✅ 已完成
 
-### 步骤 1：部署 Tomcat 巡检采集脚本
+### 步骤 1：部署 Tomcat 巡检采集脚本 ✅ 已完成
 
 **操作**：
 
@@ -124,15 +124,15 @@ data_format = "prometheus"
 
 **验证**：
 
-- [ ] 执行脚本输出 Prometheus 格式数据
-- [ ] 输出包含 `tomcat_up`、`tomcat_info`、`tomcat_connections` 等指标
-- [ ] `tomcat_info` 标签包含 `port`、`app_type`、`install_path`、`log_path`、`version`、`jvm_config`
-- [ ] `tomcat_up` 标签包含 `container`、`ip`、`port`
-- [ ] 各数值正确（运行状态、连接数、运行时长等）
+- [x] 执行脚本输出 Prometheus 格式数据
+- [x] 输出包含 `tomcat_up`、`tomcat_info`、`tomcat_connections` 等指标
+- [x] `tomcat_info` 标签包含 `port`、`app_type`、`install_path`、`log_path`、`version`、`jvm_config`
+- [x] `tomcat_up` 标签包含 `container`、`ip`、`port`
+- [x] 各数值正确（运行状态、连接数、运行时长等）
 
 ---
 
-### 步骤 2：配置 Categraf exec 插件并验证采集
+### 步骤 2：配置 Categraf exec 插件并验证采集 ✅ 已完成
 
 **操作**：
 
@@ -144,9 +144,9 @@ data_format = "prometheus"
 
 **验证**：
 
-- [ ] 执行 `./categraf --test --inputs exec` 输出所有 `tomcat_*` 指标
-- [ ] Categraf 服务已重启生效
-- [ ] N9E 监控平台可查询到 exec 脚本上报的监控数据
+- [x] 执行 `./categraf --test --inputs exec` 输出所有 `tomcat_*` 指标
+- [x] Categraf 服务已重启生效
+- [x] N9E 监控平台可查询到 exec 脚本上报的监控数据
 
 ---
 
@@ -488,8 +488,8 @@ if container != "" {
 
 | 阶段           | 步骤                    | 状态       | 完成日期   |
 | -------------- | ----------------------- | ---------- | ---------- |
-| 一、采集配置   | 1. 部署采集脚本         | ⏳ 待开始  | -          |
-|                | 2. 配置 exec 插件       | ⏳ 待开始  | -          |
+| 一、采集配置   | 1. 部署采集脚本         | ✅ 已完成  | 2025-12-23 |
+|                | 2. 配置 exec 插件       | ✅ 已完成  | 2025-12-23 |
 | 二、数据模型   | 3. 定义 Tomcat 数据模型 | ⏳ 待开始  | -          |
 |                | 4. 扩展配置结构         | ⏳ 待开始  | -          |
 | 三、服务实现   | 5. 实现采集器和评估器   | ⏳ 待开始  | -          |
