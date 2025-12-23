@@ -623,3 +623,114 @@ Step 7 将进行：
 - 扩展 Excel 报告生成器支持 Tomcat（internal/report/excel/writer.go）
 - 扩展 HTML 报告生成器支持 Tomcat（internal/report/html/writer.go）
 - 端到端验收测试
+
+---
+
+## Step 7 完成详情（2025-12-23）
+
+### 实施内容
+
+#### 1. Excel 报告生成器扩展
+
+**文件**：`internal/report/excel/writer.go`
+
+**添加内容**：
+
+1. **Sheet 常量**（第 29-30 行）
+   - `sheetTomcat = "Tomcat 巡检"`
+   - `sheetTomcatAlerts = "Tomcat 异常"`
+
+2. **辅助函数**（第 1962-2011 行）
+   - `tomcatStatusText()` - 状态转中文文本
+   - `tomcatBoolToText()` - 布尔值转是/否
+   - `getTomcatPortOrContainer()` - 获取端口或容器名
+   - `formatTomcatThreshold()` - 格式化阈值（时间反转逻辑）
+
+3. **createTomcatSheet 方法**（第 2098-2162 行）
+   - 15 列数据：巡检时间、主机名、IP地址、应用类型、端口、容器名、版本、安装路径、日志路径、JVM配置、连接数、运行时长、非root用户、最近错误时间、整体状态
+   - 支持条件格式（正常/警告/严重）
+   - 冻结首行、列宽自适应
+
+4. **createTomcatAlertsSheet 方法**（第 2197-2228 行）
+   - 7 列数据、告警排序、颜色编码
+
+5. **WriteTomcatInspection 方法**（第 2230-2261 行）
+   - 独立 Tomcat Excel 报告生成
+
+6. **AppendTomcatInspection 方法**（第 2263-2284 行）
+   - 向现有 Excel 文件追加 Tomcat sheet
+
+7. **WriteCombined 方法更新**（第 1568-1655 行）
+   - 添加 `tomcatResult` 参数和 Tomcat sheet 创建逻辑
+
+#### 2. HTML 报告生成器扩展
+
+**文件**：`internal/report/html/writer.go`
+
+**添加内容**：
+
+1. **Tomcat 数据结构**（第 1538-1587 行）
+   - `TomcatTemplateData`、`TomcatInstanceData`、`TomcatAlertData`
+
+2. **辅助函数**（第 1589-1653 行）
+   - `tomcatStatusText()`、`tomcatStatusClass()`、`formatTomcatThreshold()`
+
+3. **模板加载和转换方法**（第 1655-1743 行）
+   - `loadTomcatTemplate()`、`convertTomcatInstanceData()`、`convertTomcatAlerts()`、`prepareTomcatTemplateData()`
+
+4. **WriteTomcatInspection 方法**（第 1745-1773 行）
+   - 生成独立 Tomcat HTML 报告
+
+5. **CombinedTemplateData 扩展**（第 732-737 行）
+   - 添加 Tomcat 相关字段
+
+6. **WriteCombined 和 prepareCombinedTemplateData 更新**（第 743-932 行）
+   - 添加 `tomcatResult` 参数和处理逻辑
+
+#### 3. Tomcat HTML 模板
+
+**文件**：`internal/report/html/templates/tomcat.html`（新建）
+
+**特性**：
+- **橙色主题**：#fd7e14
+- 响应式设计、表格排序、摘要卡片、实例详情表、异常汇总表
+
+### 验证结果
+
+✅ **编译验证通过**：
+- `go build ./internal/report/excel/` 无编译错误
+- `go build ./internal/report/html/` 无编译错误
+- `go build ./internal/report/...` 无编译错误
+
+✅ **文件清单**：
+| 文件 | 操作 | 新增行数 |
+|------|------|----------|
+| internal/report/excel/writer.go | 修改 | +220 |
+| internal/report/html/writer.go | 修改 | +240 |
+| internal/report/html/templates/tomcat.html | 新建 | +470 |
+
+✅ **颜色方案验证**：
+- MySQL: #00758f (蓝绿色)
+- Redis: #dc3545 (红色)
+- Nginx: #28a745 (绿色)
+- Tomcat: #fd7e14 (橙色) ✅
+
+✅ **PID 字段排除**：
+- Excel 和 HTML 报告均不显示 PID 字段
+
+### 参考文件
+
+- `internal/report/excel/writer.go` - MySQL/Redis/Nginx 报告生成参考
+- `internal/report/html/writer.go` - MySQL/Redis/Nginx 模板参考
+- `internal/report/html/templates/mysql.html` - 模板结构参考
+- `memory-bank/tomcat-feature-implementation.md` - 权威需求文档
+
+---
+
+## 下一步
+
+✅ Step 7 已完成，**请用户审核通过后再进入 Step 8**
+
+Step 8 将进行：
+- 端到端验收测试
+- 报告生成验证
