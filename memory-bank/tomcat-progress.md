@@ -831,16 +831,91 @@ ok  	inspection-tool/internal/service	5.162s
 |------|------|----------|
 | cmd/inspect/cmd/run.go | 修改 | +4 / -16 |
 | internal/report/html/writer_test.go | 修改 | +4 / -4 |
+| internal/report/html/templates/combined.html | 修改 | +113 / -1 (CSS + HTML + JavaScript) |
 
 ### 注意事项
 
-**实际环境验证**：由于端到端测试需要实际的监控环境和 Tomcat 实例，以下验证需要在陕西营销活动环境中执行：
+**重要问题修复**：HTML 模板缺少 Tomcat 部分
 
-1. **巡检命令成功完成**：`./bin/inspect run -c config.yaml --tomcat-only`
-2. **Tomcat 实例正确发现**：验证从 VictoriaMetrics 查询到 `tomcat_up == 1` 的实例
-3. **所有巡检项数据正确**：验证 7 个指标数据采集完整
-4. **告警规则正确触发**：验证时间反转阈值逻辑（warning > critical）
-5. **报告正确生成**：验证 Excel 和 HTML 报告包含 Tomcat Sheet/区域
+#### 8. HTML 模板修复
+
+**问题发现**：虽然 Go 代码已正确实现，但 `internal/report/html/templates/combined.html` 模板文件缺少 Tomcat 部分。
+
+**文件**：`internal/report/html/templates/combined.html`
+
+**修复内容**：
+
+1. **添加 CSS 样式**（第 82-84 行，156-158 行）
+```css
+.section-header.tomcat-section {
+    background: linear-gradient(135deg, #fd7e14 0%, #e67a00 100%);
+}
+.section-title.tomcat {
+    border-bottom-color: #fd7e14;
+}
+```
+
+2. **添加 HTML 结构**（第 1054-1162 行）
+- Tomcat 巡检概览（摘要卡片）
+- Tomcat 实例详情表格
+- Tomcat 异常汇总表格
+
+3. **添加 JavaScript 表格排序初始化**（第 1275-1276 行）
+```javascript
+setupTableSorting('tomcat-table', 9); // Default sort by status column
+setupTableSorting('tomcat-alerts-table', 0); // Default sort by identifier
+```
+
+#### 9. 实际环境端到端验证
+
+**验证环境**：广西魔方UI（标签：`items: "广西魔方UI"`）
+
+**配置文件**：`config.yaml`
+```yaml
+tomcat:
+  enabled: true
+  instance_filter:
+    hostname_patterns:
+      - "GX-MFUI-*"
+    tags:
+      items: "广西魔方UI"  # 正确的标签
+  thresholds:
+    last_error_warning_minutes: 60
+    last_error_critical_minutes: 10
+```
+
+✅ **巡检命令成功完成**：
+```bash
+./bin/inspect run -c config.yaml --tomcat-only
+# 发现: 2 个 Tomcat 实例
+# 实例: GX-MFUI-BE-01, GX-MFUI-BE-02
+```
+
+✅ **完整巡检验证**：
+```bash
+./bin/inspect run -c config.yaml --format excel,html
+# 主机巡检: 32 台
+# MySQL: 3 实例
+# Redis: 6 实例
+# Nginx: 2 实例
+# Tomcat: 2 实例
+# 总耗时: 2.8s
+```
+
+✅ **Excel 报告验证**：
+- 包含 "Tomcat 巡检" 工作表
+- 显示 2 个实例详情
+- 容器名: tomcat-18002
+- 端口: 18002
+- 版本: Apache Tomcat/9.0.89
+- 连接数: 20-21
+- 状态: 正常
+
+✅ **HTML 报告验证**：
+- 包含 "🟠 Tomcat 巡检" 部分（橙色主题）
+- 摘要卡片正确显示：2/2/0/0/0（总数/正常/警告/严重/失败）
+- Tomcat 实例详情表格包含完整数据
+- 表格排序功能正常初始化
 
 ### 参考文件
 
