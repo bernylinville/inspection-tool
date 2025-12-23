@@ -81,14 +81,26 @@ version          # Tomcat 版本
 jvm_config       # JVM 配置参数
 ```
 
-### 4. 巡检状态判断规则
+### 4. 多实例支持
+
+**同一主机支持多个 Tomcat 实例**（通过 `container` 标签区分）：
+
+```
+主机 GX-MFUI-BE-01:
+  ├── tomcat-18001  → Identifier: GX-MFUI-BE-01:tomcat-18001
+  ├── tomcat-18002  → Identifier: GX-MFUI-BE-01:tomcat-18002
+  └── tomcat-18003  → Identifier: GX-MFUI-BE-01:tomcat-18003
+```
+
+### 5. 巡检状态判断规则
 
 | 巡检项              | 正常条件                         | 警告条件                         | 严重条件                         |
 | ------------------- | -------------------------------- | -------------------------------- | -------------------------------- |
 | 运行状态            | `tomcat_up=1`                    | -                                | `tomcat_up=0`                    |
 | 是否普通用户启动    | `non_root_user=1`                | -                                | `non_root_user=0` (root 启动)    |
 | 最近错误日志        | 无最近 1 小时错误                | 1 小时内有错误                   | 10 分钟内有错误                  |
-| 连接数              | `< 配置最大值 70%`               | `70%-90%`                        | `> 90%`                          |
+
+> **注意**：MVP 阶段连接数仅展示，不实现告警（因为采集脚本无法获取 max_connections 配置）。
 
 ### 5. 验证环境
 
@@ -172,13 +184,13 @@ data_format = "prometheus"
   - `TomcatInspectionResult` 结构体：
     - Instance (*TomcatInstance)
     - Up (bool): 运行状态
-    - Connections (int): 当前连接数
+    - Connections (int): 当前连接数（MVP 仅展示，不告警）
     - UptimeSeconds (int64): 运行时长（秒）
     - UptimeFormatted (string): 格式化显示
     - LastErrorTimestamp (int64): 最近错误日志时间戳
     - LastErrorTimeFormatted (string): 格式化显示
     - NonRootUser (bool): 是否非 root 用户启动
-    - PID (int): 容器主进程 PID
+    - PID (int): 容器主进程 PID（**内部使用，不在报告中展示**）
     - Status (TomcatInstanceStatus): 整体状态
     - Alerts ([]*TomcatAlert): 告警列表
   - `TomcatInstanceStatus` 枚举和 `TomcatAlert` 结构体
@@ -277,22 +289,24 @@ type TomcatThresholds struct {
 
 **Excel 列定义**：
 
-| 列名             | 数据来源                    |
-| ---------------- | --------------------------- |
-| 主机名           | agent_hostname              |
-| IP 地址          | ip 标签                     |
-| 应用类型         | app_type 标签               |
-| 端口             | port 标签                   |
-| 容器名           | container 标签              |
-| 版本             | version 标签                |
-| 安装路径         | install_path 标签           |
-| 日志路径         | log_path 标签               |
-| JVM 配置         | jvm_config 标签             |
-| 连接数           | tomcat_connections          |
-| 运行时长         | tomcat_uptime_seconds 格式化 |
-| 非 root 用户     | tomcat_non_root_user        |
-| 最近错误时间     | tomcat_last_error_timestamp 格式化 |
-| 状态             | 评估结果                    |
+| 列名             | 数据来源                    | 备注              |
+| ---------------- | --------------------------- | ----------------- |
+| 主机名           | agent_hostname              |                   |
+| IP 地址          | ip 标签                     |                   |
+| 应用类型         | app_type 标签               |                   |
+| 端口             | port 标签                   |                   |
+| 容器名           | container 标签              | 区分多实例        |
+| 版本             | version 标签                |                   |
+| 安装路径         | install_path 标签           |                   |
+| 日志路径         | log_path 标签               |                   |
+| JVM 配置         | jvm_config 标签             |                   |
+| 连接数           | tomcat_connections          | 仅展示，不告警    |
+| 运行时长         | tomcat_uptime_seconds 格式化 |                   |
+| 非 root 用户     | tomcat_non_root_user        |                   |
+| 最近错误时间     | tomcat_last_error_timestamp 格式化 |           |
+| 状态             | 评估结果                    |                   |
+
+> **注意**：PID (tomcat_pid) 字段仅内部使用，不在 Excel/HTML 报告中展示。
 
 **验证**：
 
@@ -455,29 +469,60 @@ tomcat:
 
 ## 附录 E：需求澄清与边界说明
 
-### 1. 容器 vs 二进制部署的判断依据
+### 1. 多实例支持（用户澄清）
+
+**问题**：同一主机是否支持多个 Tomcat 实例？
+
+**答复**：✅ **是，需支持多实例**
+
+- 同一主机可运行多个容器（如 tomcat-18001、tomcat-18002、tomcat-18003）
+- 通过 `container` 标签区分不同实例
+- 唯一标识：`hostname:container`（容器部署）或 `hostname:port`（二进制部署）
+
+### 2. 连接数告警规则（用户澄清）
+
+**问题**：连接数是否需要实现 70%/90% 阈值告警？
+
+**答复**：❌ **MVP 阶段不实现连接数告警**
+
+- 原因：采集脚本无法获取 `max_connections` 配置，无法计算使用率
+- MVP 行为：仅展示当前连接数数值，不进行告警评估
+- 用户说明："只要获取当前数据就行，因为我是巡检工具而不是监控告警，巡检工具依赖监控的数据"
+
+### 3. PID 字段显示（用户澄清）
+
+**问题**：PID 字段是否在报告中展示？
+
+**答复**：❌ **不展示 PID**
+
+- PID 字段保留在 `TomcatInspectionResult` 结构体中（内部使用）
+- Excel 报告和 HTML 报告中不显示 PID 列
+
+### 4. 容器 vs 二进制部署的判断依据
 
 **通过 `container` 标签是否存在/非空判断**：
 ```go
 if container != "" {
     DeploymentType = "container"
+    Identifier = fmt.Sprintf("%s:%s", hostname, container)
 } else {
     DeploymentType = "binary"
+    Identifier = fmt.Sprintf("%s:%d", hostname, port)
 }
 ```
 
-### 2. 错误日志时间戳为 0 的处理
+### 5. 错误日志时间戳为 0 的处理
 
 - `last_error_timestamp = 0` 表示 **从未有错误日志**
 - `LastErrorTimeFormatted = "无错误"`
 - 状态评估为 **正常**
 
-### 3. JVM 配置为空的处理
+### 6. JVM 配置为空的处理
 
 - 如果无法获取 JVM 配置，`jvm_config` 标签为空字符串
 - 报告中显示为 **"-"** 或 **"未配置"**
 
-### 4. IP 地址获取
+### 7. IP 地址获取
 
 - 直接从 `tomcat_up` 或 `tomcat_info` 指标的 `ip` 标签获取
 - 无需调用夜莺 API 查询元信息
@@ -504,3 +549,4 @@ if container != "" {
 | 日期       | 变更说明                                                |
 | ---------- | ------------------------------------------------------- |
 | 2025-12-23 | 初始版本，基于 Categraf exec 脚本采集实现 Tomcat 巡检   |
+| 2025-12-23 | 添加用户澄清：多实例支持、MVP 不实现连接数告警、PID 不展示 |
