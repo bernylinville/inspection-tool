@@ -168,23 +168,38 @@ func (a *TomcatAlert) IsCritical() bool {
 }
 
 // =============================================================================
+// Tomcat 指标值结构体
+// =============================================================================
+
+type TomcatMetricValue struct {
+	Name           string            `json:"name"`
+	RawValue       float64           `json:"raw_value"`
+	StringValue    string            `json:"string_value,omitempty"` // 标签提取的字符串值
+	FormattedValue string            `json:"formatted_value"`
+	IsNA           bool              `json:"is_na"`
+	Timestamp      int64             `json:"timestamp"`
+	Labels         map[string]string `json:"labels,omitempty"`
+}
+
+// =============================================================================
 // Tomcat 巡检结果结构体
 // =============================================================================
 
 type TomcatInspectionResult struct {
-	Instance               *TomcatInstance      `json:"instance"`
-	Up                     bool                 `json:"up"`
-	Connections            int                  `json:"connections"`
-	UptimeSeconds          int64                `json:"uptime_seconds"`
-	UptimeFormatted        string               `json:"uptime_formatted"`
-	LastErrorTimestamp     int64                `json:"last_error_timestamp"`
-	LastErrorTimeFormatted string               `json:"last_error_time_formatted"`
-	NonRootUser            bool                 `json:"non_root_user"`
-	PID                    int                  `json:"-"`
-	Status                 TomcatInstanceStatus `json:"status"`
-	Alerts                 []*TomcatAlert       `json:"alerts,omitempty"`
-	CollectedAt            time.Time            `json:"collected_at"`
-	Error                  string               `json:"error,omitempty"`
+	Instance               *TomcatInstance         `json:"instance"`
+	Up                     bool                    `json:"up"`
+	Connections            int                     `json:"connections"`
+	UptimeSeconds          int64                   `json:"uptime_seconds"`
+	UptimeFormatted        string                  `json:"uptime_formatted"`
+	LastErrorTimestamp     int64                   `json:"last_error_timestamp"`
+	LastErrorTimeFormatted string                  `json:"last_error_time_formatted"`
+	NonRootUser            bool                    `json:"non_root_user"`
+	PID                    int                     `json:"-"`
+	Metrics                map[string]*TomcatMetricValue `json:"-"` // 指标映射（内部使用，不序列化）
+	Status                 TomcatInstanceStatus    `json:"status"`
+	Alerts                 []*TomcatAlert          `json:"alerts,omitempty"`
+	CollectedAt            time.Time               `json:"collected_at"`
+	Error                  string                  `json:"error,omitempty"`
 }
 
 func NewTomcatInspectionResult(instance *TomcatInstance) *TomcatInspectionResult {
@@ -248,6 +263,23 @@ func (r *TomcatInspectionResult) GetIdentifier() string {
 		return ""
 	}
 	return r.Instance.Identifier
+}
+
+func (r *TomcatInspectionResult) SetMetric(mv *TomcatMetricValue) {
+	if r == nil || mv == nil {
+		return
+	}
+	if r.Metrics == nil {
+		r.Metrics = make(map[string]*TomcatMetricValue)
+	}
+	r.Metrics[mv.Name] = mv
+}
+
+func (r *TomcatInspectionResult) GetMetric(name string) *TomcatMetricValue {
+	if r == nil || r.Metrics == nil {
+		return nil
+	}
+	return r.Metrics[name]
 }
 
 // =============================================================================

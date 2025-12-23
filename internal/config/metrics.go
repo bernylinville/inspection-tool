@@ -221,3 +221,56 @@ func CountActiveNginxMetrics(metrics []*model.NginxMetricDefinition) int {
 	}
 	return count
 }
+
+// LoadTomcatMetrics reads Tomcat metric definitions from the specified YAML file.
+// It returns a slice of TomcatMetricDefinition pointers for use with TomcatCollector and TomcatEvaluator.
+func LoadTomcatMetrics(metricsPath string) ([]*model.TomcatMetricDefinition, error) {
+	if metricsPath == "" {
+		return nil, fmt.Errorf("Tomcat metrics file path is required")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(metricsPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("Tomcat metrics file not found: %s", metricsPath)
+	}
+
+	// Read file content
+	data, err := os.ReadFile(metricsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Tomcat metrics file: %w", err)
+	}
+
+	// Parse YAML
+	var cfg model.TomcatMetricsConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse Tomcat metrics file: %w", err)
+	}
+
+	// Validate metrics
+	if len(cfg.Metrics) == 0 {
+		return nil, fmt.Errorf("no Tomcat metrics defined in file: %s", metricsPath)
+	}
+
+	// Validate each metric definition
+	for i, m := range cfg.Metrics {
+		if m.Name == "" {
+			return nil, fmt.Errorf("Tomcat metric at index %d has no name", i)
+		}
+		if m.DisplayName == "" {
+			return nil, fmt.Errorf("Tomcat metric %q has no display_name", m.Name)
+		}
+	}
+
+	return cfg.Metrics, nil
+}
+
+// CountActiveTomcatMetrics returns the count of active (non-pending) Tomcat metrics.
+func CountActiveTomcatMetrics(metrics []*model.TomcatMetricDefinition) int {
+	count := 0
+	for _, m := range metrics {
+		if !m.IsPending() {
+			count++
+		}
+	}
+	return count
+}

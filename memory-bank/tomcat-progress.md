@@ -6,12 +6,12 @@
   - Step 1: 部署 Tomcat 巡检采集脚本 ✅ 已完成
   - Step 2: 配置 Categraf exec 插件并验证采集 ✅ 已完成
 
-- **阶段二（数据模型与配置）**：🔄 进行中
+- **阶段二（数据模型与配置）**：✅ 已完成（2025-12-23）
   - **Step 3: 定义 Tomcat 数据模型** ✅ 已完成（2025-12-23）
   - **Step 4: 扩展配置结构并创建指标定义文件** ✅ 已完成（2025-12-23）
 
-- **阶段三（服务实现）**：⏳ 待开始
-  - Step 5: 实现 Tomcat 采集器和评估器 ⏳ 待开始
+- **阶段三（服务实现）**：🔄 进行中
+  - **Step 5: 实现 Tomcat 采集器和评估器** ✅ 已完成（2025-12-23）
   - Step 6: 实现 Tomcat 巡检服务并集成到主服务 ⏳ 待开始
 
 - **阶段四（报告生成与验收）**：⏳ 待开始
@@ -204,12 +204,235 @@ tomcat:
 
 ---
 
+## Step 5 完成详情（2025-12-23）
+
+### 实施内容
+
+#### 1. 扩展 Tomcat 数据模型
+
+**文件**：`internal/model/tomcat.go`
+
+**添加 TomcatMetricValue 结构体**：
+```go
+type TomcatMetricValue struct {
+    Name           string            `json:"name"`
+    RawValue       float64           `json:"raw_value"`
+    StringValue    string            `json:"string_value,omitempty"` // 标签提取的字符串值
+    FormattedValue string            `json:"formatted_value"`
+    IsNA           bool              `json:"is_na"`
+    Timestamp      int64             `json:"timestamp"`
+    Labels         map[string]string `json:"labels,omitempty"`
+}
+```
+
+**扩展 TomcatInspectionResult 结构体**：
+- ✅ 添加 `Metrics map[string]*TomcatMetricValue` 字段（带 `json:"-"` 标签）
+- ✅ 添加 `SetMetric(mv *TomcatMetricValue)` 方法
+- ✅ 添加 `GetMetric(name string) *TomcatMetricValue` 方法
+
+#### 2. 创建 Tomcat 指标定义模型
+
+**文件**：`internal/model/tomcat_metric.go`（新建）
+
+**结构体定义**：
+- ✅ `TomcatMetricDefinition`：指标定义结构体
+  - Name, DisplayName, Query, Category
+  - LabelExtract []string（从标签提取的字段）
+  - Format, Status, Note
+- ✅ `TomcatMetricsConfig`：YAML 根结构体
+
+**方法**：
+- ✅ `IsPending()` - 判断指标是否待实现
+- ✅ `HasLabelExtract()` - 判断是否需要从标签提取值
+- ✅ `GetDisplayName()` - 获取指标显示名称
+
+#### 3. 扩展配置加载器
+
+**文件**：`internal/config/metrics.go`
+
+**添加函数**：
+- ✅ `LoadTomcatMetrics(metricsPath string)` - 从 YAML 文件加载 Tomcat 指标定义
+- ✅ `CountActiveTomcatMetrics(metrics)` - 统计活跃指标数量
+
+**实现要点**：
+- 与 LoadMySQLMetrics、LoadRedisMetrics、LoadNginxMetrics 模式一致
+- 包含完整的文件验证和指标定义验证
+
+#### 4. 实现 Tomcat 采集器
+
+**文件**：`internal/service/tomcat_collector.go`（新建）
+
+**核心结构体**：
+```go
+type TomcatCollector struct {
+    vmClient       *vm.Client
+    n9eClient      *n9e.Client
+    config         *config.TomcatInspectionConfig
+    metrics        []*model.TomcatMetricDefinition
+    metricDefs     map[string]*model.TomcatMetricDefinition
+    instanceFilter *TomcatInstanceFilter
+    logger         zerolog.Logger
+}
+
+type TomcatInstanceFilter struct {
+    HostnamePatterns  []string          // 主机名模式（glob）
+    ContainerPatterns []string          // 容器名模式（glob）
+    BusinessGroups    []string          // 业务组（OR）
+    Tags              map[string]string // 标签（AND）
+}
+```
+
+**核心方法**：
+
+| 方法 | 说明 |
+|------|------|
+| `NewTomcatCollector()` | 创建采集器 |
+| `DiscoverInstances()` | 查询 `tomcat_up == 1` 发现实例 |
+| `buildContainerMap()` | 构建 hostname->container 映射 |
+| `buildInfoMap()` | 构建 hostname->labels 映射 |
+| `extractHostname()` | 提取主机名（agent_hostname > ident > host） |
+| `extractIdentifier()` | 提取标识符（容器优先） |
+| `matchesHostnamePatterns()` | 主机名模式匹配 |
+| `matchesContainerPatterns()` | 容器名模式匹配 |
+| `CollectMetrics()` | 采集所有指标 |
+| `collectMetricConcurrent()` | 并发采集单个指标 |
+| `collectLabelExtractMetric()` | 标签提取指标采集 |
+| `extractFieldsFromMetrics()` | 从指标提取字段值 |
+
+**关键实现要点**：
+1. **双过滤器模式**：同时支持 `HostnamePatterns` 和 `ContainerPatterns`
+2. **Identifier 生成**：容器部署优先（`hostname:container`），二进制部署用（`hostname:port`）
+3. **IP 获取**：从 N9E API 获取主机 IP 地址
+4. **标签提取**：从 `tomcat_info` 标签提取 `port, app_type, install_path, log_path, version, jvm_config`
+5. **并发安全**：使用 errgroup + sync.Mutex 保护共享 map
+
+**代码行数**：约 730 行
+
+#### 5. 实现 Tomcat 评估器
+
+**文件**：`internal/service/tomcat_evaluator.go`（新建）
+
+**核心结构体**：
+```go
+type TomcatEvaluator struct {
+    thresholds *config.TomcatThresholds
+    metricDefs map[string]*model.TomcatMetricDefinition
+    timezone   *time.Location
+    logger     zerolog.Logger
+}
+
+type TomcatEvaluationResult struct {
+    Identifier string
+    Status     model.TomcatInstanceStatus
+    Alerts     []*model.TomcatAlert
+}
+```
+
+**核心方法**：
+
+| 方法 | 说明 |
+|------|------|
+| `NewTomcatEvaluator()` | 创建评估器 |
+| `EvaluateAll()` | 批量评估所有实例 |
+| `Evaluate()` | 评估单个实例 |
+| `evaluateUpStatus()` | 运行状态评估（tomcat_up=0 -> Critical） |
+| `evaluateNonRootUser()` | 非 root 用户评估（=0 -> Critical） |
+| `evaluateLastErrorTime()` | 最近错误时间评估（**时间反转逻辑**） |
+| `determineInstanceStatus()` | 聚合状态 |
+| `createAlert()` | 创建告警 |
+| `formatValue()` | 格式化指标值 |
+| `generateAlertMessage()` | 生成告警消息 |
+| `getThresholds()` | 获取阈值 |
+
+**时间反转阈值逻辑（CRITICAL）**：
+```go
+// 配置：warning=60分钟, critical=10分钟
+// 逻辑：时间越短越严重
+
+minutesSinceError := (now - timestamp) / 60
+
+// Critical: 错误在 10 分钟内
+if minutesSinceError <= criticalMinutes {
+    return AlertLevelCritical
+}
+
+// Warning: 错误在 60 分钟内
+if minutesSinceError <= warningMinutes {
+    return AlertLevelWarning
+}
+
+// Normal: 无错误或错误超过 60 分钟
+return nil
+```
+
+**代码行数**：约 290 行
+
+### 验证结果
+
+✅ **编译验证通过**：
+- `go build ./internal/model/` 无编译错误
+- `go build ./internal/config/` 无编译错误
+- `go build ./internal/service/` 无编译错误
+- `go build ./cmd/inspect/` 无编译错误
+
+✅ **文件清单**：
+| 文件 | 操作 | 代码行数 |
+|------|------|----------|
+| internal/model/tomcat.go | 修改 | +30 |
+| internal/model/tomcat_metric.go | 新建 | +45 |
+| internal/config/metrics.go | 修改 | +53 |
+| internal/service/tomcat_collector.go | 新建 | +730 |
+| internal/service/tomcat_evaluator.go | 新建 | +290 |
+
+✅ **模式一致性检查**：
+- ✅ 与 Redis/MySQL 采集器结构一致
+- ✅ 与 Redis/MySQL 评估器结构一致
+- ✅ 错误处理模式一致（单个指标失败不中止整体）
+- ✅ nil 安全处理一致（所有接收器方法包含 nil 检查）
+- ✅ 并发安全处理一致（errgroup + sync.Mutex）
+
+### 关键实现要点
+
+1. **双过滤器模式（Tomcat 独有）**
+   ```go
+   type TomcatInstanceFilter struct {
+       HostnamePatterns  []string  // 主机名模式
+       ContainerPatterns []string  // 容器名模式 - Tomcat 特有
+       BusinessGroups    []string  // 业务组（OR）
+       Tags              map[string]string // 标签（AND）
+   }
+   ```
+
+2. **时间反转阈值评估**
+   - 配置：`LastErrorWarningMinutes: 60`, `LastErrorCriticalMinutes: 10`
+   - 逻辑：`minutesSinceError <= critical` → Critical（严重）
+   - 逻辑：`minutesSinceError <= warning` → Warning（警告）
+   - 与常规阈值逻辑相反（warning > critical）
+
+3. **容器优先 Identifier 生成**
+   - 容器部署：`hostname:container`（如 `GX-MFUI-BE-01:tomcat-18001`）
+   - 二进制部署：`hostname:port`（如 `GX-MFUI-BE-01:8080`）
+
+4. **标签提取模式**
+   - `tomcat_info` 指标包含多个标签
+   - LabelExtract: `[port, app_type, install_path, log_path, version, jvm_config]`
+   - 提取的值存储在 `TomcatMetricValue.StringValue` 中
+
+### 参考文件
+
+- `internal/service/nginx_collector.go` - 双过滤器模式参考
+- `internal/service/redis_evaluator.go` - 评估器结构参考
+- `internal/service/mysql_collector.go` - 标签提取模式参考
+- `internal/model/alert.go` - AlertLevel 枚举依赖
+- `memory-bank/tomcat-feature-implementation.md` - 权威需求文档
+
+---
+
 ## 下一步
 
-✅ Step 4 已完成，**请用户审核通过后再进入 Step 5**
+✅ Step 5 已完成，**请用户审核通过后再进入 Step 6**
 
-Step 5 将进行：
-- 实现 Tomcat 采集器（internal/service/tomcat_collector.go）
-- 实现 Tomcat 评估器（internal/service/tomcat_evaluator.go）
-- 双过滤器逻辑：hostname_patterns + container_patterns
-- 时间反转告警：最近错误日志时间评估
+Step 6 将进行：
+- 实现 Tomcat 巡检服务（internal/service/tomcat_inspector.go）
+- 集成到主服务（internal/service/inspector.go）
+- 更新 model/inspection.go 添加 TomcatResults 字段
