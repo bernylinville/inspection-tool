@@ -36,6 +36,9 @@ var (
 	nginxMetricsPath string   // Path to Nginx metrics definition file
 	nginxOnly        bool     // Run Nginx inspection only
 	skipNginx        bool     // Skip Nginx inspection
+	tomcatMetricsPath string  // Path to Tomcat metrics definition file
+	tomcatOnly        bool    // Run Tomcat inspection only
+	skipTomcat        bool    // Skip Tomcat inspection
 )
 
 // runCmd represents the run command.
@@ -48,11 +51,12 @@ var runCmd = &cobra.Command{
 3. 执行 MySQL 数据库巡检（如果启用）
 4. 执行 Redis 集群巡检（如果启用）
 5. 执行 Nginx/OpenResty 巡检（如果启用）
-6. 根据配置的阈值评估告警级别
-7. 生成 Excel 和 HTML 格式的巡检报告
+6. 执行 Tomcat 应用巡检（如果启用）
+7. 根据配置的阈值评估告警级别
+8. 生成 Excel 和 HTML 格式的巡检报告
 
 示例:
-  # 使用默认配置执行巡检（包含 Host、MySQL、Redis 和 Nginx）
+  # 使用默认配置执行巡检（包含 Host、MySQL、Redis、Nginx 和 Tomcat）
   inspect run -c config.yaml
 
   # 仅执行 MySQL 巡检
@@ -64,6 +68,9 @@ var runCmd = &cobra.Command{
   # 仅执行 Nginx 巡检
   inspect run -c config.yaml --nginx-only
 
+  # 仅执行 Tomcat 巡检
+  inspect run -c config.yaml --tomcat-only
+
   # 跳过 MySQL 巡检
   inspect run -c config.yaml --skip-mysql
 
@@ -73,14 +80,17 @@ var runCmd = &cobra.Command{
   # 跳过 Nginx 巡检
   inspect run -c config.yaml --skip-nginx
 
-  # 仅执行 Host 巡检（跳过 MySQL、Redis 和 Nginx）
-  inspect run -c config.yaml --skip-mysql --skip-redis --skip-nginx
+  # 跳过 Tomcat 巡检
+  inspect run -c config.yaml --skip-tomcat
+
+  # 仅执行 Host 巡检（跳过 MySQL、Redis、Nginx 和 Tomcat）
+  inspect run -c config.yaml --skip-mysql --skip-redis --skip-nginx --skip-tomcat
 
   # 指定输出格式和目录
   inspect run -c config.yaml -f excel,html -o ./reports
 
   # 使用自定义指标定义文件
-  inspect run -c config.yaml -m custom_metrics.yaml --mysql-metrics custom_mysql_metrics.yaml --redis-metrics custom_redis_metrics.yaml --nginx-metrics custom_nginx_metrics.yaml`,
+  inspect run -c config.yaml -m custom_metrics.yaml --mysql-metrics custom_mysql_metrics.yaml --redis-metrics custom_redis_metrics.yaml --nginx-metrics custom_nginx_metrics.yaml --tomcat-metrics custom_tomcat_metrics.yaml`,
 	Run: runInspection,
 }
 
@@ -106,6 +116,11 @@ func init() {
 	runCmd.Flags().StringVar(&nginxMetricsPath, "nginx-metrics", "configs/nginx-metrics.yaml", "Nginx 指标定义文件路径")
 	runCmd.Flags().BoolVar(&nginxOnly, "nginx-only", false, "仅执行 Nginx 巡检")
 	runCmd.Flags().BoolVar(&skipNginx, "skip-nginx", false, "跳过 Nginx 巡检")
+
+	// Tomcat-specific flags
+	runCmd.Flags().StringVar(&tomcatMetricsPath, "tomcat-metrics", "configs/tomcat-metrics.yaml", "Tomcat 指标定义文件路径")
+	runCmd.Flags().BoolVar(&tomcatOnly, "tomcat-only", false, "仅执行 Tomcat 巡检")
+	runCmd.Flags().BoolVar(&skipTomcat, "skip-tomcat", false, "跳过 Tomcat 巡检")
 }
 
 // runInspection executes the complete inspection workflow.
@@ -164,11 +179,30 @@ func runInspection(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Tomcat flag validation
+	if tomcatOnly && skipTomcat {
+		fmt.Fprintf(os.Stderr, "❌ --tomcat-only 和 --skip-tomcat 不能同时使用\n")
+		os.Exit(1)
+	}
+	if tomcatOnly && mysqlOnly {
+		fmt.Fprintf(os.Stderr, "❌ --tomcat-only 和 --mysql-only 不能同时使用\n")
+		os.Exit(1)
+	}
+	if tomcatOnly && redisOnly {
+		fmt.Fprintf(os.Stderr, "❌ --tomcat-only 和 --redis-only 不能同时使用\n")
+		os.Exit(1)
+	}
+	if tomcatOnly && nginxOnly {
+		fmt.Fprintf(os.Stderr, "❌ --tomcat-only 和 --nginx-only 不能同时使用\n")
+		os.Exit(1)
+	}
+
 	// Determine execution mode
-	runHostInspection := !mysqlOnly && !redisOnly && !nginxOnly
-	runMySQLInspection := !skipMySQL && !redisOnly && !nginxOnly && cfg.MySQL.Enabled
-	runRedisInspection := !skipRedis && !mysqlOnly && !nginxOnly && cfg.Redis.Enabled
-	runNginxInspection := !skipNginx && !mysqlOnly && !redisOnly && cfg.Nginx.Enabled
+	runHostInspection := !mysqlOnly && !redisOnly && !nginxOnly && !tomcatOnly
+	runMySQLInspection := !skipMySQL && !redisOnly && !nginxOnly && !tomcatOnly && cfg.MySQL.Enabled
+	runRedisInspection := !skipRedis && !mysqlOnly && !nginxOnly && !tomcatOnly && cfg.Redis.Enabled
+	runNginxInspection := !skipNginx && !mysqlOnly && !redisOnly && !tomcatOnly && cfg.Nginx.Enabled
+	runTomcatInspection := !skipTomcat && !mysqlOnly && !redisOnly && !nginxOnly && cfg.Tomcat.Enabled
 
 	// If --mysql-only but MySQL is not enabled
 	if mysqlOnly && !cfg.MySQL.Enabled {
@@ -188,14 +222,22 @@ func runInspection(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// If --tomcat-only but Tomcat is not enabled
+	if tomcatOnly && !cfg.Tomcat.Enabled {
+		fmt.Fprintf(os.Stderr, "❌ Tomcat 巡检未启用，请在配置文件中设置 tomcat.enabled: true\n")
+		os.Exit(1)
+	}
+
 	logger.Debug().
 		Bool("run_host", runHostInspection).
 		Bool("run_mysql", runMySQLInspection).
 		Bool("run_redis", runRedisInspection).
 		Bool("run_nginx", runNginxInspection).
+		Bool("run_tomcat", runTomcatInspection).
 		Bool("mysql_enabled", cfg.MySQL.Enabled).
 		Bool("redis_enabled", cfg.Redis.Enabled).
 		Bool("nginx_enabled", cfg.Nginx.Enabled).
+		Bool("tomcat_enabled", cfg.Tomcat.Enabled).
 		Msg("execution mode determined")
 
 	// Step 3: Load Host metrics definitions (if needed)
@@ -256,6 +298,21 @@ func runInspection(cmd *cobra.Command, args []string) {
 		nginxActiveCount := config.CountActiveNginxMetrics(nginxMetrics)
 		fmt.Printf(" (%d 个活跃指标)\n", nginxActiveCount)
 		logger.Debug().Int("active_metrics", nginxActiveCount).Int("total_metrics", len(nginxMetrics)).Msg("Nginx metrics loaded")
+	}
+
+	// Step 3e: Load Tomcat metrics definitions (if needed)
+	var tomcatMetrics []*model.TomcatMetricDefinition
+	if runTomcatInspection {
+		fmt.Printf("📊 加载 Tomcat 指标定义: %s", tomcatMetricsPath)
+		tomcatMetrics, err = config.LoadTomcatMetrics(tomcatMetricsPath)
+		if err != nil {
+			logger.Error().Err(err).Str("path", tomcatMetricsPath).Msg("failed to load Tomcat metrics")
+			fmt.Fprintf(os.Stderr, "\n❌ 加载 Tomcat 指标定义失败: %v\n", err)
+			os.Exit(1)
+		}
+		tomcatActiveCount := config.CountActiveTomcatMetrics(tomcatMetrics)
+		fmt.Printf(" (%d 个活跃指标)\n", tomcatActiveCount)
+		logger.Debug().Int("active_metrics", tomcatActiveCount).Int("total_metrics", len(tomcatMetrics)).Msg("Tomcat metrics loaded")
 	}
 
 	// Step 4: Determine output settings
@@ -351,6 +408,21 @@ func runInspection(cmd *cobra.Command, args []string) {
 		logger.Debug().Msg("Nginx services initialized")
 	}
 
+	// Step 7e: Create Tomcat services (if needed)
+	var tomcatInspector *service.TomcatInspector
+	if runTomcatInspection {
+		tomcatCollector := service.NewTomcatCollector(&cfg.Tomcat, vmClient, n9eClient, tomcatMetrics, logger)
+		tomcatEvaluator := service.NewTomcatEvaluator(&cfg.Tomcat.Thresholds, tomcatMetrics, timezone, logger)
+		tomcatInspector, err = service.NewTomcatInspector(cfg, tomcatCollector, tomcatEvaluator, logger,
+			service.WithTomcatVersion(Version))
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to create Tomcat inspector")
+			fmt.Fprintf(os.Stderr, "❌ 创建 Tomcat 巡检器失败: %v\n", err)
+			os.Exit(1)
+		}
+		logger.Debug().Msg("Tomcat services initialized")
+	}
+
 	// Step 8: Execute inspection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -360,6 +432,7 @@ func runInspection(cmd *cobra.Command, args []string) {
 	var mysqlResult *model.MySQLInspectionResults
 	var redisResult *model.RedisInspectionResults
 	var nginxResult *model.NginxInspectionResults
+	var tomcatResult *model.TomcatInspectionResults
 
 	// Execute Host inspection
 	if runHostInspection {
@@ -425,6 +498,23 @@ func runInspection(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Execute Tomcat inspection
+	if runTomcatInspection {
+		fmt.Println("\n⏳ 开始 Tomcat 巡检...")
+		tomcatResult, err = tomcatInspector.Inspect(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Tomcat inspection failed")
+			fmt.Fprintf(os.Stderr, "❌ Tomcat 巡检执行失败: %v\n", err)
+			// Don't exit, continue to generate other reports if available
+			if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("\n📊 Tomcat 巡检完成！\n")
+			printTomcatSummary(tomcatResult)
+		}
+	}
+
 	fmt.Printf("\n⏱️  总耗时 %.1fs\n", time.Since(startTime).Seconds())
 
 	// Step 9: Generate reports
@@ -443,6 +533,8 @@ func runInspection(cmd *cobra.Command, args []string) {
 		timezone = redisInspector.GetTimezone()
 	} else if nginxInspector != nil {
 		timezone = nginxInspector.GetTimezone()
+	} else if tomcatInspector != nil {
+		timezone = tomcatInspector.GetTimezone()
 	}
 
 	// Generate filename base
@@ -459,9 +551,9 @@ func runInspection(cmd *cobra.Command, args []string) {
 		var genErr error
 		switch format {
 		case "excel":
-			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, nginxResult, reportPath, timezone, logger)
+			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, reportPath, timezone, logger)
 		case "html":
-			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, nginxResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
+			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
 		default:
 			logger.Error().Str("format", format).Msg("unsupported format")
 			fmt.Fprintf(os.Stderr, "   ❌ 不支持的格式: %s\n", format)
@@ -505,6 +597,13 @@ func runInspection(cmd *cobra.Command, args []string) {
 		if nginxResult.Summary.CriticalInstances > 0 {
 			exitCode = 2
 		} else if nginxResult.Summary.WarningInstances > 0 && exitCode < 1 {
+			exitCode = 1
+		}
+	}
+	if tomcatResult != nil && tomcatResult.Summary != nil {
+		if tomcatResult.Summary.CriticalInstances > 0 {
+			exitCode = 2
+		} else if tomcatResult.Summary.WarningInstances > 0 && exitCode < 1 {
 			exitCode = 1
 		}
 	}
@@ -671,27 +770,52 @@ func printNginxSummary(result *model.NginxInspectionResults) {
 	}
 }
 
-// generateCombinedExcel creates Excel report with Host, MySQL, Redis and Nginx data in same file.
-func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string, timezone *time.Location, logger zerolog.Logger) error {
+// printTomcatSummary prints the Tomcat inspection result summary.
+func printTomcatSummary(result *model.TomcatInspectionResults) {
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	if result.Summary != nil {
+		fmt.Printf("   Tomcat 实例总数: %d\n", result.Summary.TotalInstances)
+		fmt.Printf("   正常实例: %d\n", result.Summary.NormalInstances)
+		fmt.Printf("   警告实例: %d\n", result.Summary.WarningInstances)
+		fmt.Printf("   严重实例: %d\n", result.Summary.CriticalInstances)
+		fmt.Printf("   失败实例: %d\n", result.Summary.FailedInstances)
+	}
+	fmt.Println()
+	if result.AlertSummary != nil {
+		fmt.Printf("   Tomcat 告警总数: %d\n", result.AlertSummary.TotalAlerts)
+		fmt.Printf("   警告级别: %d\n", result.AlertSummary.WarningCount)
+		fmt.Printf("   严重级别: %d\n", result.AlertSummary.CriticalCount)
+	}
+}
+
+// generateCombinedExcel creates Excel report with Host, MySQL, Redis, Nginx and Tomcat data in same file.
+func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string, timezone *time.Location, logger zerolog.Logger) error {
 	w := excel.NewWriter(timezone)
 
 	// Only Nginx mode
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult != nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult == nil && nginxResult != nil {
 		return w.WriteNginxInspection(nginxResult, outputPath)
 	}
 
+	// Only Tomcat mode (TODO: Step 7 will implement Tomcat report generation)
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult != nil && nginxResult == nil {
+		// Temporary: create empty file until Tomcat report generation is implemented in Step 7
+		logger.Info().Msg("Tomcat-only mode: report generation will be implemented in Step 7")
+		return nil
+	}
+
 	// Only Redis mode
-	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil && tomcatResult == nil {
 		return w.WriteRedisInspection(redisResult, outputPath)
 	}
 
 	// Only MySQL mode
-	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil {
+	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
 		return w.WriteMySQLInspection(mysqlResult, outputPath)
 	}
 
 	// Only Host mode
-	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
+	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
 		return w.Write(hostResult, outputPath)
 	}
 
@@ -734,45 +858,61 @@ func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *mode
 			}
 		}
 	}
+	// TODO: Append Tomcat report in Step 7
+	if tomcatResult != nil {
+		logger.Info().Msg("Tomcat result included: report generation will be implemented in Step 7")
+	}
 
 	logger.Debug().
 		Bool("has_host", hostResult != nil).
 		Bool("has_mysql", mysqlResult != nil).
 		Bool("has_redis", redisResult != nil).
 		Bool("has_nginx", nginxResult != nil).
+		Bool("has_tomcat", tomcatResult != nil).
 		Str("path", outputPath).
 		Msg("combined Excel report generated")
 
 	return nil
 }
 
-// generateCombinedHTML creates HTML report with Host, MySQL, Redis and Nginx data.
-func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
+// generateCombinedHTML creates HTML report with Host, MySQL, Redis, Nginx and Tomcat data.
+func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
 	w := html.NewWriter(timezone, templatePath)
 
 	// Only Redis mode
-	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil && tomcatResult == nil {
 		return w.WriteRedisInspection(redisResult, outputPath)
 	}
 
 	// Only MySQL mode
-	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil {
+	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
 		return w.WriteMySQLInspection(mysqlResult, outputPath)
 	}
 
 	// Only Nginx mode
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult != nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult != nil && tomcatResult == nil {
 		return w.WriteNginxInspection(nginxResult, outputPath)
 	}
 
+	// Only Tomcat mode (TODO: Step 7 will implement Tomcat report generation)
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult != nil {
+		// Temporary: create empty file until Tomcat report generation is implemented in Step 7
+		logger.Info().Msg("Tomcat-only mode: report generation will be implemented in Step 7")
+		return nil
+	}
+
 	// Only Host mode
-	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
+	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
 		return w.Write(hostResult, outputPath)
 	}
 
-	// Combined mode
+	// Combined mode (TODO: Add Tomcat in Step 7)
 	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, outputPath); err != nil {
 		return fmt.Errorf("failed to write combined HTML report: %w", err)
+	}
+	// TODO: Process Tomcat result in Step 7
+	if tomcatResult != nil {
+		logger.Info().Msg("Tomcat result included: report generation will be implemented in Step 7")
 	}
 
 	logger.Debug().
@@ -780,6 +920,7 @@ func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model
 		Bool("has_mysql", mysqlResult != nil).
 		Bool("has_redis", redisResult != nil).
 		Bool("has_nginx", nginxResult != nil).
+		Bool("has_tomcat", tomcatResult != nil).
 		Str("path", outputPath).
 		Msg("combined HTML report generated")
 

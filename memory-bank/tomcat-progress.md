@@ -12,7 +12,7 @@
 
 - **阶段三（服务实现）**：🔄 进行中
   - **Step 5: 实现 Tomcat 采集器和评估器** ✅ 已完成（2025-12-23）
-  - Step 6: 实现 Tomcat 巡检服务并集成到主服务 ⏳ 待开始
+  - **Step 6: 实现 Tomcat 巡检服务并集成到主服务** ✅ 已完成（2025-12-23）
 
 - **阶段四（报告生成与验收）**：⏳ 待开始
   - Step 7: 扩展报告生成器支持 Tomcat ⏳ 待开始
@@ -428,11 +428,198 @@ return nil
 
 ---
 
+## Step 6 完成详情（2025-12-23）
+
+### 实施内容
+
+#### 1. 创建 Tomcat 巡检编排器
+
+**文件**：`internal/service/tomcat_inspector.go`（新建）
+
+**核心结构体**：
+```go
+type TomcatInspector struct {
+    collector *TomcatCollector
+    evaluator *TomcatEvaluator
+    config    *config.Config
+    timezone  *time.Location
+    version   string
+    logger    zerolog.Logger
+}
+
+type TomcatInspectorOption func(*TomcatInspector)
+```
+
+**核心方法**：
+
+| 方法 | 说明 | 行数 |
+|------|------|------|
+| `NewTomcatInspector()` | 构造函数，验证参数、加载时区、应用选项 | 45 |
+| `WithTomcatVersion()` | 函数选项模式，设置版本号 | 8 |
+| `Inspect()` | 核心编排方法：发现→采集→评估→聚合 | 75 |
+| `buildInspectionResults()` | 合并结果到容器 | 25 |
+| `GetTimezone()` | 返回配置的时区 | 5 |
+| `GetVersion()` | 返回配置的版本号 | 5 |
+| `IsEnabled()` | 返回 Tomcat 巡检是否启用 | 5 |
+| `GetConfig()` | 返回 Tomcat 配置 | 8 |
+
+**Inspect() 执行流程**：
+```
+1. 记录开始时间（timezone）
+2. 创建 TomcatInspectionResults 结果容器
+3. 调用 collector.DiscoverInstances() 发现实例
+   ├── 错误：返回 error
+   └── 空列表：优雅降级，Finalize 后返回
+4. 获取指标定义（collector.GetMetrics()）
+   └── 空检查：返回 error
+5. 调用 collector.CollectMetrics() 采集指标
+   └── 返回 map[string]*TomcatInspectionResult
+6. 调用 evaluator.EvaluateAll() 评估阈值
+7. 调用 buildInspectionResults() 构建结果
+8. 调用 result.Finalize() 最终化
+9. 记录完成日志
+10. 如果有严重告警，额外记录
+11. 返回 result
+```
+
+**代码行数**：约 210 行
+
+#### 2. 集成到 CLI 入口
+
+**文件**：`cmd/inspect/cmd/run.go`（修改）
+
+**添加内容**：
+
+1. **命令行标志**（3 个变量）
+   - `tomcatMetricsPath string` - Tomcat 指标定义文件路径
+   - `tomcatOnly bool` - 仅执行 Tomcat 巡检
+   - `skipTomcat bool` - 跳过 Tomcat 巡检
+
+2. **init() 中注册标志**
+   - `--tomcat-metrics` (默认: configs/tomcat-metrics.yaml)
+   - `--tomcat-only`
+   - `--skip-tomcat`
+
+3. **标志验证逻辑**（5 个互斥验证）
+   - `--tomcat-only` 与 `--skip-tomcat` 互斥
+   - `--tomcat-only` 与 `--mysql-only` 互斥
+   - `--tomcat-only` 与 `--redis-only` 互斥
+   - `--tomcat-only` 与 `--nginx-only` 互斥
+   - `--tomcat-only` 时验证配置已启用
+
+4. **执行模式判断**
+   - `runTomcatInspection := !skipTomcat && !mysqlOnly && !redisOnly && !nginxOnly && cfg.Tomcat.Enabled`
+   - 更新所有现有模式的判断条件以包含 `!tomcatOnly`
+
+5. **Tomcat 指标加载**（Step 3e）
+   - 调用 `config.LoadTomcatMetrics(tomcatMetricsPath)`
+   - 调用 `config.CountActiveTomcatMetrics(tomcatMetrics)`
+   - 输出日志和活跃指标数
+
+6. **Tomcat 服务创建**（Step 7e）
+   - 创建 `TomcatCollector`
+   - 创建 `TomcatEvaluator`
+   - 创建 `TomcatInspector`
+   - 应用 `WithTomcatVersion(Version)` 选项
+
+7. **Tomcat 巡检执行**
+   - 输出 "⏳ 开始 Tomcat 巡检..."
+   - 调用 `tomcatInspector.Inspect(ctx)`
+   - 错误处理：如果所有巡检都失败则退出，否则继续
+   - 成功后输出 "📊 Tomcat 巡检完成！"
+   - 调用 `printTomcatSummary(tomcatResult)` 打印摘要
+
+8. **printTomcatSummary 函数**
+   ```go
+   func printTomcatSummary(result *model.TomcatInspectionResults) {
+       fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+       if result.Summary != nil {
+           fmt.Printf("   Tomcat 实例总数: %d\n", result.Summary.TotalInstances)
+           fmt.Printf("   正常实例: %d\n", result.Summary.NormalInstances)
+           fmt.Printf("   警告实例: %d\n", result.Summary.WarningInstances)
+           fmt.Printf("   严重实例: %d\n", result.Summary.CriticalInstances)
+           fmt.Printf("   失败实例: %d\n", result.Summary.FailedInstances)
+       }
+       fmt.Println()
+       if result.AlertSummary != nil {
+           fmt.Printf("   Tomcat 告警总数: %d\n", result.AlertSummary.TotalAlerts)
+           fmt.Printf("   警告级别: %d\n", result.AlertSummary.WarningCount)
+           fmt.Printf("   严重级别: %d\n", result.AlertSummary.CriticalCount)
+       }
+   }
+   ```
+
+9. **报告生成函数签名修改**
+   - `generateCombinedExcel()` 添加 `tomcatResult *model.TomcatInspectionResults` 参数
+   - `generateCombinedHTML()` 添加 `tomcatResult *model.TomcatInspectionResults` 参数
+   - 两个函数内部暂时记录 TODO 日志（Step 7 实现报告生成）
+
+10. **退出码判断**
+    - 添加 Tomcat 严重/警告实例退出码逻辑
+    - `CriticalInstances > 0` → exitCode = 2
+    - `WarningInstances > 0` → exitCode = 1
+
+11. **runCmd Long 描述更新**
+    - 添加 "6. 执行 Tomcat 应用巡检（如果启用）"
+    - 添加 `--tomcat-only` 示例
+    - 添加 `--skip-tomcat` 示例
+    - 添加 `--tomcat-metrics` 示例
+
+**代码行数**：+125 行
+
+### 验证结果
+
+✅ **编译验证通过**：
+- `go build ./internal/service/` 无编译错误
+- `go build ./cmd/inspect/` 无编译错误
+
+✅ **文件清单**：
+| 文件 | 操作 | 新增行数 |
+|------|------|----------|
+| internal/service/tomcat_inspector.go | 新建 | +210 |
+| cmd/inspect/cmd/run.go | 修改 | +125 |
+
+✅ **模式一致性检查**：
+- ✅ 与 MySQL/Redis/Nginx Inspector 结构一致
+- ✅ 与 MySQL/Redis/Nginx CLI 集成模式一致
+- ✅ 函数选项模式实现一致
+- ✅ 错误处理模式一致
+- ✅ 日志记录模式一致
+
+### 关键实现要点
+
+1. **模式一致性**
+   - TomcatInspector 结构体与 MySQL/Redis/Nginx 完全一致
+   - Inspect() 方法流程与 MySQL/Nginx 保持一致
+   - CLI 集成模式与现有服务保持一致
+
+2. **报告生成（Step 7 预留）**
+   - generateCombinedExcel 和 generateCombinedHTML 函数签名已更新
+   - 内部暂时记录 TODO 日志，不实际生成 Tomcat 报告
+   - Step 7 将实现 `WriteTomcatInspection()` 和 `AppendTomcatInspection()` 方法
+
+3. **时区处理**
+   - TomcatInspector 使用配置的时区（默认 Asia/Shanghai）
+   - 所有时间戳在 buildInspectionResults 中转换为配置时区
+
+4. **优雅降级**
+   - 空实例列表时返回空结果而不是错误
+   - 单个巡检失败不中止整体流程
+
+### 参考文件
+
+- `internal/service/mysql_inspector.go` - 主要参考模式
+- `internal/service/nginx_inspector.go` - N9E API 集成参考
+- `internal/service/redis_inspector.go` - 简洁的流程编排参考
+- `cmd/inspect/cmd/run.go` - CLI 集成参考
+
+---
+
 ## 下一步
 
-✅ Step 5 已完成，**请用户审核通过后再进入 Step 6**
+✅ Step 6 已完成，**请用户审核通过后再进入 Step 7**
 
-Step 6 将进行：
-- 实现 Tomcat 巡检服务（internal/service/tomcat_inspector.go）
-- 集成到主服务（internal/service/inspector.go）
-- 更新 model/inspection.go 添加 TomcatResults 字段
+Step 7 将进行：
+- 扩展 Excel 报告生成器支持 Tomcat（internal/report/excel/writer.go）
+- 扩展 HTML 报告生成器支持 Tomcat（internal/report/html/writer.go）
+- 端到端验收测试
