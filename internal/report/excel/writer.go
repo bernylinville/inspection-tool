@@ -26,6 +26,8 @@ const (
 	sheetRedisAlerts = "Redis 异常" // Redis alerts sheet
 	sheetNginx       = "Nginx 巡检" // Nginx inspection sheet
 	sheetNginxAlerts = "Nginx 异常" // Nginx alerts sheet
+	sheetTomcat      = "Tomcat 巡检" // Tomcat inspection sheet
+	sheetTomcatAlerts = "Tomcat 异常" // Tomcat alerts sheet
 
 	// Default sheet to remove
 	defaultSheet = "Sheet1"
@@ -1563,10 +1565,10 @@ func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisC
 	return nil
 }
 
-// WriteCombined generates an Excel report combining Host, MySQL, Redis, and Nginx inspection results.
-func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string) error {
+// WriteCombined generates an Excel report combining Host, MySQL, Redis, Nginx, and Tomcat inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string) error {
 	// At least one result must be present
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
 		return fmt.Errorf("all inspection results are nil")
 	}
 
@@ -1622,6 +1624,16 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 		}
 	}
 
+	// Create Tomcat sheets if available
+	if tomcatResult != nil {
+		if err := w.createTomcatSheet(f, tomcatResult); err != nil {
+			return fmt.Errorf("failed to create Tomcat sheet: %w", err)
+		}
+		if err := w.createTomcatAlertsSheet(f, tomcatResult); err != nil {
+			return fmt.Errorf("failed to create Tomcat alerts sheet: %w", err)
+		}
+	}
+
 	// Remove default Sheet1
 	if err := f.DeleteSheet(defaultSheet); err != nil {
 		// Ignore error if sheet doesn't exist
@@ -1636,6 +1648,8 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 			activeSheet = sheetRedis
 		} else if nginxResult != nil {
 			activeSheet = sheetNginx
+		} else if tomcatResult != nil {
+			activeSheet = sheetTomcat
 		}
 	}
 	idx, _ := f.GetSheetIndex(activeSheet)
@@ -1957,6 +1971,57 @@ func formatNginxThreshold(value float64) string {
 	return fmt.Sprintf("%.1f", value)
 }
 
+// =============================================================================
+// Tomcat Report Helper Functions
+// ============================================================================
+
+// tomcatStatusText converts Tomcat instance status to Chinese text.
+func tomcatStatusText(status model.TomcatInstanceStatus) string {
+	switch status {
+	case model.TomcatStatusNormal:
+		return "正常"
+	case model.TomcatStatusWarning:
+		return "警告"
+	case model.TomcatStatusCritical:
+		return "严重"
+	case model.TomcatStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// tomcatBoolToText converts boolean to Chinese text (是/否).
+func tomcatBoolToText(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
+}
+
+// getTomcatPortOrContainer returns container name if container deployment,
+// otherwise returns port number.
+func getTomcatPortOrContainer(r *model.TomcatInspectionResult) string {
+	if r.Instance == nil {
+		return ""
+	}
+	if r.Instance.IsContainerDeployment() {
+		return r.Instance.Container
+	}
+	return fmt.Sprintf("%d", r.Instance.Port)
+}
+
+// formatTomcatThreshold formats a Tomcat alert threshold value.
+func formatTomcatThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "last_error_timestamp":
+		// Time-based thresholds (in minutes)
+		return fmt.Sprintf("%.0f分钟", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
 // WriteNginxInspection generates an Excel report for Nginx inspection results.
 func (w *Writer) WriteNginxInspection(result *model.NginxInspectionResults, outputPath string) error {
 	if result == nil {
@@ -2028,4 +2093,242 @@ func (w *Writer) AppendNginxInspection(result *model.NginxInspectionResults, exi
 	}
 
 	return nil
+}
+
+// createTomcatSheet creates the Tomcat inspection worksheet.
+func (w *Writer) createTomcatSheet(f *excelize.File, result *model.TomcatInspectionResults) error {
+	if result == nil || len(result.Results) == 0 {
+		return nil
+	}
+
+	// Create sheet
+	_, err := f.NewSheet(sheetTomcat)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers (15 columns)
+	headers := []string{
+		"巡检时间", "主机名", "IP地址", "应用类型", "端口", "容器名",
+		"版本", "安装路径", "日志路径", "JVM配置",
+		"连接数", "运行时长", "非root用户", "最近错误时间", "整体状态",
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 20, "B": 18, "C": 15, "D": 12, "E": 10, "F": 18,
+		"G": 12, "H": 30, "I": 30, "J": 25, "K": 12, "L": 18,
+		"M": 14, "N": 20, "O": 12,
+	}
+
+	for col, width := range colWidths {
+		f.SetColWidth(sheetTomcat, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetTomcat, cell, header)
+		f.SetCellStyle(sheetTomcat, cell, cell, headerStyle)
+	}
+
+	// Freeze header row
+	f.SetPanes(sheetTomcat, &excelize.Panes{Freeze: true, YSplit: 1})
+
+	// Write data rows
+	for i, r := range result.Results {
+		row := i + 2
+		inspectionTime := result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+
+		f.SetCellValue(sheetTomcat, "A"+fmt.Sprint(row), inspectionTime)
+		f.SetCellValue(sheetTomcat, "B"+fmt.Sprint(row), r.Instance.Hostname)
+		f.SetCellValue(sheetTomcat, "C"+fmt.Sprint(row), r.Instance.IP)
+		f.SetCellValue(sheetTomcat, "D"+fmt.Sprint(row), r.Instance.ApplicationType)
+		f.SetCellValue(sheetTomcat, "E"+fmt.Sprint(row), r.Instance.Port)
+		f.SetCellValue(sheetTomcat, "F"+fmt.Sprint(row), r.Instance.Container)
+		f.SetCellValue(sheetTomcat, "G"+fmt.Sprint(row), r.Instance.Version)
+		f.SetCellValue(sheetTomcat, "H"+fmt.Sprint(row), r.Instance.InstallPath)
+		f.SetCellValue(sheetTomcat, "I"+fmt.Sprint(row), r.Instance.LogPath)
+		f.SetCellValue(sheetTomcat, "J"+fmt.Sprint(row), r.Instance.JVMConfig)
+		f.SetCellValue(sheetTomcat, "K"+fmt.Sprint(row), r.Connections)
+		f.SetCellValue(sheetTomcat, "L"+fmt.Sprint(row), r.UptimeFormatted)
+		f.SetCellValue(sheetTomcat, "M"+fmt.Sprint(row), tomcatBoolToText(r.NonRootUser))
+		f.SetCellValue(sheetTomcat, "N"+fmt.Sprint(row), r.LastErrorTimeFormatted)
+
+		// Status column with conditional formatting
+		statusCell := "O" + fmt.Sprint(row)
+		statusText := tomcatStatusText(r.Status)
+		f.SetCellValue(sheetTomcat, statusCell, statusText)
+
+		switch r.Status {
+		case model.TomcatStatusCritical:
+			f.SetCellStyle(sheetTomcat, statusCell, statusCell, criticalStyle)
+		case model.TomcatStatusWarning:
+			f.SetCellStyle(sheetTomcat, statusCell, statusCell, warningStyle)
+		case model.TomcatStatusNormal:
+			f.SetCellStyle(sheetTomcat, statusCell, statusCell, normalStyle)
+		}
+	}
+
+	return nil
+}
+
+// createTomcatAlertsSheet creates the Tomcat alerts worksheet.
+func (w *Writer) createTomcatAlertsSheet(f *excelize.File, result *model.TomcatInspectionResults) error {
+	if result == nil || len(result.Alerts) == 0 {
+		return nil
+	}
+
+	// Create sheet
+	_, err := f.NewSheet(sheetTomcatAlerts)
+	if err != nil {
+		return err
+	}
+
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	headers := []string{
+		"实例标识", "告警级别", "指标名称", "当前值",
+		"警告阈值", "严重阈值", "告警消息",
+	}
+
+	// Set column widths
+	colWidths := map[string]float64{
+		"A": 25, "B": 12, "C": 20, "D": 15, "E": 15, "F": 15, "G": 40,
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetTomcatAlerts, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetTomcatAlerts, cell, header)
+		f.SetCellStyle(sheetTomcatAlerts, cell, cell, headerStyle)
+	}
+
+	f.SetPanes(sheetTomcatAlerts, &excelize.Panes{Freeze: true, YSplit: 1})
+
+	// Sort alerts: critical first, then by identifier
+	alerts := make([]*model.TomcatAlert, len(result.Alerts))
+	copy(alerts, result.Alerts)
+	sort.Slice(alerts, func(i, j int) bool {
+		if alerts[i].Level != alerts[j].Level {
+			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
+		}
+		return alerts[i].Identifier < alerts[j].Identifier
+	})
+
+	// Write alert rows
+	for i, alert := range alerts {
+		row := i + 2
+		f.SetCellValue(sheetTomcatAlerts, "A"+fmt.Sprint(row), alert.Identifier)
+		f.SetCellValue(sheetTomcatAlerts, "B"+fmt.Sprint(row), alertLevelText(alert.Level))
+		f.SetCellValue(sheetTomcatAlerts, "C"+fmt.Sprint(row), alert.MetricDisplayName)
+		f.SetCellValue(sheetTomcatAlerts, "D"+fmt.Sprint(row), alert.FormattedValue)
+		f.SetCellValue(sheetTomcatAlerts, "E"+fmt.Sprint(row), formatTomcatThreshold(alert.WarningThreshold, alert.MetricName))
+		f.SetCellValue(sheetTomcatAlerts, "F"+fmt.Sprint(row), formatTomcatThreshold(alert.CriticalThreshold, alert.MetricName))
+		f.SetCellValue(sheetTomcatAlerts, "G"+fmt.Sprint(row), alert.Message)
+
+		// Color code the level column
+		levelCell := "B" + fmt.Sprint(row)
+		switch alert.Level {
+		case model.AlertLevelCritical:
+			f.SetCellStyle(sheetTomcatAlerts, levelCell, levelCell, criticalStyle)
+		case model.AlertLevelWarning:
+			f.SetCellStyle(sheetTomcatAlerts, levelCell, levelCell, warningStyle)
+		}
+	}
+
+	return nil
+}
+
+// WriteTomcatInspection generates a standalone Excel report for Tomcat inspection.
+func (w *Writer) WriteTomcatInspection(result *model.TomcatInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("tomcat inspection result is nil")
+	}
+
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	if err := w.createTomcatSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Tomcat sheet: %w", err)
+	}
+
+	if err := w.createTomcatAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Tomcat alerts sheet: %w", err)
+	}
+
+	// Remove default Sheet1
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+		// Ignore error
+	}
+
+	// Set active sheet to Tomcat
+	idx, _ := f.GetSheetIndex(sheetTomcat)
+	f.SetActiveSheet(idx)
+
+	return f.SaveAs(outputPath)
+}
+
+// AppendTomcatInspection appends Tomcat sheets to an existing Excel file.
+func (w *Writer) AppendTomcatInspection(result *model.TomcatInspectionResults, existingPath string) error {
+	if result == nil {
+		return fmt.Errorf("tomcat inspection result is nil")
+	}
+
+	f, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		return fmt.Errorf("failed to open existing file: %w", err)
+	}
+	defer f.Close()
+
+	if err := w.createTomcatSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Tomcat sheet: %w", err)
+	}
+
+	if err := w.createTomcatAlertsSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Tomcat alerts sheet: %w", err)
+	}
+
+	return f.Save()
 }

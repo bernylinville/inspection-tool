@@ -79,6 +79,10 @@
             background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
         }
 
+        .section-header.tomcat-section {
+            background: linear-gradient(135deg, #fd7e14 0%, #e67a00 100%);
+        }
+
         .section-header h2 {
             font-size: 20px;
             font-weight: 600;
@@ -147,6 +151,10 @@
 
         .section-title.nginx {
             border-bottom-color: #28a745;
+        }
+
+        .section-title.tomcat {
+            border-bottom-color: #fd7e14;
         }
 
         /* Tables */
@@ -1051,6 +1059,116 @@
         {{end}}
         {{end}}
 
+        {{if .HasTomcat}}
+        <!-- ============================================================ -->
+        <!-- Tomcat Inspection Section -->
+        <!-- ============================================================ -->
+        <div class="section-header tomcat-section">
+            <h2>🟠 Tomcat 巡检</h2>
+        </div>
+
+        <!-- Tomcat Summary Section -->
+        <section class="summary-section">
+            <h3 class="section-title tomcat">Tomcat 巡检概览</h3>
+            <div class="summary-cards">
+                <div class="card card-total">
+                    <div class="card-value">{{.TomcatSummary.TotalInstances}}</div>
+                    <div class="card-label">实例总数</div>
+                </div>
+                <div class="card card-normal">
+                    <div class="card-value">{{.TomcatSummary.NormalInstances}}</div>
+                    <div class="card-label">正常实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.TomcatSummary.WarningInstances}}</div>
+                    <div class="card-label">警告实例</div>
+                </div>
+                <div class="card card-critical">
+                    <div class="card-value">{{.TomcatSummary.CriticalInstances}}</div>
+                    <div class="card-label">严重实例</div>
+                </div>
+                <div class="card card-failed">
+                    <div class="card-value">{{.TomcatSummary.FailedInstances}}</div>
+                    <div class="card-label">失败实例</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tomcat Instances Table -->
+        <section class="table-section">
+            <h3 class="section-title tomcat">Tomcat 实例详情</h3>
+            <div class="table-container">
+                <table id="tomcat-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="text">主机名</th>
+                            <th class="sortable" data-sort="text">IP地址</th>
+                            <th>端口</th>
+                            <th>容器名</th>
+                            <th>版本</th>
+                            <th>连接数</th>
+                            <th>运行时长</th>
+                            <th>非root用户</th>
+                            <th class="sortable" data-sort="text">最近错误时间</th>
+                            <th class="sortable" data-sort="status">整体状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .TomcatInstances}}
+                        <tr class="{{.StatusClass}}">
+                            <td>{{.Hostname}}</td>
+                            <td>{{.IP}}</td>
+                            <td>{{if .Container}}-{{else}}{{.Port}}{{end}}</td>
+                            <td>{{.Container}}</td>
+                            <td>{{.Version}}</td>
+                            <td>{{.Connections}}</td>
+                            <td>{{.UptimeFormatted}}</td>
+                            <td>{{.NonRootUser}}</td>
+                            <td>{{.LastErrorTimeFormatted}}</td>
+                            <td><span class="badge badge-{{.StatusClass}}">{{.Status}}</span></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Tomcat Alerts Section -->
+        {{if .TomcatAlerts}}
+        <section class="alerts-section">
+            <h3 class="section-title tomcat">Tomcat 异常汇总</h3>
+            <div class="table-container">
+                <table id="tomcat-alerts-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="text">实例标识</th>
+                            <th class="sortable" data-sort="level">告警级别</th>
+                            <th class="sortable" data-sort="text">指标名称</th>
+                            <th class="sortable" data-sort="text">当前值</th>
+                            <th>警告阈值</th>
+                            <th>严重阈值</th>
+                            <th>告警消息</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .TomcatAlerts}}
+                        <tr>
+                            <td>{{.Identifier}}</td>
+                            <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
+                            <td>{{.MetricDisplayName}}</td>
+                            <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
+                            <td>{{.WarningThreshold}}</td>
+                            <td>{{.CriticalThreshold}}</td>
+                            <td>{{.Message}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {{end}}
+        {{end}}
+
         <!-- Footer -->
         <footer class="footer">
             <p>报告生成时间: {{.GeneratedAt}} | {{if .Version}}版本: {{.Version}} | {{end}}系统巡检工具</p>
@@ -1154,6 +1272,8 @@
                 setupTableSorting('redis-table', 13);
                 setupTableSorting('nginx-table', 15); // Default sort by status column
                 setupTableSorting('nginx-alerts-table', 0); // Default sort by identifier
+                setupTableSorting('tomcat-table', 9); // Default sort by status column
+                setupTableSorting('tomcat-alerts-table', 0); // Default sort by identifier
             });
         })();
     </script>

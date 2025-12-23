@@ -11,9 +11,10 @@ type Config struct {
 	Report      ReportConfig          `mapstructure:"report"`
 	Logging     LoggingConfig         `mapstructure:"logging"`
 	HTTP        HTTPConfig            `mapstructure:"http"`
-	MySQL       MySQLInspectionConfig `mapstructure:"mysql"`
-	Redis       RedisInspectionConfig `mapstructure:"redis"`
-	Nginx       NginxInspectionConfig `mapstructure:"nginx"`
+	MySQL       MySQLInspectionConfig  `mapstructure:"mysql"`
+	Redis       RedisInspectionConfig  `mapstructure:"redis"`
+	Nginx       NginxInspectionConfig  `mapstructure:"nginx"`
+	Tomcat      TomcatInspectionConfig `mapstructure:"tomcat"`
 }
 
 // DatasourcesConfig contains configurations for data sources.
@@ -168,4 +169,37 @@ type NginxThresholds struct {
 	ConnectionUsageCritical  float64 `mapstructure:"connection_usage_critical" validate:"gte=0,lte=100"` // Default: 90
 	LastErrorWarningMinutes  int     `mapstructure:"last_error_warning_minutes" validate:"gte=0"`        // Default: 60
 	LastErrorCriticalMinutes int     `mapstructure:"last_error_critical_minutes" validate:"gte=0"`       // Default: 10
+}
+
+// =============================================================================
+// Tomcat Inspection Configuration
+// =============================================================================
+
+// TomcatInspectionConfig contains configurations for Tomcat inspection.
+type TomcatInspectionConfig struct {
+	Enabled        bool             `mapstructure:"enabled"`
+	InstanceFilter TomcatFilter     `mapstructure:"instance_filter"`
+	Thresholds     TomcatThresholds `mapstructure:"thresholds"`
+}
+
+// TomcatFilter defines Tomcat instance filtering criteria.
+// UNIQUE: Supports both HostnamePatterns AND ContainerPatterns (dual deployment).
+type TomcatFilter struct {
+	HostnamePatterns  []string          `mapstructure:"hostname_patterns"`  // Hostname patterns (glob, e.g., "GX-MFUI-*")
+	ContainerPatterns []string          `mapstructure:"container_patterns"` // Container name patterns (glob, e.g., "tomcat-18001")
+	BusinessGroups    []string          `mapstructure:"business_groups"`    // Business groups (OR relation)
+	Tags              map[string]string `mapstructure:"tags"`               // Tags (AND relation)
+}
+
+// TomcatThresholds contains threshold configurations for Tomcat alerts.
+type TomcatThresholds struct {
+	// LastErrorWarningMinutes defines the warning threshold for recent error logs.
+	// Time since last error in error.log (in minutes).
+	// Note: Shorter time is MORE severe, so warning > critical.
+	// Default: 60 minutes.
+	LastErrorWarningMinutes int `mapstructure:"last_error_warning_minutes" validate:"gte=0"`
+	// LastErrorCriticalMinutes defines the critical threshold for recent error logs.
+	// Time since last error in error.log (in minutes).
+	// Default: 10 minutes.
+	LastErrorCriticalMinutes int `mapstructure:"last_error_critical_minutes" validate:"gte=0"`
 }

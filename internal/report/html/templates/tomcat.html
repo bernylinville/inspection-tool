@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header - Tomcat Orange Theme */
+        .header {
+            background: linear-gradient(135deg, #fd7e14 0%, #e67a00 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .header-info span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Summary Cards */
+        .summary-section {
+            margin-bottom: 24px;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .card-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .card-total .card-value { color: #4a5568; }
+        .card-normal .card-value { color: #28a745; }
+        .card-warning .card-value { color: #ffc107; }
+        .card-critical .card-value { color: #dc3545; }
+        .card-failed .card-value { color: #6c757d; }
+
+        /* Section Title - Tomcat Orange */
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #fd7e14;
+            display: inline-block;
+        }
+
+        /* Tables */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        /* Tomcat Orange Header */
+        th {
+            background: #fd7e14;
+            color: white;
+            font-weight: 600;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:hover {
+            background: #e67a00;
+        }
+
+        th.sortable::after {
+            content: " \2195";
+            opacity: 0.5;
+        }
+
+        th.sort-asc::after {
+            content: " \2191";
+            opacity: 1;
+        }
+
+        th.sort-desc::after {
+            content: " \2193";
+            opacity: 1;
+        }
+
+        tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        tbody tr:nth-child(even):hover {
+            background-color: #f0f4f8;
+        }
+
+        /* Status Styles */
+        .status-normal {
+            background-color: #c6efce !important;
+            color: #006100;
+        }
+
+        .status-warning {
+            background-color: #ffeb9c !important;
+            color: #9c6500;
+        }
+
+        .status-critical {
+            background-color: #ffc7ce !important;
+            color: #9c0006;
+        }
+
+        .status-failed {
+            background-color: #d9d9d9 !important;
+            color: #666;
+        }
+
+        /* Alert Styles */
+        .alert-warning {
+            background-color: #ffeb9c !important;
+            color: #9c6500;
+        }
+
+        .alert-critical {
+            background-color: #ffc7ce !important;
+            color: #9c0006;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-normal { background: #c6efce; color: #006100; }
+        .badge-warning { background: #ffeb9c; color: #9c6500; }
+        .badge-critical { background: #ffc7ce; color: #9c0006; }
+        .badge-failed { background: #d9d9d9; color: #666; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
+            border-top: 1px solid #e2e8f0;
+            margin-top: 24px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .header-info {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .summary-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .card-value {
+                font-size: 28px;
+            }
+
+            th, td {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+            }
+
+            .header {
+                background: #fd7e14;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .card, .table-container {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+
+            th {
+                background: #fd7e14 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>{{.Title}}</h1>
+            <div class="header-info">
+                <span>&#128197; 巡检时间: {{.InspectionTime}}</span>
+                <span>&#9201; 耗时: {{.Duration}}</span>
+                {{if .Version}}<span>&#128278; 版本: {{.Version}}</span>{{end}}
+            </div>
+        </header>
+
+        <!-- Summary Section -->
+        <section class="summary-section">
+            <h2 class="section-title">Tomcat 巡检概览</h2>
+            <div class="summary-cards">
+                <div class="card card-total">
+                    <div class="card-value">{{.Summary.TotalInstances}}</div>
+                    <div class="card-label">实例总数</div>
+                </div>
+                <div class="card card-normal">
+                    <div class="card-value">{{.Summary.NormalInstances}}</div>
+                    <div class="card-label">正常实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.Summary.WarningInstances}}</div>
+                    <div class="card-label">警告实例</div>
+                </div>
+                <div class="card card-critical">
+                    <div class="card-value">{{.Summary.CriticalInstances}}</div>
+                    <div class="card-label">严重实例</div>
+                </div>
+                <div class="card card-failed">
+                    <div class="card-value">{{.Summary.FailedInstances}}</div>
+                    <div class="card-label">失败实例</div>
+                </div>
+                <div class="card card-warning">
+                    <div class="card-value">{{.AlertSummary.TotalAlerts}}</div>
+                    <div class="card-label">告警总数</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tomcat Instances Section -->
+        <section class="tomcat-section">
+            <h2 class="section-title">Tomcat 实例详情</h2>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="tomcat-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="string">主机名</th>
+                                <th class="sortable" data-sort="string">IP地址</th>
+                                <th class="sortable" data-sort="string">应用类型</th>
+                                <th class="sortable" data-sort="string">端口/容器</th>
+                                <th class="sortable" data-sort="string">版本</th>
+                                <th>安装路径</th>
+                                <th>日志路径</th>
+                                <th>JVM配置</th>
+                                <th class="sortable" data-sort="number">连接数</th>
+                                <th class="sortable" data-sort="string">运行时长</th>
+                                <th class="sortable" data-sort="string">非root用户</th>
+                                <th class="sortable" data-sort="string">最近错误时间</th>
+                                <th class="sortable" data-sort="status">整体状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Instances}}
+                            <tr>
+                                <td>{{.Hostname}}</td>
+                                <td>{{.IP}}</td>
+                                <td>{{.ApplicationType}}</td>
+                                <td>{{if .Container}}{{.Container}}{{else}}{{.Port}}{{end}}</td>
+                                <td>{{.Version}}</td>
+                                <td>{{.InstallPath}}</td>
+                                <td>{{.LogPath}}</td>
+                                <td>{{.JVMConfig}}</td>
+                                <td>{{.Connections}}</td>
+                                <td>{{.UptimeFormatted}}</td>
+                                <td>{{.NonRootUser}}</td>
+                                <td>{{.LastErrorTimeFormatted}}</td>
+                                <td><span class="badge badge-{{.StatusClass}}">{{.Status}}</span></td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tomcat Alerts Section -->
+        {{if .Alerts}}
+        <section class="tomcat-alerts-section">
+            <h2 class="section-title">Tomcat 异常汇总</h2>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="tomcat-alerts-table">
+                        <thead>
+                            <tr>
+                                <th>实例标识</th>
+                                <th>告警级别</th>
+                                <th>指标名称</th>
+                                <th>当前值</th>
+                                <th>警告阈值</th>
+                                <th>严重阈值</th>
+                                <th>告警消息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Alerts}}
+                            <tr>
+                                <td>{{.Identifier}}</td>
+                                <td><span class="badge badge-{{.LevelClass}}">{{.Level}}</span></td>
+                                <td>{{.MetricDisplayName}}</td>
+                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
+                                <td>{{.WarningThreshold}}</td>
+                                <td>{{.CriticalThreshold}}</td>
+                                <td>{{.Message}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {{end}}
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>报告生成时间: {{.GeneratedAt}} | {{if .Version}}版本: {{.Version}} | {{end}}Tomcat 巡检工具</p>
+        </footer>
+    </div>
+
+    <!-- JavaScript for table sorting -->
+    <script>
+        // Table sorting functionality
+        (function() {
+            let currentSortColumn = null;
+            let currentSortDirection = 'desc';
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const tomcatTable = document.getElementById('tomcat-table');
+                if (!tomcatTable) return;
+
+                const headers = tomcatTable.querySelectorAll('th.sortable');
+
+                headers.forEach((header) => {
+                    header.addEventListener('click', function() {
+                        const actualIndex = getActualColumnIndex(tomcatTable, header);
+                        const sortType = this.dataset.sort;
+
+                        // Toggle direction if same column, otherwise default to desc
+                        if (currentSortColumn === actualIndex) {
+                            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSortDirection = 'desc';
+                            currentSortColumn = actualIndex;
+                        }
+
+                        // Update visual indicators
+                        headers.forEach(h => {
+                            h.classList.remove('sort-asc', 'sort-desc');
+                        });
+                        this.classList.add('sort-' + currentSortDirection);
+
+                        // Perform sort
+                        sortTable(tomcatTable, actualIndex, sortType, currentSortDirection);
+                    });
+                });
+
+                // Default sort by status (last column) descending
+                const statusHeader = tomcatTable.querySelector('th[data-sort="status"]');
+                if (statusHeader) {
+                    const statusIndex = getActualColumnIndex(tomcatTable, statusHeader);
+                    currentSortColumn = statusIndex;
+                    currentSortDirection = 'desc';
+                    statusHeader.classList.add('sort-desc');
+                    sortTable(tomcatTable, statusIndex, 'status', 'desc');
+                }
+            });
+
+            function getActualColumnIndex(table, header) {
+                const headers = table.querySelectorAll('th');
+                return Array.from(headers).indexOf(header);
+            }
+
+            function sortTable(table, columnIndex, sortType, direction) {
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                rows.sort((a, b) => {
+                    const aCell = a.cells[columnIndex];
+                    const bCell = b.cells[columnIndex];
+                    let aValue = aCell ? aCell.textContent.trim() : '';
+                    let bValue = bCell ? bCell.textContent.trim() : '';
+
+                    // Handle N/A values - always sort to bottom
+                    if (aValue === 'N/A' && bValue !== 'N/A') return 1;
+                    if (bValue === 'N/A' && aValue !== 'N/A') return -1;
+                    if (aValue === 'N/A' && bValue === 'N/A') return 0;
+
+                    if (sortType === 'number') {
+                        aValue = parseFloat(aValue.replace('%', '').replace(/[^\d.-]/g, '')) || 0;
+                        bValue = parseFloat(bValue.replace('%', '').replace(/[^\d.-]/g, '')) || 0;
+                    } else if (sortType === 'status') {
+                        const statusOrder = {'严重': 0, '警告': 1, '失败': 2, '正常': 3};
+                        aValue = statusOrder[aValue] !== undefined ? statusOrder[aValue] : 4;
+                        bValue = statusOrder[bValue] !== undefined ? statusOrder[bValue] : 4;
+                    }
+
+                    let result;
+                    if (direction === 'asc') {
+                        result = aValue > bValue ? 1 : (aValue < bValue ? -1 : 0);
+                    } else {
+                        result = aValue < bValue ? 1 : (aValue > bValue ? -1 : 0);
+                    }
+                    return result;
+                });
+
+                rows.forEach(row => tbody.appendChild(row));
+            }
+        })();
+    </script>
+</body>
+</html>

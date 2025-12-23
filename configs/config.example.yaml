@@ -308,3 +308,51 @@ nginx:
     # 注意: 时间越短越严重，因此 warning > critical
     last_error_warning_minutes: 60   # 1小时内有错误触发警告
     last_error_critical_minutes: 10  # 10分钟内有错误触发严重告警
+
+# -----------------------------------------------------------------------------
+# Tomcat 巡检配置
+# -----------------------------------------------------------------------------
+# 用途: Tomcat 应用巡检（支持容器部署和二进制部署）
+# 数据来源: VictoriaMetrics（通过 Categraf exec 脚本采集的 tomcat_* 指标）
+tomcat:
+  # 是否启用 Tomcat 巡检 (默认: false)
+  enabled: true
+
+  # 实例筛选条件 (可选)
+  # 不配置则查询所有 Tomcat 实例
+  instance_filter:
+    # 主机名匹配模式 (支持通配符 *)
+    # 示例: "GX-MFUI-*" 匹配所有以 GX-MFUI- 开头的主机
+    # 示例: "*-BE-*" 匹配主机名包含 -BE- 的主机
+    hostname_patterns:
+      # - "GX-MFUI-*"
+      # - "*-BE-*"
+
+    # 容器名匹配模式 (支持通配符 *)
+    # 示例: "tomcat-18001" 匹配具体容器
+    # 示例: "tomcat-*" 匹配所有以 tomcat- 开头的容器
+    # 注意: 二进制部署的实例无 container 标签，不会被此规则匹配
+    container_patterns:
+      # - "tomcat-*"
+      # - "*-18001"
+
+    # 业务组筛选 (OR 关系)
+    # 匹配任意一个业务组的实例都会被纳入巡检
+    business_groups:
+      # - "生产Tomcat"
+      # - "短剧项目"
+
+    # 标签筛选 (AND 关系)
+    # 与业务组条件之间是 AND 关系
+    tags:
+      # env: "prod"
+      # app: "tomcat"
+
+  # 阈值配置
+  thresholds:
+    # 最近错误日志时间阈值 (单位: 分钟)
+    # 检测 error.log 最后一条错误日志距今的时间
+    # 注意: 时间越短越严重，因此 warning > critical
+    # 示例: 如果最后一条错误日志是 5 分钟前，触发严重告警
+    last_error_warning_minutes: 60   # 1小时内有错误触发警告
+    last_error_critical_minutes: 10  # 10分钟内有错误触发严重告警

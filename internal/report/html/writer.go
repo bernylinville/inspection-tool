@@ -729,15 +729,21 @@ type CombinedTemplateData struct {
 	NginxAlertSummary *model.NginxAlertSummary
 	NginxInstances    []*NginxInstanceData
 	NginxAlerts       []*NginxAlertData
+	// Tomcat data
+	HasTomcat          bool
+	TomcatSummary      *model.TomcatInspectionSummary
+	TomcatAlertSummary *model.TomcatAlertSummary
+	TomcatInstances    []*TomcatInstanceData
+	TomcatAlerts       []*TomcatAlertData
 	// Common
 	Version     string
 	GeneratedAt string
 }
 
-// WriteCombined generates an HTML report combining Host, MySQL, Redis, and Nginx inspection results.
-func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, outputPath string) error {
+// WriteCombined generates an HTML report combining Host, MySQL, Redis, Nginx, and Tomcat inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string) error {
 	// At least one result must be present
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
 		return fmt.Errorf("all inspection results are nil")
 	}
 
@@ -753,7 +759,7 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 	}
 
 	// Prepare combined template data
-	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult, nginxResult)
+	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult)
 
 	// Create output file
 	file, err := os.Create(outputPath)
@@ -789,7 +795,7 @@ func (w *Writer) loadCombinedTemplate() (*template.Template, error) {
 }
 
 // prepareCombinedTemplateData prepares data for the combined template.
-func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults) *CombinedTemplateData {
+func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults) *CombinedTemplateData {
 	data := &CombinedTemplateData{
 		Title:       "系统巡检报告",
 		GeneratedAt: time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
@@ -808,6 +814,14 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 		data.InspectionTime = redisResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
 		data.Duration = formatDuration(redisResult.Duration)
 		data.Version = redisResult.Version
+	} else if nginxResult != nil {
+		data.InspectionTime = nginxResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(nginxResult.Duration)
+		data.Version = nginxResult.Version
+	} else if tomcatResult != nil {
+		data.InspectionTime = tomcatResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(tomcatResult.Duration)
+		data.Version = tomcatResult.Version
 	}
 
 	// Fill Host data if available
@@ -895,6 +909,23 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 
 		// Convert Nginx alerts
 		data.NginxAlerts = w.convertNginxAlerts(nginxResult.Alerts)
+	}
+
+	// Fill Tomcat data if available
+	if tomcatResult != nil {
+		data.HasTomcat = true
+		data.TomcatSummary = tomcatResult.Summary
+		data.TomcatAlertSummary = tomcatResult.AlertSummary
+
+		// Convert Tomcat instances
+		tomcatInstances := make([]*TomcatInstanceData, 0, len(tomcatResult.Results))
+		for _, r := range tomcatResult.Results {
+			tomcatInstances = append(tomcatInstances, w.convertTomcatInstanceData(r))
+		}
+		data.TomcatInstances = tomcatInstances
+
+		// Convert Tomcat alerts
+		data.TomcatAlerts = w.convertTomcatAlerts(tomcatResult.Alerts)
 	}
 
 	return data
@@ -1533,4 +1564,241 @@ func (w *Writer) prepareNginxTemplateData(result *model.NginxInspectionResults) 
 	data.Alerts = w.convertNginxAlerts(result.Alerts)
 
 	return data
+}
+
+// =============================================================================
+// Tomcat Report Data Structures
+// ============================================================================
+
+// TomcatTemplateData holds Tomcat inspection data for template rendering.
+type TomcatTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.TomcatInspectionSummary
+	AlertSummary   *model.TomcatAlertSummary
+	Instances      []*TomcatInstanceData
+	Alerts         []*TomcatAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+// TomcatInstanceData represents Tomcat instance data formatted for template.
+type TomcatInstanceData struct {
+	Identifier            string
+	Hostname              string
+	IP                    string
+	ApplicationType       string
+	Port                 int
+	Container            string
+	Version              string
+	InstallPath          string
+	LogPath              string
+	JVMConfig            string
+	Connections          int
+	UptimeFormatted      string
+	NonRootUser          string
+	LastErrorTimeFormatted string
+	Status               string
+	StatusClass          string
+	AlertCount           int
+}
+
+// TomcatAlertData represents Tomcat alert data formatted for template.
+type TomcatAlertData struct {
+	Identifier        string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// =============================================================================
+// Tomcat Report Helper Functions
+// ============================================================================
+
+// tomcatStatusText converts Tomcat instance status to Chinese text.
+func tomcatStatusText(status model.TomcatInstanceStatus) string {
+	switch status {
+	case model.TomcatStatusNormal:
+		return "正常"
+	case model.TomcatStatusWarning:
+		return "警告"
+	case model.TomcatStatusCritical:
+		return "严重"
+	case model.TomcatStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// tomcatStatusClass returns the CSS class for Tomcat instance status.
+func tomcatStatusClass(status model.TomcatInstanceStatus) string {
+	switch status {
+	case model.TomcatStatusNormal:
+		return "status-normal"
+	case model.TomcatStatusWarning:
+		return "status-warning"
+	case model.TomcatStatusCritical:
+		return "status-critical"
+	case model.TomcatStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// tomcatBoolToText converts boolean to Chinese text (是/否).
+func tomcatBoolToText(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
+}
+
+// getTomcatPortOrContainer returns container name if container deployment,
+// otherwise returns port number as string.
+func getTomcatPortOrContainer(r *model.TomcatInspectionResult) string {
+	if r.Instance == nil {
+		return ""
+	}
+	if r.Instance.IsContainerDeployment() {
+		return r.Instance.Container
+	}
+	return fmt.Sprintf("%d", r.Instance.Port)
+}
+
+// formatTomcatThreshold formats a Tomcat alert threshold value.
+func formatTomcatThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "last_error_timestamp":
+		return fmt.Sprintf("%.0f分钟", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// loadTomcatTemplate loads the embedded Tomcat HTML template.
+func (w *Writer) loadTomcatTemplate() (*template.Template, error) {
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    func(s model.TomcatInstanceStatus) string { return tomcatStatusClass(s) },
+		"alertClass":     func(l model.AlertLevel) string { return alertLevelClass(l) },
+	}
+
+	tmpl, err := template.New("tomcat.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/tomcat.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded tomcat template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// convertTomcatInstanceData converts TomcatInspectionResult to TomcatInstanceData.
+func (w *Writer) convertTomcatInstanceData(r *model.TomcatInspectionResult) *TomcatInstanceData {
+	return &TomcatInstanceData{
+		Identifier:            r.Instance.Identifier,
+		Hostname:              r.Instance.Hostname,
+		IP:                    r.Instance.IP,
+		ApplicationType:       r.Instance.ApplicationType,
+		Port:                  r.Instance.Port,
+		Container:             r.Instance.Container,
+		Version:               r.Instance.Version,
+		InstallPath:           r.Instance.InstallPath,
+		LogPath:               r.Instance.LogPath,
+		JVMConfig:             r.Instance.JVMConfig,
+		Connections:           r.Connections,
+		UptimeFormatted:       r.UptimeFormatted,
+		NonRootUser:           tomcatBoolToText(r.NonRootUser),
+		LastErrorTimeFormatted: r.LastErrorTimeFormatted,
+		Status:                tomcatStatusText(r.Status),
+		StatusClass:           tomcatStatusClass(r.Status),
+		AlertCount:            len(r.Alerts),
+	}
+}
+
+// convertTomcatAlerts converts TomcatAlert slice to TomcatAlertData slice.
+func (w *Writer) convertTomcatAlerts(alerts []*model.TomcatAlert) []*TomcatAlertData {
+	// Sort by level (critical first)
+	sortedAlerts := make([]*model.TomcatAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Identifier < sortedAlerts[j].Identifier
+	})
+
+	result := make([]*TomcatAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &TomcatAlertData{
+			Identifier:        alert.Identifier,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatTomcatThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatTomcatThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+// prepareTomcatTemplateData converts TomcatInspectionResults to TomcatTemplateData.
+func (w *Writer) prepareTomcatTemplateData(result *model.TomcatInspectionResults) *TomcatTemplateData {
+	instances := make([]*TomcatInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertTomcatInstanceData(r))
+	}
+
+	alerts := w.convertTomcatAlerts(result.Alerts)
+
+	return &TomcatTemplateData{
+		Title:          "Tomcat 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Instances:      instances,
+		Alerts:         alerts,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+// WriteTomcatInspection generates an HTML report for Tomcat inspection results.
+func (w *Writer) WriteTomcatInspection(result *model.TomcatInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("tomcat inspection result is nil")
+	}
+
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	tmpl, err := w.loadTomcatTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Tomcat template: %w", err)
+	}
+
+	data := w.prepareTomcatTemplateData(result)
+
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return nil
 }
