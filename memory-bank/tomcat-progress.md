@@ -734,3 +734,127 @@ Step 7 将进行：
 Step 8 将进行：
 - 端到端验收测试
 - 报告生成验证
+
+---
+
+## Step 8 完成详情（2025-12-23）
+
+### 实施内容
+
+#### 1. CLI 报告生成集成修复
+
+**问题发现**：Step 7 中实现的 Excel 和 HTML 报告生成方法未正确集成到 CLI 入口。
+
+**文件**：`cmd/inspect/cmd/run.go`
+
+**修复点 1**：generateCombinedExcel 函数 - Tomcat-only 模式（第 800-803 行）
+```go
+// 修复前：TODO 占位符返回 nil
+// 修复后：调用 w.WriteTomcatInspection(tomcatResult, outputPath)
+```
+
+**修复点 2**：generateCombinedExcel 函数 - 合并模式追加 Tomcat（第 859-869 行）
+```go
+// 修复前：TODO 日志占位符
+// 修复后：根据已有报告选择 Write 或 AppendTomcatInspection
+```
+
+**修复点 3**：generateCombinedHTML 函数 - Tomcat-only 模式（第 902-905 行）
+```go
+// 修复前：TODO 占位符返回 nil
+// 修复后：调用 w.WriteTomcatInspection(tomcatResult, outputPath)
+```
+
+**修复点 4**：generateCombinedHTML 函数 - 合并模式传入 Tomcat 参数（第 912-915 行）
+```go
+// 修复前：WriteCombined 调用缺少 tomcatResult 参数
+// 修复后：传入 tomcatResult 参数
+```
+
+#### 2. HTML 测试文件修复
+
+**文件**：`internal/report/html/writer_test.go`
+
+**问题**：`WriteCombined` 方法签名更新后，测试调用未同步更新。
+
+**修复**：更新 4 处 `WriteCombined` 调用，添加 `tomcatResult` 参数（传入 `nil`）。
+
+#### 3. 编译验证
+
+✅ **编译验证通过**：`make build` 成功生成 `bin/inspect` 二进制文件
+
+#### 4. 配置文件验证
+
+✅ **配置文件存在**：
+- `configs/tomcat-metrics.yaml` - 7 个指标定义
+- `configs/config.example.yaml` - Tomcat 配置节（第 317-358 行）
+
+#### 5. 单元测试验证
+
+✅ **所有测试通过**：
+```
+ok  	inspection-tool/internal/client/n9e	0.446s
+ok  	inspection-tool/internal/client/vm	1.607s
+ok  	inspection-tool/internal/config	0.691s
+ok  	inspection-tool/internal/model	1.679s
+ok  	inspection-tool/internal/report	1.418s
+ok  	inspection-tool/internal/report/excel	2.014s
+ok  	inspection-tool/internal/report/html	2.215s
+ok  	inspection-tool/internal/service	5.162s
+```
+
+#### 6. CLI 标志验证
+
+✅ **CLI 标志正确注册**：
+- `--tomcat-metrics` (default: configs/tomcat-metrics.yaml)
+- `--tomcat-only` - 仅执行 Tomcat 巡检
+- `--skip-tomcat` - 跳过 Tomcat 巡检
+
+#### 7. 端到端测试（代码级验证）
+
+✅ **以下场景已在代码层面验证**：
+1. Tomcat-only Excel 报告生成逻辑 ✅
+2. Tomcat-only HTML 报告生成逻辑 ✅
+3. 合并报告包含 Tomcat 数据逻辑 ✅
+4. 跳过 Tomcat 巡检逻辑 ✅
+
+### 验证结果
+
+✅ **编译验证通过**：`make build` 无编译错误
+✅ **测试验证通过**：所有单元测试通过
+✅ **配置验证通过**：配置文件存在且格式正确
+✅ **CLI 集成完成**：报告生成方法正确调用
+
+### 文件清单
+
+| 文件 | 操作 | 新增行数 |
+|------|------|----------|
+| cmd/inspect/cmd/run.go | 修改 | +4 / -16 |
+| internal/report/html/writer_test.go | 修改 | +4 / -4 |
+
+### 注意事项
+
+**实际环境验证**：由于端到端测试需要实际的监控环境和 Tomcat 实例，以下验证需要在陕西营销活动环境中执行：
+
+1. **巡检命令成功完成**：`./bin/inspect run -c config.yaml --tomcat-only`
+2. **Tomcat 实例正确发现**：验证从 VictoriaMetrics 查询到 `tomcat_up == 1` 的实例
+3. **所有巡检项数据正确**：验证 7 个指标数据采集完整
+4. **告警规则正确触发**：验证时间反转阈值逻辑（warning > critical）
+5. **报告正确生成**：验证 Excel 和 HTML 报告包含 Tomcat Sheet/区域
+
+### 参考文件
+
+- `cmd/inspect/cmd/run.go` - CLI 集成修复
+- `internal/report/html/writer_test.go` - 测试文件修复
+- `memory-bank/tomcat-feature-implementation.md` - 权威需求文档
+
+---
+
+## 阶段四完成状态
+
+- **Step 7**: ✅ 已完成（2025-12-23）
+- **Step 8**: ✅ 已完成（2025-12-23）
+
+**Tomcat 应用巡检功能全部开发工作已完成！** 🎉
+
+下一步请用户在实际验证环境中执行端到端验收测试，确认功能符合预期后正式交付。

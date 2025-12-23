@@ -797,11 +797,9 @@ func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *mode
 		return w.WriteNginxInspection(nginxResult, outputPath)
 	}
 
-	// Only Tomcat mode (TODO: Step 7 will implement Tomcat report generation)
+	// Only Tomcat mode
 	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult != nil && nginxResult == nil {
-		// Temporary: create empty file until Tomcat report generation is implemented in Step 7
-		logger.Info().Msg("Tomcat-only mode: report generation will be implemented in Step 7")
-		return nil
+		return w.WriteTomcatInspection(tomcatResult, outputPath)
 	}
 
 	// Only Redis mode
@@ -858,9 +856,16 @@ func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *mode
 			}
 		}
 	}
-	// TODO: Append Tomcat report in Step 7
 	if tomcatResult != nil {
-		logger.Info().Msg("Tomcat result included: report generation will be implemented in Step 7")
+		if hostResult != nil || mysqlResult != nil || redisResult != nil || nginxResult != nil {
+			if err := w.AppendTomcatInspection(tomcatResult, outputPath); err != nil {
+				return fmt.Errorf("failed to append Tomcat report: %w", err)
+			}
+		} else {
+			if err := w.WriteTomcatInspection(tomcatResult, outputPath); err != nil {
+				return fmt.Errorf("failed to write Tomcat report: %w", err)
+			}
+		}
 	}
 
 	logger.Debug().
@@ -894,11 +899,9 @@ func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model
 		return w.WriteNginxInspection(nginxResult, outputPath)
 	}
 
-	// Only Tomcat mode (TODO: Step 7 will implement Tomcat report generation)
+	// Only Tomcat mode
 	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult != nil {
-		// Temporary: create empty file until Tomcat report generation is implemented in Step 7
-		logger.Info().Msg("Tomcat-only mode: report generation will be implemented in Step 7")
-		return nil
+		return w.WriteTomcatInspection(tomcatResult, outputPath)
 	}
 
 	// Only Host mode
@@ -906,13 +909,9 @@ func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model
 		return w.Write(hostResult, outputPath)
 	}
 
-	// Combined mode (TODO: Add Tomcat in Step 7)
-	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, outputPath); err != nil {
+	// Combined mode
+	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, outputPath); err != nil {
 		return fmt.Errorf("failed to write combined HTML report: %w", err)
-	}
-	// TODO: Process Tomcat result in Step 7
-	if tomcatResult != nil {
-		logger.Info().Msg("Tomcat result included: report generation will be implemented in Step 7")
 	}
 
 	logger.Debug().
