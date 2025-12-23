@@ -8,7 +8,7 @@
 
 - **阶段二（数据模型与配置）**：🔄 进行中
   - **Step 3: 定义 Tomcat 数据模型** ✅ 已完成（2025-12-23）
-  - Step 4: 扩展配置结构并创建指标定义文件 ⏳ 待开始
+  - **Step 4: 扩展配置结构并创建指标定义文件** ✅ 已完成（2025-12-23）
 
 - **阶段三（服务实现）**：⏳ 待开始
   - Step 5: 实现 Tomcat 采集器和评估器 ⏳ 待开始
@@ -96,11 +96,120 @@
 
 ---
 
+## Step 4 完成详情（2025-12-23）
+
+### 实施内容
+
+#### 1. 扩展 internal/config/config.go
+
+**添加位置**：第 16-17 行（Config 结构体）
+```go
+Tomcat      TomcatInspectionConfig `mapstructure:"tomcat"`
+```
+
+**添加位置**：第 173-205 行（Tomcat 配置结构体）
+- ✅ TomcatInspectionConfig：Enabled、InstanceFilter、Thresholds
+- ✅ TomcatFilter：HostnamePatterns、ContainerPatterns、BusinessGroups、Tags
+  - **独有特性**：同时支持 HostnamePatterns 和 ContainerPatterns（双过滤器）
+- ✅ TomcatThresholds：LastErrorWarningMinutes、LastErrorCriticalMinutes
+  - **时间反转**：warning > critical（时间越短越严重）
+
+#### 2. 创建 configs/tomcat-metrics.yaml
+
+**文件路径**：`configs/tomcat-metrics.yaml`
+
+**指标定义**（7 个指标）：
+- ✅ tomcat_up：运行状态（category: status）
+- ✅ tomcat_info：实例信息，标签提取 [port, app_type, install_path, log_path, version, jvm_config]
+- ✅ tomcat_connections：当前连接数（仅展示，不告警）
+- ✅ tomcat_non_root_user：非 root 用户启动（category: security）
+- ✅ tomcat_uptime_seconds：运行时长（format: duration）
+- ✅ tomcat_last_error_timestamp：最近错误日志时间（format: timestamp）
+
+**设计要点**：
+- 不包含 tomcat_pid（仅内部使用，不在报告中展示）
+- 与 MySQL/Nginx metrics.yaml 格式保持一致
+
+#### 3. 更新 configs/config.example.yaml
+
+**添加位置**：第 312-358 行（Tomcat 配置节）
+
+**配置结构**：
+```yaml
+tomcat:
+  enabled: true
+  instance_filter:
+    hostname_patterns: []     # 主机名模式（glob）
+    container_patterns: []    # 容器名模式（glob）- Tomcat 独有
+    business_groups: []       # 业务组（OR）
+    tags: {}                  # 标签（AND）
+  thresholds:
+    last_error_warning_minutes: 60   # 时间反转阈值
+    last_error_critical_minutes: 10
+```
+
+**注释说明**：
+- 明确说明双过滤器使用场景
+- 强调二进制部署实例无 container 标签
+- 注释时间反转逻辑
+
+### 验证结果
+
+✅ **编译验证通过**：
+- `go build ./internal/config/` 无编译错误
+- `go build ./cmd/inspect/` 无编译错误
+
+✅ **文件修改清单**：
+| 文件 | 操作 | 新增行数 |
+|------|------|----------|
+| internal/config/config.go | 修改 | +35 |
+| configs/tomcat-metrics.yaml | 新建 | +70 |
+| configs/config.example.yaml | 修改 | +48 |
+
+✅ **模式一致性**：
+- TomcatFilter 与 NginxFilter 字段命名一致
+- TomcatThresholds 与 NginxThresholds 字段命名一致
+- YAML 配置与 Go 结构体 mapstructure 标签一一对应
+
+### 关键实现要点
+
+1. **双过滤器模式（Tomcat 独有）**
+   ```go
+   type TomcatFilter struct {
+       HostnamePatterns  []string  // 主机名模式
+       ContainerPatterns []string  // 容器名模式 - Tomcat 特有
+       BusinessGroups    []string  // 业务组（OR）
+       Tags              map[string]string // 标签（AND）
+   }
+   ```
+
+2. **时间反转阈值**
+   ```go
+   LastErrorWarningMinutes: 60   // 1 小时内有错误 → 警告
+   LastErrorCriticalMinutes: 10  // 10 分钟内有错误 → 严重
+   ```
+   - 与 Nginx 保持一致的字段命名
+   - 时间越短越严重（warning > critical）
+
+3. **配置加载验证**（Step 5 实现）
+   - 阈值 validate:"gte=0" 确保非负数
+   - 与 MySQL/Redis/Nginx 配置加载逻辑一致
+
+### 参考文件
+
+- internal/config/config.go - MySQL/Redis/Nginx 配置结构参考
+- configs/mysql-metrics.yaml - 指标 YAML 格式参考
+- configs/config.example.yaml - 配置示例格式参考
+- memory-bank/tomcat-feature-implementation.md - 权威需求文档
+
+---
+
 ## 下一步
 
-✅ Step 3 已完成，**请用户审核通过后再进入 Step 4**
+✅ Step 4 已完成，**请用户审核通过后再进入 Step 5**
 
-Step 4 将进行：
-- 扩展 `internal/config/config.go`（添加 TomcatInspectionConfig, TomcatFilter, TomcatThresholds）
-- 创建 `configs/tomcat-metrics.yaml`（定义 Tomcat 指标查询表达式）
-- 更新 `configs/config.example.yaml`（添加 Tomcat 配置示例）
+Step 5 将进行：
+- 实现 Tomcat 采集器（internal/service/tomcat_collector.go）
+- 实现 Tomcat 评估器（internal/service/tomcat_evaluator.go）
+- 双过滤器逻辑：hostname_patterns + container_patterns
+- 时间反转告警：最近错误日志时间评估
