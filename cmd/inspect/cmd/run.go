@@ -817,55 +817,9 @@ func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *mode
 		return w.Write(hostResult, outputPath)
 	}
 
-	// Combined mode: write Host first, then append MySQL and/or Redis
-	if hostResult != nil {
-		if err := w.Write(hostResult, outputPath); err != nil {
-			return fmt.Errorf("failed to write host report: %w", err)
-		}
-	}
-	if mysqlResult != nil {
-		if hostResult != nil {
-			if err := w.AppendMySQLInspection(mysqlResult, outputPath); err != nil {
-				return fmt.Errorf("failed to append MySQL report: %w", err)
-			}
-		} else {
-			if err := w.WriteMySQLInspection(mysqlResult, outputPath); err != nil {
-				return fmt.Errorf("failed to write MySQL report: %w", err)
-			}
-		}
-	}
-	if redisResult != nil {
-		if hostResult != nil || mysqlResult != nil {
-			if err := w.AppendRedisInspection(redisResult, outputPath); err != nil {
-				return fmt.Errorf("failed to append Redis report: %w", err)
-			}
-		} else {
-			if err := w.WriteRedisInspection(redisResult, outputPath); err != nil {
-				return fmt.Errorf("failed to write Redis report: %w", err)
-			}
-		}
-	}
-	if nginxResult != nil {
-		if hostResult != nil || mysqlResult != nil || redisResult != nil {
-			if err := w.AppendNginxInspection(nginxResult, outputPath); err != nil {
-				return fmt.Errorf("failed to append Nginx report: %w", err)
-			}
-		} else {
-			if err := w.WriteNginxInspection(nginxResult, outputPath); err != nil {
-				return fmt.Errorf("failed to write Nginx report: %w", err)
-			}
-		}
-	}
-	if tomcatResult != nil {
-		if hostResult != nil || mysqlResult != nil || redisResult != nil || nginxResult != nil {
-			if err := w.AppendTomcatInspection(tomcatResult, outputPath); err != nil {
-				return fmt.Errorf("failed to append Tomcat report: %w", err)
-			}
-		} else {
-			if err := w.WriteTomcatInspection(tomcatResult, outputPath); err != nil {
-				return fmt.Errorf("failed to write Tomcat report: %w", err)
-			}
-		}
+	// Combined mode: use WriteCombined to generate unified alerts sheet
+	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, outputPath); err != nil {
+		return fmt.Errorf("failed to write combined report: %w", err)
 	}
 
 	logger.Debug().

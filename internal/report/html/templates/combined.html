@@ -127,7 +127,7 @@
 
         .card-total .card-value { color: #4a5568; }
         .card-normal .card-value { color: #28a745; }
-        .card-warning .card-value { color: #ffc107; }
+        .card-warning .card-value { color: #e6a700; }
         .card-critical .card-value { color: #dc3545; }
         .card-failed .card-value { color: #6c757d; }
 
@@ -306,11 +306,15 @@
 
         /* Badge */
         .badge {
-            display: inline-block;
-            padding: 4px 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            line-height: 1;
+            min-width: 48px;
         }
 
         .badge-normal { background: #c6efce; color: #006100; }
@@ -320,33 +324,45 @@
 
         /* Nginx specific badges */
         .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            line-height: 1;
+            min-width: 48px;
         }
 
         .status-badge.status-运行 { background: #c6efce; color: #006100; }
         .status-badge.status-停止 { background: #ffc7ce; color: #9c0006; }
 
         .config-badge {
-            display: inline-block;
-            padding: 4px 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            line-height: 1;
+            min-width: 48px;
         }
 
         .config-badge.config-已配置 { background: #c6efce; color: #006100; }
         .config-badge.config-未配置 { background: #ffc7ce; color: #9c0006; }
 
         .user-badge {
-            display: inline-block;
-            padding: 4px 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 12px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            line-height: 1;
+            min-width: 48px;
         }
 
         .user-badge.user-是 { background: #c6efce; color: #006100; }
@@ -467,7 +483,20 @@
                 background: #dc3545 !important;
             }
 
+            th.nginx-header {
+                background: #28a745 !important;
+            }
+
+            th.tomcat-header {
+                background: #fd7e14 !important;
+            }
+
             .section-header {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .badge, .status-badge, .config-badge, .user-badge {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }

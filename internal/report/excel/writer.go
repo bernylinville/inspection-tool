@@ -1581,7 +1581,7 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Create Host sheets if available
+	// Create Host sheets if available (概览 + 详细数据)
 	if hostResult != nil {
 		if err := w.createSummarySheet(f, hostResult); err != nil {
 			return fmt.Errorf("failed to create summary sheet: %w", err)
@@ -1589,49 +1589,39 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 		if err := w.createDetailSheet(f, hostResult); err != nil {
 			return fmt.Errorf("failed to create detail sheet: %w", err)
 		}
-		if err := w.createAlertsSheet(f, hostResult); err != nil {
-			return fmt.Errorf("failed to create alerts sheet: %w", err)
-		}
 	}
 
-	// Create MySQL sheets if available
+	// Create MySQL sheet if available (仅巡检数据，不创建单独的异常sheet)
 	if mysqlResult != nil {
 		if err := w.createMySQLSheet(f, mysqlResult); err != nil {
 			return fmt.Errorf("failed to create MySQL sheet: %w", err)
 		}
-		if err := w.createMySQLAlertsSheet(f, mysqlResult); err != nil {
-			return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
-		}
 	}
 
-	// Create Redis sheets if available
+	// Create Redis sheet if available (仅巡检数据)
 	if redisResult != nil {
 		if err := w.createRedisSheet(f, redisResult); err != nil {
 			return fmt.Errorf("failed to create Redis sheet: %w", err)
 		}
-		if err := w.createRedisAlertsSheet(f, redisResult); err != nil {
-			return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
-		}
 	}
 
-	// Create Nginx sheets if available
+	// Create Nginx sheet if available (仅巡检数据)
 	if nginxResult != nil {
 		if err := w.createNginxSheet(f, nginxResult); err != nil {
 			return fmt.Errorf("failed to create Nginx sheet: %w", err)
 		}
-		if err := w.createNginxAlertsSheet(f, nginxResult); err != nil {
-			return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
-		}
 	}
 
-	// Create Tomcat sheets if available
+	// Create Tomcat sheet if available (仅巡检数据)
 	if tomcatResult != nil {
 		if err := w.createTomcatSheet(f, tomcatResult); err != nil {
 			return fmt.Errorf("failed to create Tomcat sheet: %w", err)
 		}
-		if err := w.createTomcatAlertsSheet(f, tomcatResult); err != nil {
-			return fmt.Errorf("failed to create Tomcat alerts sheet: %w", err)
-		}
+	}
+
+	// Create combined alerts sheet at the end (合并所有服务的异常)
+	if err := w.createCombinedAlertsSheet(f, hostResult, mysqlResult, redisResult, nginxResult, tomcatResult); err != nil {
+		return fmt.Errorf("failed to create combined alerts sheet: %w", err)
 	}
 
 	// Remove default Sheet1
@@ -1725,16 +1715,16 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 		f.SetColWidth(sheetNginx, col, col, width)
 	}
 
-	// Write headers
-	sheetName := sheetNginx
+	// Write headers FIRST (before data) - same order as createDetailSheet
 	for i, header := range headers {
-		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue(sheetName, cell, header)
-		f.SetCellStyle(sheetName, cell, cell, headerStyle)
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetNginx, cell, header)
+		f.SetCellStyle(sheetNginx, cell, cell, headerStyle)
 	}
+	f.SetRowHeight(sheetNginx, 1, 25)
 
 	// Freeze header row
-	f.SetPanes(sheetName, &excelize.Panes{
+	f.SetPanes(sheetNginx, &excelize.Panes{
 		Freeze:      true,
 		XSplit:      0,
 		YSplit:      1,
@@ -1743,6 +1733,7 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 	})
 
 	// Write Nginx instance data
+	sheetName := sheetNginx
 	for i, r := range result.Results {
 		row := i + 2
 		rowStr := fmt.Sprintf("%d", row)
@@ -1900,7 +1891,7 @@ func (w *Writer) createNginxAlertsSheet(f *excelize.File, result *model.NginxIns
 	// Write headers
 	sheetName := sheetNginxAlerts
 	for i, header := range headers {
-		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		cell := fmt.Sprintf("%s1", columnName(i+1))
 		f.SetCellValue(sheetName, cell, header)
 		f.SetCellStyle(sheetName, cell, cell, headerStyle)
 	}
@@ -2331,4 +2322,201 @@ func (w *Writer) AppendTomcatInspection(result *model.TomcatInspectionResults, e
 	}
 
 	return f.Save()
+}
+
+// ============================================================================
+// Combined Alerts Sheet (for WriteCombined)
+// ============================================================================
+
+// CombinedAlert represents a unified alert structure for the combined alerts sheet.
+type CombinedAlert struct {
+	Source            string           // 来源: 主机/MySQL/Redis/Nginx/Tomcat
+	Identifier        string           // 标识符: 主机名/实例地址
+	Level             model.AlertLevel // 告警级别
+	MetricName        string           // 指标名称
+	MetricDisplayName string           // 指标中文显示名称
+	CurrentValue      string           // 当前值（格式化后）
+	WarningThreshold  string           // 警告阈值（格式化后）
+	CriticalThreshold string           // 严重阈值（格式化后）
+	Message           string           // 告警消息
+}
+
+// createCombinedAlertsSheet creates a unified alerts sheet combining all service alerts.
+func (w *Writer) createCombinedAlertsSheet(f *excelize.File, hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults) error {
+	// Create sheet
+	_, err := f.NewSheet(sheetAlerts)
+	if err != nil {
+		return err
+	}
+
+	// Create styles
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	// Define headers (添加"来源"列)
+	headers := []string{"来源", "标识符", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
+
+	// Set column widths
+	colWidths := []float64{10, 22, 10, 18, 15, 12, 12, 45}
+	for i, width := range colWidths {
+		col := columnName(i + 1)
+		f.SetColWidth(sheetAlerts, col, col, width)
+	}
+
+	// Write headers
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetAlerts, cell, header)
+		f.SetCellStyle(sheetAlerts, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetAlerts, 1, 25)
+
+	// Freeze header row
+	f.SetPanes(sheetAlerts, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	// Collect all alerts into unified structure
+	var combinedAlerts []CombinedAlert
+
+	// Host alerts
+	if hostResult != nil {
+		for _, alert := range hostResult.Alerts {
+			combinedAlerts = append(combinedAlerts, CombinedAlert{
+				Source:            "主机",
+				Identifier:        alert.Hostname,
+				Level:             alert.Level,
+				MetricName:        alert.MetricName,
+				MetricDisplayName: alert.MetricDisplayName,
+				CurrentValue:      alert.FormattedValue,
+				WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+				CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+				Message:           alert.Message,
+			})
+		}
+	}
+
+	// MySQL alerts
+	if mysqlResult != nil {
+		for _, alert := range mysqlResult.Alerts {
+			combinedAlerts = append(combinedAlerts, CombinedAlert{
+				Source:            "MySQL",
+				Identifier:        alert.Address,
+				Level:             alert.Level,
+				MetricName:        alert.MetricName,
+				MetricDisplayName: alert.MetricDisplayName,
+				CurrentValue:      alert.FormattedValue,
+				WarningThreshold:  formatMySQLThreshold(alert.WarningThreshold, alert.MetricName),
+				CriticalThreshold: formatMySQLThreshold(alert.CriticalThreshold, alert.MetricName),
+				Message:           alert.Message,
+			})
+		}
+	}
+
+	// Redis alerts
+	if redisResult != nil {
+		for _, alert := range redisResult.Alerts {
+			combinedAlerts = append(combinedAlerts, CombinedAlert{
+				Source:            "Redis",
+				Identifier:        alert.Address,
+				Level:             alert.Level,
+				MetricName:        alert.MetricName,
+				MetricDisplayName: alert.MetricDisplayName,
+				CurrentValue:      alert.FormattedValue,
+				WarningThreshold:  formatRedisThreshold(alert.WarningThreshold, alert.MetricName),
+				CriticalThreshold: formatRedisThreshold(alert.CriticalThreshold, alert.MetricName),
+				Message:           alert.Message,
+			})
+		}
+	}
+
+	// Nginx alerts
+	if nginxResult != nil {
+		for _, alert := range nginxResult.Alerts {
+			combinedAlerts = append(combinedAlerts, CombinedAlert{
+				Source:            "Nginx",
+				Identifier:        alert.Identifier,
+				Level:             alert.Level,
+				MetricName:        alert.MetricName,
+				MetricDisplayName: alert.MetricDisplayName,
+				CurrentValue:      alert.FormattedValue,
+				WarningThreshold:  formatNginxThreshold(alert.WarningThreshold),
+				CriticalThreshold: formatNginxThreshold(alert.CriticalThreshold),
+				Message:           alert.Message,
+			})
+		}
+	}
+
+	// Tomcat alerts
+	if tomcatResult != nil {
+		for _, alert := range tomcatResult.Alerts {
+			combinedAlerts = append(combinedAlerts, CombinedAlert{
+				Source:            "Tomcat",
+				Identifier:        alert.Identifier,
+				Level:             alert.Level,
+				MetricName:        alert.MetricName,
+				MetricDisplayName: alert.MetricDisplayName,
+				CurrentValue:      alert.FormattedValue,
+				WarningThreshold:  formatTomcatThreshold(alert.WarningThreshold, alert.MetricName),
+				CriticalThreshold: formatTomcatThreshold(alert.CriticalThreshold, alert.MetricName),
+				Message:           alert.Message,
+			})
+		}
+	}
+
+	// Sort alerts by level (critical first) then by source, then by identifier
+	sort.Slice(combinedAlerts, func(i, j int) bool {
+		if combinedAlerts[i].Level != combinedAlerts[j].Level {
+			return alertLevelPriority(combinedAlerts[i].Level) > alertLevelPriority(combinedAlerts[j].Level)
+		}
+		if combinedAlerts[i].Source != combinedAlerts[j].Source {
+			return combinedAlerts[i].Source < combinedAlerts[j].Source
+		}
+		return combinedAlerts[i].Identifier < combinedAlerts[j].Identifier
+	})
+
+	// Write alert data
+	for i, alert := range combinedAlerts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		f.SetCellValue(sheetAlerts, "A"+rowStr, alert.Source)
+		f.SetCellValue(sheetAlerts, "B"+rowStr, alert.Identifier)
+		f.SetCellValue(sheetAlerts, "C"+rowStr, alertLevelText(alert.Level))
+		f.SetCellValue(sheetAlerts, "D"+rowStr, alert.MetricDisplayName)
+		f.SetCellValue(sheetAlerts, "E"+rowStr, alert.CurrentValue)
+		f.SetCellValue(sheetAlerts, "F"+rowStr, alert.WarningThreshold)
+		f.SetCellValue(sheetAlerts, "G"+rowStr, alert.CriticalThreshold)
+		f.SetCellValue(sheetAlerts, "H"+rowStr, alert.Message)
+
+		// Apply style based on alert level
+		var style int
+		if alert.Level == model.AlertLevelCritical {
+			style = criticalStyle
+		} else if alert.Level == model.AlertLevelWarning {
+			style = warningStyle
+		}
+		if style > 0 {
+			f.SetCellStyle(sheetAlerts, "C"+rowStr, "C"+rowStr, style)
+		}
+	}
+
+	return nil
 }
