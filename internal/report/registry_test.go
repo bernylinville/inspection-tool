@@ -8,7 +8,7 @@ import (
 
 func TestNewRegistry(t *testing.T) {
 	t.Run("with nil timezone uses default", func(t *testing.T) {
-		r := NewRegistry(nil, "")
+		r := NewRegistry(nil, "", "")
 
 		if r == nil {
 			t.Fatal("expected non-nil registry")
@@ -30,7 +30,7 @@ func TestNewRegistry(t *testing.T) {
 
 	t.Run("with custom timezone", func(t *testing.T) {
 		tz, _ := time.LoadLocation("America/New_York")
-		r := NewRegistry(tz, "")
+		r := NewRegistry(tz, "", "")
 
 		if r == nil {
 			t.Fatal("expected non-nil registry")
@@ -43,7 +43,7 @@ func TestNewRegistry(t *testing.T) {
 	})
 
 	t.Run("with custom template path", func(t *testing.T) {
-		r := NewRegistry(nil, "/custom/template.html")
+		r := NewRegistry(nil, "/custom/template.html", "")
 
 		if r == nil {
 			t.Fatal("expected non-nil registry")
@@ -61,7 +61,7 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestRegistry_Get_Excel(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	writer, err := r.Get("excel")
 
@@ -77,7 +77,7 @@ func TestRegistry_Get_Excel(t *testing.T) {
 }
 
 func TestRegistry_Get_HTML(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	writer, err := r.Get("html")
 
@@ -93,7 +93,7 @@ func TestRegistry_Get_HTML(t *testing.T) {
 }
 
 func TestRegistry_Get_Unknown(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	writer, err := r.Get("pdf")
 
@@ -116,7 +116,7 @@ func TestRegistry_Get_Unknown(t *testing.T) {
 }
 
 func TestRegistry_Get_CaseInsensitive(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	testCases := []struct {
 		input    string
@@ -148,7 +148,7 @@ func TestRegistry_Get_CaseInsensitive(t *testing.T) {
 }
 
 func TestRegistry_GetAll(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	formats := r.GetAll()
 
@@ -166,7 +166,7 @@ func TestRegistry_GetAll(t *testing.T) {
 }
 
 func TestRegistry_Has(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	testCases := []struct {
 		format   string
@@ -193,7 +193,7 @@ func TestRegistry_Has(t *testing.T) {
 }
 
 func TestRegistry_Get_EmptyFormat(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	writer, err := r.Get("")
 
@@ -206,7 +206,7 @@ func TestRegistry_Get_EmptyFormat(t *testing.T) {
 }
 
 func TestRegistry_Get_WhitespaceFormat(t *testing.T) {
-	r := NewRegistry(nil, "")
+	r := NewRegistry(nil, "", "")
 
 	writer, err := r.Get("   ")
 

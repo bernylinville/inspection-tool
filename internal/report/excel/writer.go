@@ -5,7 +5,6 @@ package excel
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -50,17 +49,21 @@ const (
 
 // Writer implements report.ReportWriter for Excel format.
 type Writer struct {
-	timezone *time.Location
+	timezone     *time.Location
+	templatePath string // Excel template file path (optional)
 }
 
 // NewWriter creates a new Excel report writer.
 // If timezone is nil, it defaults to Asia/Shanghai.
-func NewWriter(timezone *time.Location) *Writer {
+// If templatePath is provided and exists, it will be used as a template;
+// otherwise, the report will be created from scratch.
+func NewWriter(timezone *time.Location, templatePath string) *Writer {
 	if timezone == nil {
 		timezone, _ = time.LoadLocation("Asia/Shanghai")
 	}
 	return &Writer{
-		timezone: timezone,
+		timezone:     timezone,
+		templatePath: templatePath,
 	}
 }
 
@@ -70,6 +73,8 @@ func (w *Writer) Format() string {
 }
 
 // Write generates an Excel report from the inspection result.
+// If a template file is configured and exists, it will be used as a base.
+// Otherwise, the report will be created from scratch.
 func (w *Writer) Write(result *model.InspectionResult, outputPath string) error {
 	if result == nil {
 		return fmt.Errorf("inspection result is nil")
@@ -80,6 +85,53 @@ func (w *Writer) Write(result *model.InspectionResult, outputPath string) error 
 		outputPath = outputPath + ".xlsx"
 	}
 
+	// Try to use template if configured
+	if w.templatePath != "" {
+		if err := w.writeFromTemplate(result, outputPath); err == nil {
+			return nil
+		}
+		// Template failed, fall through to create from scratch
+	}
+
+	// Create from scratch (original behavior)
+	return w.writeFromScratch(result, outputPath)
+}
+
+// writeFromTemplate generates a report using an Excel template file.
+func (w *Writer) writeFromTemplate(result *model.InspectionResult, outputPath string) error {
+	f, err := excelize.OpenFile(w.templatePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Fill data into existing sheets (styles and headers already in template)
+	if err := w.fillSummarySheet(f, result); err != nil {
+		return err
+	}
+
+	if err := w.fillDetailSheet(f, result); err != nil {
+		return err
+	}
+
+	if err := w.fillAlertsSheet(f, result); err != nil {
+		return err
+	}
+
+	// Set active sheet to summary
+	idx, _ := f.GetSheetIndex(sheetSummary)
+	f.SetActiveSheet(idx)
+
+	// Save the file
+	if err := f.SaveAs(outputPath); err != nil {
+		return fmt.Errorf("failed to save Excel file: %w", err)
+	}
+
+	return nil
+}
+
+// writeFromScratch generates a report by creating a new Excel file from scratch.
+func (w *Writer) writeFromScratch(result *model.InspectionResult, outputPath string) error {
 	// Create new Excel file
 	f := excelize.NewFile()
 	defer f.Close()
@@ -105,12 +157,6 @@ func (w *Writer) Write(result *model.InspectionResult, outputPath string) error 
 	// Set active sheet to summary
 	idx, _ := f.GetSheetIndex(sheetSummary)
 	f.SetActiveSheet(idx)
-
-	// Ensure output directory exists
-	dir := filepath.Dir(outputPath)
-	if dir != "" && dir != "." {
-		// Directory creation is handled by the caller
-	}
 
 	// Save the file
 	if err := f.SaveAs(outputPath); err != nil {
@@ -224,6 +270,171 @@ func (w *Writer) createSummarySheet(f *excelize.File, result *model.InspectionRe
 	}
 
 	return nil
+}
+
+// fillSummarySheet fills data into an existing summary sheet (from template).
+// Assumes the sheet already exists with proper formatting.
+func (w *Writer) fillSummarySheet(f *excelize.File, result *model.InspectionResult) error {
+	// Check if sheet exists
+	sheetIdx, err := f.GetSheetIndex(sheetSummary)
+	if err != nil || sheetIdx == -1 {
+		return fmt.Errorf("summary sheet not found in template")
+	}
+
+	// Update title timestamp
+	f.SetCellValue(sheetSummary, "A1", "系统巡检报告")
+
+	// Update summary data
+	summaryData := []struct {
+		label string
+		value interface{}
+	}{
+		{"巡检时间", result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")},
+		{"巡检耗时", formatDuration(result.Duration)},
+		{"主机总数", result.Summary.TotalHosts},
+		{"正常主机", result.Summary.NormalHosts},
+		{"警告主机", result.Summary.WarningHosts},
+		{"严重主机", result.Summary.CriticalHosts},
+		{"失败主机", result.Summary.FailedHosts},
+		{"告警总数", result.AlertSummary.TotalAlerts},
+		{"警告告警", result.AlertSummary.WarningCount},
+		{"严重告警", result.AlertSummary.CriticalCount},
+	}
+
+	if result.Version != "" {
+		summaryData = append(summaryData, struct {
+			label string
+			value interface{}
+		}{"工具版本", result.Version})
+	}
+
+	// Write summary data starting from row 3
+	// Clear existing data first by finding the last used row
+	rows, _ := f.GetRows(sheetSummary)
+	lastRow := len(rows)
+	for row := lastRow; row >= 3; row-- {
+		f.SetCellValue(sheetSummary, fmt.Sprintf("A%d", row), "")
+		f.SetCellValue(sheetSummary, fmt.Sprintf("B%d", row), "")
+	}
+
+	for i, item := range summaryData {
+		row := i + 3 // Start from row 3
+		f.SetCellValue(sheetSummary, fmt.Sprintf("A%d", row), item.label)
+		f.SetCellValue(sheetSummary, fmt.Sprintf("B%d", row), item.value)
+	}
+
+	return nil
+}
+
+// fillDetailSheet fills data into an existing detail sheet (from template).
+// Assumes the sheet already exists with proper formatting, headers, and column widths.
+func (w *Writer) fillDetailSheet(f *excelize.File, result *model.InspectionResult) error {
+	// Check if sheet exists
+	sheetIdx, err := f.GetSheetIndex(sheetDetail)
+	if err != nil || sheetIdx == -1 {
+		return fmt.Errorf("detail sheet not found in template")
+	}
+
+	// Get unique disk paths from all hosts
+	diskPaths := w.collectDiskPaths(result.Hosts)
+
+	// Clear existing data rows (keep header row 1)
+	rows, _ := f.GetRows(sheetDetail)
+	for row := len(rows); row >= 2; row-- {
+		for col := 1; col <= 15+len(diskPaths); col++ {
+			cell := fmt.Sprintf("%s%d", columnName(col), row)
+			f.SetCellValue(sheetDetail, cell, "")
+		}
+	}
+
+	// Write host data
+	for i, host := range result.Hosts {
+		row := i + 2 // Start from row 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		// Basic info
+		f.SetCellValue(sheetDetail, "A"+rowStr, host.Hostname)
+		f.SetCellValue(sheetDetail, "B"+rowStr, host.IP)
+		f.SetCellValue(sheetDetail, "C"+rowStr, statusText(host.Status))
+		f.SetCellValue(sheetDetail, "D"+rowStr, host.OS)
+		f.SetCellValue(sheetDetail, "E"+rowStr, host.OSVersion)
+		f.SetCellValue(sheetDetail, "F"+rowStr, host.KernelVersion)
+		f.SetCellValue(sheetDetail, "G"+rowStr, host.CPUCores)
+
+		// Metrics (without style application - template handles this)
+		w.setMetricCellValue(f, sheetDetail, "H"+rowStr, host.Metrics["cpu_usage"])
+		w.setMetricCellValue(f, sheetDetail, "I"+rowStr, host.Metrics["memory_usage"])
+		w.setMetricCellValue(f, sheetDetail, "J"+rowStr, host.Metrics["disk_usage_max"])
+		w.setMetricCellValue(f, sheetDetail, "K"+rowStr, host.Metrics["uptime"])
+		w.setMetricCellValue(f, sheetDetail, "L"+rowStr, host.Metrics["load_1m"])
+		w.setMetricCellValue(f, sheetDetail, "M"+rowStr, host.Metrics["load_per_core"])
+		w.setMetricCellValue(f, sheetDetail, "N"+rowStr, host.Metrics["processes_zombies"])
+		w.setMetricCellValue(f, sheetDetail, "O"+rowStr, host.Metrics["processes_total"])
+
+		// Disk usage by path
+		for j, path := range diskPaths {
+			col := columnName(16 + j)
+			metricName := fmt.Sprintf("disk_usage:%s", path)
+			w.setMetricCellValue(f, sheetDetail, col+rowStr, host.Metrics[metricName])
+		}
+	}
+
+	return nil
+}
+
+// fillAlertsSheet fills data into an existing alerts sheet (from template).
+// Assumes the sheet already exists with proper formatting and headers.
+func (w *Writer) fillAlertsSheet(f *excelize.File, result *model.InspectionResult) error {
+	// Check if sheet exists
+	sheetIdx, err := f.GetSheetIndex(sheetAlerts)
+	if err != nil || sheetIdx == -1 {
+		return fmt.Errorf("alerts sheet not found in template")
+	}
+
+	// Sort alerts by level (critical first) then by hostname
+	alerts := make([]*model.Alert, len(result.Alerts))
+	copy(alerts, result.Alerts)
+	sort.Slice(alerts, func(i, j int) bool {
+		if alerts[i].Level != alerts[j].Level {
+			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
+		}
+		return alerts[i].Hostname < alerts[j].Hostname
+	})
+
+	// Clear existing data rows (keep header row 1)
+	rows, _ := f.GetRows(sheetAlerts)
+	for row := len(rows); row >= 2; row-- {
+		for col := 1; col <= 7; col++ {
+			cell := fmt.Sprintf("%s%d", columnName(col), row)
+			f.SetCellValue(sheetAlerts, cell, "")
+		}
+	}
+
+	// Write alert data
+	for i, alert := range alerts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		f.SetCellValue(sheetAlerts, "A"+rowStr, alert.Hostname)
+		f.SetCellValue(sheetAlerts, "B"+rowStr, alertLevelText(alert.Level))
+		f.SetCellValue(sheetAlerts, "C"+rowStr, alert.MetricDisplayName)
+		f.SetCellValue(sheetAlerts, "D"+rowStr, alert.FormattedValue)
+		f.SetCellValue(sheetAlerts, "E"+rowStr, formatThreshold(alert.WarningThreshold, alert.MetricName))
+		f.SetCellValue(sheetAlerts, "F"+rowStr, formatThreshold(alert.CriticalThreshold, alert.MetricName))
+		f.SetCellValue(sheetAlerts, "G"+rowStr, alert.Message)
+	}
+
+	return nil
+}
+
+// setMetricCellValue sets a metric cell value without applying styles.
+// Used when filling from template where styles are predefined.
+func (w *Writer) setMetricCellValue(f *excelize.File, sheet, cell string, metric *model.MetricValue) {
+	if metric == nil || metric.IsNA {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+	f.SetCellValue(sheet, cell, metric.FormattedValue)
 }
 
 // createDetailSheet creates the detailed data worksheet.

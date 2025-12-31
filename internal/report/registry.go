@@ -22,14 +22,15 @@ type Registry struct {
 // NewRegistry creates a new report registry with pre-registered Excel and HTML writers.
 // If timezone is nil, defaults to Asia/Shanghai.
 // htmlTemplatePath is optional; if empty, the HTML writer will use the embedded default template.
-func NewRegistry(timezone *time.Location, htmlTemplatePath string) *Registry {
+// excelTemplatePath is optional; if empty, the Excel writer will create reports from scratch.
+func NewRegistry(timezone *time.Location, htmlTemplatePath, excelTemplatePath string) *Registry {
 	// Set default timezone if not provided
 	if timezone == nil {
 		timezone, _ = time.LoadLocation("Asia/Shanghai")
 	}
 
 	// Create writers
-	excelWriter := excel.NewWriter(timezone)
+	excelWriter := excel.NewWriter(timezone, excelTemplatePath)
 	htmlWriter := html.NewWriter(timezone, htmlTemplatePath)
 
 	// Build registry

@@ -39,6 +39,12 @@ var (
 	tomcatMetricsPath string  // Path to Tomcat metrics definition file
 	tomcatOnly        bool    // Run Tomcat inspection only
 	skipTomcat        bool    // Skip Tomcat inspection
+	excelTemplatePath string  // Path to Excel template file (optional)
+)
+
+const (
+	// Default Excel template path
+	defaultExcelTemplate = "templates/excel/inspection_template.xlsx"
 )
 
 // runCmd represents the run command.
@@ -101,6 +107,7 @@ func init() {
 	runCmd.Flags().StringSliceVarP(&formats, "format", "f", nil, "输出格式 (excel,html)，可用逗号分隔多个")
 	runCmd.Flags().StringVarP(&outputDir, "output", "o", "", "输出目录")
 	runCmd.Flags().StringVarP(&metricsPath, "metrics", "m", "configs/metrics.yaml", "指标定义文件路径")
+	runCmd.Flags().StringVar(&excelTemplatePath, "excel-template", "", "Excel 模板文件路径（默认使用 templates/excel/inspection_template.xlsx）")
 
 	// MySQL-specific flags
 	runCmd.Flags().StringVar(&mysqlMetricsPath, "mysql-metrics", "configs/mysql-metrics.yaml", "MySQL 指标定义文件路径")
@@ -551,7 +558,7 @@ func runInspection(cmd *cobra.Command, args []string) {
 		var genErr error
 		switch format {
 		case "excel":
-			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, reportPath, timezone, logger)
+			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, reportPath, timezone, excelTemplatePath, logger)
 		case "html":
 			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
 		default:
@@ -789,8 +796,12 @@ func printTomcatSummary(result *model.TomcatInspectionResults) {
 }
 
 // generateCombinedExcel creates Excel report with Host, MySQL, Redis, Nginx and Tomcat data in same file.
-func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string, timezone *time.Location, logger zerolog.Logger) error {
-	w := excel.NewWriter(timezone)
+func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
+	// Resolve template path: use flag, config, or default
+	if templatePath == "" {
+		templatePath = defaultExcelTemplate
+	}
+	w := excel.NewWriter(timezone, templatePath)
 
 	// Only Nginx mode
 	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult == nil && nginxResult != nil {

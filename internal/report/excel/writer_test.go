@@ -33,7 +33,7 @@ func TestNewWriter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := NewWriter(tt.timezone)
+			w := NewWriter(tt.timezone, "")
 			if w == nil {
 				t.Fatal("NewWriter returned nil")
 			}
@@ -45,14 +45,14 @@ func TestNewWriter(t *testing.T) {
 }
 
 func TestWriter_Format(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	if got := w.Format(); got != "excel" {
 		t.Errorf("Format() = %v, want %v", got, "excel")
 	}
 }
 
 func TestWriter_Write_NilResult(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(nil, "test.xlsx")
 	if err == nil {
 		t.Error("Write() with nil result should return error")
@@ -68,7 +68,7 @@ func TestWriter_Write_Success(t *testing.T) {
 	result := createTestInspectionResult()
 
 	// Write report
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(result, outputPath)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -115,7 +115,7 @@ func TestWriter_Write_AddsXlsxExtension(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_report") // No extension
 
 	result := createTestInspectionResult()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(result, outputPath)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -133,7 +133,7 @@ func TestWriter_SummarySheet(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_report.xlsx")
 
 	result := createTestInspectionResult()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(result, outputPath)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -167,7 +167,7 @@ func TestWriter_DetailSheet(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_report.xlsx")
 
 	result := createTestInspectionResult()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(result, outputPath)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -202,7 +202,7 @@ func TestWriter_AlertsSheet(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_report.xlsx")
 
 	result := createTestInspectionResult()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(result, outputPath)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -245,7 +245,7 @@ func TestWriter_EmptyResult(t *testing.T) {
 		Alerts:         []*model.Alert{},
 	}
 
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(result, outputPath)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -531,7 +531,7 @@ func TestAlertLevelPriority(t *testing.T) {
 }
 
 func TestWriter_CollectDiskPaths(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	hosts := []*model.HostResult{
 		{
 			Metrics: map[string]*model.MetricValue{
@@ -567,7 +567,7 @@ func TestWriter_CollectDiskPaths(t *testing.T) {
 // ============================================================================
 
 func TestWriter_WriteMySQLInspection_NilResult(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(nil, "test.xlsx")
 	if err == nil {
 		t.Error("WriteMySQLInspection() with nil result should return error")
@@ -580,7 +580,7 @@ func TestWriter_WriteMySQLInspection_Success(t *testing.T) {
 
 	result := createTestMySQLInspectionResults()
 
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -624,7 +624,7 @@ func TestWriter_WriteMySQLInspection_AddsXlsxExtension(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_mysql_report") // No extension
 
 	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -642,7 +642,7 @@ func TestWriter_MySQLSheet_Headers(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
 
 	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -685,7 +685,7 @@ func TestWriter_MySQLSheet_DataMapping(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
 
 	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -727,7 +727,7 @@ func TestWriter_MySQLSheet_ConditionalFormat(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
 
 	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -919,7 +919,7 @@ func TestBoolToText(t *testing.T) {
 }
 
 func TestGetMySQLSyncStatus(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 
 	tests := []struct {
 		name   string
@@ -979,7 +979,7 @@ func TestWriter_WriteMySQLInspection_AlertsSheetExists(t *testing.T) {
 
 	result := createTestMySQLInspectionResults()
 
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -1011,7 +1011,7 @@ func TestWriter_MySQLAlertsSheet_Headers(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
 
 	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -1050,7 +1050,7 @@ func TestWriter_MySQLAlertsSheet_DataMapping(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
 
 	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -1088,7 +1088,7 @@ func TestWriter_MySQLAlertsSheet_SortBySeverity(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
 
 	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -1142,7 +1142,7 @@ func TestWriter_MySQLAlertsSheet_EmptyAlerts(t *testing.T) {
 		AlertSummary: &model.MySQLAlertSummary{},
 	}
 
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteMySQLInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
@@ -1234,7 +1234,7 @@ func TestFormatMySQLThreshold(t *testing.T) {
 // ============================================================================
 
 func TestWriter_WriteRedisInspection_NilResult(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(nil, "test.xlsx")
 	if err == nil {
 		t.Error("WriteRedisInspection() with nil result should return error")
@@ -1247,7 +1247,7 @@ func TestWriter_WriteRedisInspection_Success(t *testing.T) {
 
 	result := createTestRedisInspectionResults()
 
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1291,7 +1291,7 @@ func TestWriter_WriteRedisInspection_AddsXlsxExtension(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_redis_report") // No extension
 
 	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1309,7 +1309,7 @@ func TestWriter_RedisSheet_Headers(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
 
 	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1355,7 +1355,7 @@ func TestWriter_RedisSheet_DataMapping_Master(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
 
 	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1400,7 +1400,7 @@ func TestWriter_RedisSheet_DataMapping_Slave(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
 
 	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1439,7 +1439,7 @@ func TestWriter_RedisSheet_ConditionalFormat(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
 
 	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1482,7 +1482,7 @@ func TestWriter_WriteRedisInspection_AlertsSheetExists(t *testing.T) {
 
 	result := createTestRedisInspectionResults()
 
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1514,7 +1514,7 @@ func TestWriter_RedisAlertsSheet_Headers(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
 
 	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1553,7 +1553,7 @@ func TestWriter_RedisAlertsSheet_SortBySeverity(t *testing.T) {
 	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
 
 	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1607,7 +1607,7 @@ func TestWriter_RedisAlertsSheet_EmptyAlerts(t *testing.T) {
 		AlertSummary: &model.RedisAlertSummary{},
 	}
 
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.WriteRedisInspection(result, outputPath)
 	if err != nil {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
@@ -1781,7 +1781,7 @@ func TestFormatRedisThreshold(t *testing.T) {
 }
 
 func TestGetMasterLinkStatusText(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 
 	tests := []struct {
 		name   string
@@ -1830,7 +1830,7 @@ func TestGetMasterLinkStatusText(t *testing.T) {
 }
 
 func TestGetMasterPortText(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 
 	tests := []struct {
 		name   string
@@ -1879,7 +1879,7 @@ func TestGetMasterPortText(t *testing.T) {
 }
 
 func TestGetReplicationLagText(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 
 	tests := []struct {
 		name   string
@@ -1932,7 +1932,7 @@ func TestGetReplicationLagText(t *testing.T) {
 // ============================================================================
 
 func TestWriter_AppendRedisInspection_NilResult(t *testing.T) {
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.AppendRedisInspection(nil, "test.xlsx")
 	if err == nil {
 		t.Error("AppendRedisInspection() with nil result should return error")
@@ -1945,7 +1945,7 @@ func TestWriter_AppendRedisInspection_Success(t *testing.T) {
 	// First create a host inspection report
 	hostOutputPath := filepath.Join(tmpDir, "combined_report.xlsx")
 	hostResult := createTestInspectionResult()
-	w := NewWriter(nil)
+	w := NewWriter(nil, "")
 	err := w.Write(hostResult, hostOutputPath)
 	if err != nil {
 		t.Fatalf("Write() error = %v", err)
@@ -2190,7 +2190,7 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 
 func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
 	// Create Excel file with host data first
-	w := NewWriter(time.UTC)
+	w := NewWriter(time.UTC, "")
 	f := excelize.NewFile()
 	defer f.Close()
 
@@ -2250,7 +2250,7 @@ func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
 }
 
 func TestWriter_AppendRedisInspection_SingleCluster_KeepsOriginalSheet(t *testing.T) {
-	w := NewWriter(time.UTC)
+	w := NewWriter(time.UTC, "")
 	f := excelize.NewFile()
 	defer f.Close()
 
@@ -2300,7 +2300,7 @@ func TestWriter_AppendRedisInspection_SingleCluster_KeepsOriginalSheet(t *testin
 }
 
 func TestWriter_RedisClusterSheet_InstanceCount(t *testing.T) {
-	w := NewWriter(time.UTC)
+	w := NewWriter(time.UTC, "")
 	f := excelize.NewFile()
 	defer f.Close()
 
