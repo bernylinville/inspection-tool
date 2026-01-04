@@ -411,6 +411,438 @@ func TestRedisInspectionResults_HasMultipleClusters_False_Nil(t *testing.T) {
 // Integration Test: Full Scenario (陕西项目场景)
 // ============================================================================
 
+func TestRedisInstanceStatus_Methods(t *testing.T) {
+	tests := []struct {
+		status     RedisInstanceStatus
+		isHealthy  bool
+		isWarning  bool
+		isCritical bool
+		isFailed   bool
+	}{
+		{RedisStatusNormal, true, false, false, false},
+		{RedisStatusWarning, false, true, false, false},
+		{RedisStatusCritical, false, false, true, false},
+		{RedisStatusFailed, false, false, false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			if got := tt.status.IsHealthy(); got != tt.isHealthy {
+				t.Errorf("IsHealthy() = %v, want %v", got, tt.isHealthy)
+			}
+			if got := tt.status.IsWarning(); got != tt.isWarning {
+				t.Errorf("IsWarning() = %v, want %v", got, tt.isWarning)
+			}
+			if got := tt.status.IsCritical(); got != tt.isCritical {
+				t.Errorf("IsCritical() = %v, want %v", got, tt.isCritical)
+			}
+			if got := tt.status.IsFailed(); got != tt.isFailed {
+				t.Errorf("IsFailed() = %v, want %v", got, tt.isFailed)
+			}
+		})
+	}
+}
+
+func TestRedisRole_Methods(t *testing.T) {
+	tests := []struct {
+		role     RedisRole
+		isMaster bool
+		isSlave  bool
+	}{
+		{RedisRoleMaster, true, false},
+		{RedisRoleSlave, false, true},
+		{RedisRoleUnknown, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			if got := tt.role.IsMaster(); got != tt.isMaster {
+				t.Errorf("IsMaster() = %v, want %v", got, tt.isMaster)
+			}
+			if got := tt.role.IsSlave(); got != tt.isSlave {
+				t.Errorf("IsSlave() = %v, want %v", got, tt.isSlave)
+			}
+		})
+	}
+}
+
+func TestRedisClusterMode_Methods(t *testing.T) {
+	tests := []struct {
+		mode               RedisClusterMode
+		is3M3S             bool
+		is3M6S             bool
+		expectedSlaveCount int
+	}{
+		{ClusterMode3M3S, true, false, 1},
+		{ClusterMode3M6S, false, true, 2},
+		{RedisClusterMode("unknown"), false, false, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.mode), func(t *testing.T) {
+			if got := tt.mode.Is3M3S(); got != tt.is3M3S {
+				t.Errorf("Is3M3S() = %v, want %v", got, tt.is3M3S)
+			}
+			if got := tt.mode.Is3M6S(); got != tt.is3M6S {
+				t.Errorf("Is3M6S() = %v, want %v", got, tt.is3M6S)
+			}
+			if got := tt.mode.GetExpectedSlaveCount(); got != tt.expectedSlaveCount {
+				t.Errorf("GetExpectedSlaveCount() = %v, want %v", got, tt.expectedSlaveCount)
+			}
+		})
+	}
+}
+
+func TestNewRedisInstance(t *testing.T) {
+	t.Run("valid address", func(t *testing.T) {
+		instance := NewRedisInstance("192.18.102.2:7000")
+
+		if instance == nil {
+			t.Fatal("expected non-nil instance")
+		}
+		if instance.Address != "192.18.102.2:7000" {
+			t.Errorf("Address = %q, want %q", instance.Address, "192.18.102.2:7000")
+		}
+		if instance.IP != "192.18.102.2" {
+			t.Errorf("IP = %q, want %q", instance.IP, "192.18.102.2")
+		}
+		if instance.Port != 7000 {
+			t.Errorf("Port = %d, want 7000", instance.Port)
+		}
+		if instance.ApplicationType != "Redis" {
+			t.Errorf("ApplicationType = %q, want %q", instance.ApplicationType, "Redis")
+		}
+		if instance.Role != RedisRoleUnknown {
+			t.Errorf("Role = %v, want %v", instance.Role, RedisRoleUnknown)
+		}
+	})
+
+	t.Run("invalid address returns nil", func(t *testing.T) {
+		instance := NewRedisInstance("invalid")
+		if instance != nil {
+			t.Error("expected nil for invalid address")
+		}
+	})
+}
+
+func TestNewRedisInstanceWithRole(t *testing.T) {
+	instance := NewRedisInstanceWithRole("192.18.102.2:7000", RedisRoleMaster)
+
+	if instance == nil {
+		t.Fatal("expected non-nil instance")
+	}
+	if instance.Role != RedisRoleMaster {
+		t.Errorf("Role = %v, want %v", instance.Role, RedisRoleMaster)
+	}
+}
+
+func TestRedisInstance_Methods(t *testing.T) {
+	instance := NewRedisInstance("192.18.102.2:7000")
+
+	t.Run("SetVersion", func(t *testing.T) {
+		instance.SetVersion("6.2.6")
+		if instance.Version != "6.2.6" {
+			t.Errorf("Version = %q, want %q", instance.Version, "6.2.6")
+		}
+	})
+
+	t.Run("SetClusterEnabled", func(t *testing.T) {
+		instance.SetClusterEnabled(true)
+		if !instance.ClusterEnabled {
+			t.Error("ClusterEnabled should be true")
+		}
+	})
+
+	t.Run("String", func(t *testing.T) {
+		str := instance.String()
+		if str == "" {
+			t.Error("String() should return non-empty string")
+		}
+	})
+
+	t.Run("String nil", func(t *testing.T) {
+		var nilInstance *RedisInstance
+		if nilInstance.String() != "<nil>" {
+			t.Errorf("String() = %q, want %q", nilInstance.String(), "<nil>")
+		}
+	})
+}
+
+func TestNewRedisAlert(t *testing.T) {
+	alert := NewRedisAlert("192.18.102.2:7000", "connection_usage", 85.5, AlertLevelWarning)
+
+	if alert.Address != "192.18.102.2:7000" {
+		t.Errorf("Address = %q, want %q", alert.Address, "192.18.102.2:7000")
+	}
+	if alert.MetricName != "connection_usage" {
+		t.Errorf("MetricName = %q, want %q", alert.MetricName, "connection_usage")
+	}
+	if alert.CurrentValue != 85.5 {
+		t.Errorf("CurrentValue = %v, want 85.5", alert.CurrentValue)
+	}
+	if alert.Level != AlertLevelWarning {
+		t.Errorf("Level = %v, want %v", alert.Level, AlertLevelWarning)
+	}
+}
+
+func TestRedisAlert_Methods(t *testing.T) {
+	t.Run("IsWarning", func(t *testing.T) {
+		alert := &RedisAlert{Level: AlertLevelWarning}
+		if !alert.IsWarning() {
+			t.Error("IsWarning() should return true")
+		}
+	})
+
+	t.Run("IsCritical", func(t *testing.T) {
+		alert := &RedisAlert{Level: AlertLevelCritical}
+		if !alert.IsCritical() {
+			t.Error("IsCritical() should return true")
+		}
+	})
+}
+
+func TestNewRedisInspectionResult(t *testing.T) {
+	t.Run("with valid instance", func(t *testing.T) {
+		instance := NewRedisInstance("192.18.102.2:7000")
+		result := NewRedisInspectionResult(instance)
+
+		if result.Instance != instance {
+			t.Error("Instance should be set")
+		}
+		if result.Status != RedisStatusNormal {
+			t.Errorf("Status = %v, want %v", result.Status, RedisStatusNormal)
+		}
+		if result.NonRootUser != "N/A" {
+			t.Errorf("NonRootUser = %q, want %q", result.NonRootUser, "N/A")
+		}
+		if result.Alerts == nil {
+			t.Error("Alerts should be initialized")
+		}
+	})
+
+	t.Run("with nil instance", func(t *testing.T) {
+		result := NewRedisInspectionResult(nil)
+
+		if result.Status != RedisStatusFailed {
+			t.Errorf("Status = %v, want %v", result.Status, RedisStatusFailed)
+		}
+	})
+}
+
+func TestRedisInspectionResult_AddAlert(t *testing.T) {
+	t.Run("nil alert ignored", func(t *testing.T) {
+		result := NewRedisInspectionResult(NewRedisInstance("192.18.102.2:7000"))
+		result.AddAlert(nil)
+
+		if len(result.Alerts) != 0 {
+			t.Error("nil alert should not be added")
+		}
+	})
+
+	t.Run("warning upgrades status from normal", func(t *testing.T) {
+		result := NewRedisInspectionResult(NewRedisInstance("192.18.102.2:7000"))
+		alert := &RedisAlert{Level: AlertLevelWarning}
+
+		result.AddAlert(alert)
+
+		if result.Status != RedisStatusWarning {
+			t.Errorf("Status = %v, want %v", result.Status, RedisStatusWarning)
+		}
+	})
+
+	t.Run("critical upgrades status from warning", func(t *testing.T) {
+		result := NewRedisInspectionResult(NewRedisInstance("192.18.102.2:7000"))
+		result.Status = RedisStatusWarning
+		alert := &RedisAlert{Level: AlertLevelCritical}
+
+		result.AddAlert(alert)
+
+		if result.Status != RedisStatusCritical {
+			t.Errorf("Status = %v, want %v", result.Status, RedisStatusCritical)
+		}
+	})
+
+	t.Run("warning does not downgrade critical", func(t *testing.T) {
+		result := NewRedisInspectionResult(NewRedisInstance("192.18.102.2:7000"))
+		result.Status = RedisStatusCritical
+		alert := &RedisAlert{Level: AlertLevelWarning}
+
+		result.AddAlert(alert)
+
+		if result.Status != RedisStatusCritical {
+			t.Errorf("Status = %v, want %v (should not downgrade)", result.Status, RedisStatusCritical)
+		}
+	})
+}
+
+func TestRedisInspectionResult_GetConnectionUsagePercent(t *testing.T) {
+	tests := []struct {
+		name             string
+		maxClients       int
+		connectedClients int
+		expected         float64
+	}{
+		{
+			name:             "normal calculation",
+			maxClients:       10000,
+			connectedClients: 7500,
+			expected:         75.0,
+		},
+		{
+			name:             "zero max clients",
+			maxClients:       0,
+			connectedClients: 100,
+			expected:         0,
+		},
+		{
+			name:             "zero connected clients",
+			maxClients:       10000,
+			connectedClients: 0,
+			expected:         0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := &RedisInspectionResult{
+				MaxClients:       tt.maxClients,
+				ConnectedClients: tt.connectedClients,
+			}
+
+			got := result.GetConnectionUsagePercent()
+			if got != tt.expected {
+				t.Errorf("GetConnectionUsagePercent() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRedisInspectionResult_GetAddress(t *testing.T) {
+	t.Run("with instance", func(t *testing.T) {
+		result := NewRedisInspectionResult(NewRedisInstance("192.18.102.2:7000"))
+		if got := result.GetAddress(); got != "192.18.102.2:7000" {
+			t.Errorf("GetAddress() = %q, want %q", got, "192.18.102.2:7000")
+		}
+	})
+
+	t.Run("nil instance", func(t *testing.T) {
+		result := &RedisInspectionResult{}
+		if got := result.GetAddress(); got != "" {
+			t.Errorf("GetAddress() = %q, want empty string", got)
+		}
+	})
+}
+
+func TestRedisInspectionResult_SetGetMetric(t *testing.T) {
+	result := NewRedisInspectionResult(NewRedisInstance("192.18.102.2:7000"))
+
+	t.Run("set and get", func(t *testing.T) {
+		value := &RedisMetricValue{Name: "redis_up", RawValue: 1}
+		result.SetMetric(value)
+
+		got := result.GetMetric("redis_up")
+		if got != value {
+			t.Error("should return the set metric")
+		}
+	})
+
+	t.Run("get non-existing", func(t *testing.T) {
+		got := result.GetMetric("not_exists")
+		if got != nil {
+			t.Error("should return nil for non-existing metric")
+		}
+	})
+
+	t.Run("get from nil metrics", func(t *testing.T) {
+		emptyResult := &RedisInspectionResult{}
+		got := emptyResult.GetMetric("redis_up")
+		if got != nil {
+			t.Error("should return nil for nil metrics map")
+		}
+	})
+}
+
+func TestNewRedisInspectionSummary(t *testing.T) {
+	results := []*RedisInspectionResult{
+		{Status: RedisStatusNormal},
+		{Status: RedisStatusNormal},
+		{Status: RedisStatusWarning},
+		{Status: RedisStatusCritical},
+		{Status: RedisStatusFailed},
+		nil,
+	}
+
+	summary := NewRedisInspectionSummary(results)
+
+	if summary.TotalInstances != 5 {
+		t.Errorf("TotalInstances = %d, want 5", summary.TotalInstances)
+	}
+	if summary.NormalInstances != 2 {
+		t.Errorf("NormalInstances = %d, want 2", summary.NormalInstances)
+	}
+	if summary.WarningInstances != 1 {
+		t.Errorf("WarningInstances = %d, want 1", summary.WarningInstances)
+	}
+	if summary.CriticalInstances != 1 {
+		t.Errorf("CriticalInstances = %d, want 1", summary.CriticalInstances)
+	}
+	if summary.FailedInstances != 1 {
+		t.Errorf("FailedInstances = %d, want 1", summary.FailedInstances)
+	}
+}
+
+func TestNewRedisAlertSummary(t *testing.T) {
+	alerts := []*RedisAlert{
+		{Level: AlertLevelWarning},
+		{Level: AlertLevelWarning},
+		{Level: AlertLevelCritical},
+		nil,
+	}
+
+	summary := NewRedisAlertSummary(alerts)
+
+	if summary.TotalAlerts != 3 {
+		t.Errorf("TotalAlerts = %d, want 3", summary.TotalAlerts)
+	}
+	if summary.WarningCount != 2 {
+		t.Errorf("WarningCount = %d, want 2", summary.WarningCount)
+	}
+	if summary.CriticalCount != 1 {
+		t.Errorf("CriticalCount = %d, want 1", summary.CriticalCount)
+	}
+}
+
+func TestRedisMetricDefinition_Methods(t *testing.T) {
+	t.Run("IsPending", func(t *testing.T) {
+		def := &RedisMetricDefinition{Status: "pending"}
+		if !def.IsPending() {
+			t.Error("IsPending() should return true for pending status")
+		}
+
+		def2 := &RedisMetricDefinition{Query: ""}
+		if !def2.IsPending() {
+			t.Error("IsPending() should return true for empty query")
+		}
+
+		def3 := &RedisMetricDefinition{Query: "some_query", Status: ""}
+		if def3.IsPending() {
+			t.Error("IsPending() should return false for normal metric")
+		}
+	})
+
+	t.Run("GetDisplayName", func(t *testing.T) {
+		def := &RedisMetricDefinition{Name: "redis_up", DisplayName: "连接状态"}
+		if got := def.GetDisplayName(); got != "连接状态" {
+			t.Errorf("GetDisplayName() = %q, want %q", got, "连接状态")
+		}
+
+		def2 := &RedisMetricDefinition{Name: "redis_up"}
+		if got := def2.GetDisplayName(); got != "redis_up" {
+			t.Errorf("GetDisplayName() = %q, want %q", got, "redis_up")
+		}
+	})
+}
+
 func TestRedisInspectionResults_GroupByClusters_ShanxiScenario(t *testing.T) {
 	// Simulate 陕西项目 scenario: 2 clusters × 3主3从 = 12 nodes
 	results := &RedisInspectionResults{

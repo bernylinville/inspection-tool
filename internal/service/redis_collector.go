@@ -485,6 +485,21 @@ func (c *RedisCollector) populateResultFields(result *model.RedisInspectionResul
 		result.Uptime = int64(m.RawValue)
 	}
 
+	// Derive ClusterState from ClusterEnabled and ConnectionStatus
+	// Since Categraf doesn't collect CLUSTER INFO, we infer state from existing metrics:
+	// - ClusterEnabled=true + ConnectionStatus=true -> "ok"
+	// - ClusterEnabled=true + ConnectionStatus=false -> "fail"
+	// - ClusterEnabled=false -> "N/A" (standalone mode, not applicable)
+	if result.ClusterEnabled {
+		if result.ConnectionStatus {
+			result.ClusterState = "ok"
+		} else {
+			result.ClusterState = "fail"
+		}
+	} else {
+		result.ClusterState = "N/A"
+	}
+
 	// Set collected timestamp
 	result.CollectedAt = time.Now()
 }

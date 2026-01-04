@@ -177,6 +177,32 @@ func (i *MySQLInspector) Inspect(ctx context.Context) (*model.MySQLInspectionRes
 		if mgrStateMetric := inspResult.GetMetric("mgr_state_online"); mgrStateMetric != nil {
 			inspResult.MGRStateOnline = mgrStateMetric.RawValue > 0
 		}
+
+		// SlowQueryLogEnabled - from metric "slow_query_log" (1=开启, 0=关闭)
+		if slowLogMetric := inspResult.GetMetric("slow_query_log"); slowLogMetric != nil {
+			inspResult.SlowQueryLogEnabled = slowLogMetric.RawValue == 1
+		}
+
+		// SlowQueryLogPath - from metric "slow_query_log_file" (StringValue from label extraction)
+		if slowLogFileMetric := inspResult.GetMetric("slow_query_log_file"); slowLogFileMetric != nil {
+			inspResult.SlowQueryLogPath = slowLogFileMetric.StringValue
+		}
+
+		// BinlogEnabled - from metric "binlog_file_count" (>0 means enabled)
+		if binlogCountMetric := inspResult.GetMetric("binlog_file_count"); binlogCountMetric != nil {
+			inspResult.BinlogEnabled = binlogCountMetric.RawValue > 0
+		}
+
+		// BinlogExpireSeconds - from metric "binlog_expire_seconds"
+		if binlogExpireMetric := inspResult.GetMetric("binlog_expire_seconds"); binlogExpireMetric != nil {
+			inspResult.BinlogExpireSeconds = int(binlogExpireMetric.RawValue)
+		}
+
+		// SyncStatus - derived from MGR state (for MGR mode)
+		// Master-slave mode: not implemented yet (SyncStatus remains false)
+		if inspResult.Instance != nil && inspResult.Instance.ClusterMode.IsMGR() {
+			inspResult.SyncStatus = inspResult.MGRStateOnline
+		}
 	}
 
 	// Step 6: 评估阈值

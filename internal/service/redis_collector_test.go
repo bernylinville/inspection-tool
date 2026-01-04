@@ -1324,46 +1324,46 @@ func TestRedisCollector_verifyRoles(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		initialRole       model.RedisRole
-		slavesCount       float64
+		name                string
+		initialRole         model.RedisRole
+		slavesCount         float64
 		hasMasterLinkStatus bool
-		expectedRole      model.RedisRole
+		expectedRole        model.RedisRole
 	}{
 		{
-			name:              "already master - no change",
-			initialRole:       model.RedisRoleMaster,
-			slavesCount:       0,
+			name:                "already master - no change",
+			initialRole:         model.RedisRoleMaster,
+			slavesCount:         0,
 			hasMasterLinkStatus: false,
-			expectedRole:      model.RedisRoleMaster,
+			expectedRole:        model.RedisRoleMaster,
 		},
 		{
-			name:              "already slave - no change",
-			initialRole:       model.RedisRoleSlave,
-			slavesCount:       0,
+			name:                "already slave - no change",
+			initialRole:         model.RedisRoleSlave,
+			slavesCount:         0,
 			hasMasterLinkStatus: false,
-			expectedRole:      model.RedisRoleSlave,
+			expectedRole:        model.RedisRoleSlave,
 		},
 		{
-			name:              "unknown with slaves > 0 - becomes master",
-			initialRole:       model.RedisRoleUnknown,
-			slavesCount:       2,
+			name:                "unknown with slaves > 0 - becomes master",
+			initialRole:         model.RedisRoleUnknown,
+			slavesCount:         2,
 			hasMasterLinkStatus: false,
-			expectedRole:      model.RedisRoleMaster,
+			expectedRole:        model.RedisRoleMaster,
 		},
 		{
-			name:              "unknown with slaves == 0 and no master_link_status - stays unknown",
-			initialRole:       model.RedisRoleUnknown,
-			slavesCount:       0,
+			name:                "unknown with slaves == 0 and no master_link_status - stays unknown",
+			initialRole:         model.RedisRoleUnknown,
+			slavesCount:         0,
 			hasMasterLinkStatus: false,
-			expectedRole:      model.RedisRoleUnknown,
+			expectedRole:        model.RedisRoleUnknown,
 		},
 		{
-			name:              "unknown with slaves == 0 and has master_link_status - becomes slave",
-			initialRole:       model.RedisRoleUnknown,
-			slavesCount:       0,
+			name:                "unknown with slaves == 0 and has master_link_status - becomes slave",
+			initialRole:         model.RedisRoleUnknown,
+			slavesCount:         0,
 			hasMasterLinkStatus: true,
-			expectedRole:      model.RedisRoleSlave,
+			expectedRole:        model.RedisRoleSlave,
 		},
 	}
 
@@ -1539,5 +1539,62 @@ func TestRedisCollector_populateResultFields(t *testing.T) {
 	}
 	if result.CollectedAt.IsZero() {
 		t.Error("expected CollectedAt to be set")
+	}
+	if result.ClusterState != "ok" {
+		t.Errorf("expected ClusterState 'ok', got %s", result.ClusterState)
+	}
+}
+
+func TestRedisCollector_populateResultFields_ClusterState(t *testing.T) {
+	collector := &RedisCollector{
+		logger: zerolog.Nop(),
+	}
+
+	tests := []struct {
+		name           string
+		redisUp        float64
+		clusterEnabled float64
+		expectedState  string
+	}{
+		{
+			name:           "cluster enabled and connected - ok",
+			redisUp:        1,
+			clusterEnabled: 1,
+			expectedState:  "ok",
+		},
+		{
+			name:           "cluster enabled but disconnected - fail",
+			redisUp:        0,
+			clusterEnabled: 1,
+			expectedState:  "fail",
+		},
+		{
+			name:           "cluster disabled - N/A",
+			redisUp:        1,
+			clusterEnabled: 0,
+			expectedState:  "N/A",
+		},
+		{
+			name:           "standalone mode disconnected - N/A",
+			redisUp:        0,
+			clusterEnabled: 0,
+			expectedState:  "N/A",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			instance := model.NewRedisInstance("192.18.102.2:7000")
+			result := model.NewRedisInspectionResult(instance)
+
+			result.SetMetric(&model.RedisMetricValue{Name: "redis_up", RawValue: tt.redisUp})
+			result.SetMetric(&model.RedisMetricValue{Name: "redis_cluster_enabled", RawValue: tt.clusterEnabled})
+
+			collector.populateResultFields(result)
+
+			if result.ClusterState != tt.expectedState {
+				t.Errorf("expected ClusterState %q, got %q", tt.expectedState, result.ClusterState)
+			}
+		})
 	}
 }
