@@ -110,14 +110,13 @@ redis_metrics:
 
   - name: redis_version
     display_name: "Redis 版本"
-    query: ""
+    query: "redis_version_info"
     category: info
-    status: pending
-    note: "需要扩展 Categraf command 配置采集"
+    label_extract: version
+    note: "Redis 版本号，从 version 标签提取。通过 collect_redis_info.sh.j2 脚本采集"
 
   - name: non_root_user
     display_name: "非 root 用户启动"
-    query: ""
+    query: "redis_non_root_user"
     category: security
-    status: pending
-    note: "MVP 阶段显示 N/A"
+    note: "检查 Redis 是否由非 root 用户启动，1=是，0=否。通过 collect_redis_info.sh.j2 脚本采集"

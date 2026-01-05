@@ -138,10 +138,9 @@ mysql_metrics:
 
   - name: non_root_user
     display_name: "非 root 用户启动"
-    query: ""
+    query: "mysql_non_root_user"
     category: security
-    status: pending
-    note: "检查 MySQL 是否由非 root 用户启动，MVP 阶段显示 N/A，后续扩展 Categraf 自定义脚本实现"
+    note: "检查 MySQL 是否由非 root 用户启动，1=是，0=否。通过 collect_mysql_security.sh.j2 脚本采集"
 
   - name: slave_running
     display_name: "Slave 是否启动"
