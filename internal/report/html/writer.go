@@ -454,6 +454,7 @@ type MySQLInstanceData struct {
 	MaxConnections     int
 	CurrentConnections int
 	BinlogEnabled      string
+	NonRootUser        string
 	Status             string
 	StatusClass        string
 	AlertCount         int
@@ -655,6 +656,7 @@ func (w *Writer) convertMySQLInstanceData(r *model.MySQLInspectionResult) *MySQL
 		MaxConnections:     r.MaxConnections,
 		CurrentConnections: r.CurrentConnections,
 		BinlogEnabled:      boolToText(r.BinlogEnabled),
+		NonRootUser:        r.NonRootUser,
 		Status:             mysqlStatusText(r.Status),
 		StatusClass:        mysqlStatusClass(r.Status),
 		AlertCount:         len(r.Alerts),
@@ -973,6 +975,7 @@ type RedisInstanceData struct {
 	Version          string // N/A for MVP
 	Role             string // "主"/"从"/"未知"
 	ClusterEnabled   string // "启用"/"禁用"
+	NonRootUser      string // "是"/"否"/"N/A"
 	ConnectionStatus string // "正常"/"异常"
 	MaxClients       int
 	ConnectedClients int
@@ -1247,6 +1250,11 @@ func (w *Writer) convertRedisInstanceData(r *model.RedisInspectionResult) *Redis
 		version = "N/A"
 	}
 
+	nonRootUser := r.NonRootUser
+	if nonRootUser == "" {
+		nonRootUser = "N/A"
+	}
+
 	return &RedisInstanceData{
 		Address:          r.GetAddress(),
 		IP:               r.Instance.IP,
@@ -1254,6 +1262,7 @@ func (w *Writer) convertRedisInstanceData(r *model.RedisInspectionResult) *Redis
 		Version:          version,
 		Role:             redisRoleText(r.Instance.Role),
 		ClusterEnabled:   boolToText(r.ClusterEnabled),
+		NonRootUser:      nonRootUser,
 		ConnectionStatus: redisConnectionStatusText(r),
 		MaxClients:       r.MaxClients,
 		ConnectedClients: r.ConnectedClients,
@@ -1340,6 +1349,7 @@ type NginxInstanceData struct {
 	Version                string
 	InstallPath            string
 	ErrorLogPath           string
+	AccessLogPath          string
 	Up                     string // "运行" / "停止"
 	ActiveConnections      int
 	WorkerProcesses        int
@@ -1470,6 +1480,7 @@ func (w *Writer) convertNginxInstanceData(r *model.NginxInspectionResult) *Nginx
 		Version:                r.Instance.Version,
 		InstallPath:            r.Instance.InstallPath,
 		ErrorLogPath:           r.Instance.ErrorLogPath,
+		AccessLogPath:          r.Instance.AccessLogPath,
 		Up:                     nginxUpText(r.Up),
 		ActiveConnections:      r.ActiveConnections,
 		WorkerProcesses:        r.WorkerProcesses,
@@ -1521,16 +1532,16 @@ func (w *Writer) convertNginxAlerts(alerts []*model.NginxAlert) []*NginxAlertDat
 func (w *Writer) loadNginxTemplate() (*template.Template, error) {
 	// Define template functions
 	funcMap := template.FuncMap{
-		"formatSize":               formatSize,
-		"formatDuration":           formatDuration,
-		"statusClass":              statusClass,
-		"alertClass":               alertLevelClass,
-		"nginxStatusText":          nginxStatusText,
-		"nginxBoolToText":          nginxBoolToText,
-		"nginxConfiguredText":      nginxConfiguredText,
-		"nginxUpText":              nginxUpText,
+		"formatSize":                 formatSize,
+		"formatDuration":             formatDuration,
+		"statusClass":                statusClass,
+		"alertClass":                 alertLevelClass,
+		"nginxStatusText":            nginxStatusText,
+		"nginxBoolToText":            nginxBoolToText,
+		"nginxConfiguredText":        nginxConfiguredText,
+		"nginxUpText":                nginxUpText,
 		"formatNginxConnectionUsage": formatNginxConnectionUsage,
-		"formatNginxThreshold":     formatNginxThreshold,
+		"formatNginxThreshold":       formatNginxThreshold,
 	}
 
 	// Load embedded Nginx template
@@ -1585,23 +1596,23 @@ type TomcatTemplateData struct {
 
 // TomcatInstanceData represents Tomcat instance data formatted for template.
 type TomcatInstanceData struct {
-	Identifier            string
-	Hostname              string
-	IP                    string
-	ApplicationType       string
-	Port                 int
-	Container            string
-	Version              string
-	InstallPath          string
-	LogPath              string
-	JVMConfig            string
-	Connections          int
-	UptimeFormatted      string
-	NonRootUser          string
+	Identifier             string
+	Hostname               string
+	IP                     string
+	ApplicationType        string
+	Port                   int
+	Container              string
+	Version                string
+	InstallPath            string
+	LogPath                string
+	JVMConfig              string
+	Connections            int
+	UptimeFormatted        string
+	NonRootUser            string
 	LastErrorTimeFormatted string
-	Status               string
-	StatusClass          string
-	AlertCount           int
+	Status                 string
+	StatusClass            string
+	AlertCount             int
 }
 
 // TomcatAlertData represents Tomcat alert data formatted for template.
@@ -1702,23 +1713,23 @@ func (w *Writer) loadTomcatTemplate() (*template.Template, error) {
 // convertTomcatInstanceData converts TomcatInspectionResult to TomcatInstanceData.
 func (w *Writer) convertTomcatInstanceData(r *model.TomcatInspectionResult) *TomcatInstanceData {
 	return &TomcatInstanceData{
-		Identifier:            r.Instance.Identifier,
-		Hostname:              r.Instance.Hostname,
-		IP:                    r.Instance.IP,
-		ApplicationType:       r.Instance.ApplicationType,
-		Port:                  r.Instance.Port,
-		Container:             r.Instance.Container,
-		Version:               r.Instance.Version,
-		InstallPath:           r.Instance.InstallPath,
-		LogPath:               r.Instance.LogPath,
-		JVMConfig:             r.Instance.JVMConfig,
-		Connections:           r.Connections,
-		UptimeFormatted:       r.UptimeFormatted,
-		NonRootUser:           tomcatBoolToText(r.NonRootUser),
+		Identifier:             r.Instance.Identifier,
+		Hostname:               r.Instance.Hostname,
+		IP:                     r.Instance.IP,
+		ApplicationType:        r.Instance.ApplicationType,
+		Port:                   r.Instance.Port,
+		Container:              r.Instance.Container,
+		Version:                r.Instance.Version,
+		InstallPath:            r.Instance.InstallPath,
+		LogPath:                r.Instance.LogPath,
+		JVMConfig:              r.Instance.JVMConfig,
+		Connections:            r.Connections,
+		UptimeFormatted:        r.UptimeFormatted,
+		NonRootUser:            tomcatBoolToText(r.NonRootUser),
 		LastErrorTimeFormatted: r.LastErrorTimeFormatted,
-		Status:                tomcatStatusText(r.Status),
-		StatusClass:           tomcatStatusClass(r.Status),
-		AlertCount:            len(r.Alerts),
+		Status:                 tomcatStatusText(r.Status),
+		StatusClass:            tomcatStatusClass(r.Status),
+		AlertCount:             len(r.Alerts),
 	}
 }
 

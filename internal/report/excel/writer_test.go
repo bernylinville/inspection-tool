@@ -669,7 +669,8 @@ func TestWriter_MySQLSheet_Headers(t *testing.T) {
 		{"H1", "最大连接数"},
 		{"I1", "当前连接数"},
 		{"J1", "Binlog状态"},
-		{"K1", "整体状态"},
+		{"K1", "非root用户"},
+		{"L1", "整体状态"},
 	}
 
 	for _, eh := range expectedHeaders {
@@ -702,16 +703,17 @@ func TestWriter_MySQLSheet_DataMapping(t *testing.T) {
 		cell     string
 		expected string
 	}{
-		{"B2", "172.18.182.91"},       // IP地址
-		{"C2", "3306"},                // 端口
-		{"D2", "8.0.39"},              // 数据库版本
-		{"E2", "91"},                  // Server ID
-		{"F2", "MGR"},                 // 集群模式
-		{"G2", "在线"},                  // 同步状态
-		{"H2", "1000"},                // 最大连接数
-		{"I2", "100"},                 // 当前连接数
-		{"J2", "启用"},                  // Binlog状态
-		{"K2", "正常"},                  // 整体状态
+		{"B2", "172.18.182.91"}, // IP地址
+		{"C2", "3306"},          // 端口
+		{"D2", "8.0.39"},        // 数据库版本
+		{"E2", "91"},            // Server ID
+		{"F2", "MGR"},           // 集群模式
+		{"G2", "在线"},            // 同步状态
+		{"H2", "1000"},          // 最大连接数
+		{"I2", "100"},           // 当前连接数
+		{"J2", "启用"},            // Binlog状态
+		{"K2", "是"},             // 非root用户
+		{"L2", "正常"},            // 整体状态
 	}
 
 	for _, tt := range tests {
@@ -744,9 +746,9 @@ func TestWriter_MySQLSheet_ConditionalFormat(t *testing.T) {
 		cell   string
 		status string
 	}{
-		{"K2", "正常"},
-		{"K3", "警告"},
-		{"K4", "严重"},
+		{"L2", "正常"},
+		{"L3", "警告"},
+		{"L4", "严重"},
 	}
 
 	for _, es := range expectedStatuses {
@@ -811,6 +813,7 @@ func createTestMySQLInspectionResults() *model.MySQLInspectionResults {
 				CurrentConnections: 100,
 				MGRStateOnline:     true,
 				BinlogEnabled:      true,
+				NonRootUser:        "是",
 				Status:             model.MySQLStatusNormal,
 			},
 			// Warning instance (high connection usage)
@@ -1069,9 +1072,9 @@ func TestWriter_MySQLAlertsSheet_DataMapping(t *testing.T) {
 		expected string
 	}{
 		{"A2", "172.18.182.93:3306"}, // 实例地址 (critical first)
-		{"B2", "严重"},                  // 告警级别
+		{"B2", "严重"},                 // 告警级别
 		{"C2", "MGR 在线状态"},           // 指标名称
-		{"D2", "离线"},                  // 当前值
+		{"D2", "离线"},                 // 当前值
 		{"G2", "MGR 节点离线"},           // 告警消息
 	}
 
@@ -1372,19 +1375,19 @@ func TestWriter_RedisSheet_DataMapping_Master(t *testing.T) {
 		cell     string
 		expected string
 	}{
-		{"B2", "192.18.102.2"},  // IP地址
+		{"B2", "192.18.102.2"}, // IP地址
 		{"C2", "7000"},         // 端口
 		{"D2", "Redis"},        // 应用类型
 		{"E2", "6.2.6"},        // Redis版本
 		{"F2", "N/A"},          // 是否普通用户启动
-		{"G2", "是"},           // 连接状态
-		{"H2", "是"},           // 集群模式
+		{"G2", "是"},            // 连接状态
+		{"H2", "是"},            // 集群模式
 		{"I2", "N/A"},          // 主从链接状态 (master shows N/A)
-		{"J2", "主"},           // 节点角色
+		{"J2", "主"},            // 节点角色
 		{"K2", "N/A"},          // Master端口 (master shows N/A)
 		{"L2", "N/A"},          // 复制延迟 (master shows N/A)
 		{"M2", "10000"},        // 最大连接数
-		{"N2", "正常"},          // 整体状态
+		{"N2", "正常"},           // 整体状态
 	}
 
 	for _, tt := range tests {
@@ -1417,13 +1420,13 @@ func TestWriter_RedisSheet_DataMapping_Slave(t *testing.T) {
 		cell     string
 		expected string
 	}{
-		{"B3", "192.18.102.2"},  // IP地址
+		{"B3", "192.18.102.2"}, // IP地址
 		{"C3", "7001"},         // 端口
-		{"I3", "是"},           // 主从链接状态 (slave shows status)
-		{"J3", "从"},           // 节点角色
+		{"I3", "是"},            // 主从链接状态 (slave shows status)
+		{"J3", "从"},            // 节点角色
 		{"K3", "7000"},         // Master端口
 		{"L3", "0 B"},          // 复制延迟
-		{"N3", "正常"},          // 整体状态
+		{"N3", "正常"},           // 整体状态
 	}
 
 	for _, tt := range tests {
@@ -2053,13 +2056,13 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 			// Normal master instance
 			{
 				Instance: &model.RedisInstance{
-					Address:        "192.18.102.2:7000",
-					IP:             "192.18.102.2",
-					Port:           7000,
+					Address:         "192.18.102.2:7000",
+					IP:              "192.18.102.2",
+					Port:            7000,
 					ApplicationType: "Redis",
-					Version:        "6.2.6",
-					Role:           model.RedisRoleMaster,
-					ClusterEnabled: true,
+					Version:         "6.2.6",
+					Role:            model.RedisRoleMaster,
+					ClusterEnabled:  true,
 				},
 				ConnectionStatus: true,
 				ClusterEnabled:   true,
@@ -2072,13 +2075,13 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 			// Normal slave instance
 			{
 				Instance: &model.RedisInstance{
-					Address:        "192.18.102.2:7001",
-					IP:             "192.18.102.2",
-					Port:           7001,
+					Address:         "192.18.102.2:7001",
+					IP:              "192.18.102.2",
+					Port:            7001,
 					ApplicationType: "Redis",
-					Version:        "6.2.6",
-					Role:           model.RedisRoleSlave,
-					ClusterEnabled: true,
+					Version:         "6.2.6",
+					Role:            model.RedisRoleSlave,
+					ClusterEnabled:  true,
 				},
 				ConnectionStatus: true,
 				ClusterEnabled:   true,
@@ -2093,13 +2096,13 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 			// Normal master instance
 			{
 				Instance: &model.RedisInstance{
-					Address:        "192.18.102.4:7000",
-					IP:             "192.18.102.4",
-					Port:           7000,
+					Address:         "192.18.102.4:7000",
+					IP:              "192.18.102.4",
+					Port:            7000,
 					ApplicationType: "Redis",
-					Version:        "6.2.6",
-					Role:           model.RedisRoleMaster,
-					ClusterEnabled: true,
+					Version:         "6.2.6",
+					Role:            model.RedisRoleMaster,
+					ClusterEnabled:  true,
 				},
 				ConnectionStatus: true,
 				ClusterEnabled:   true,
@@ -2112,13 +2115,13 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 			// Warning master instance (high connection usage)
 			{
 				Instance: &model.RedisInstance{
-					Address:        "192.18.102.3:7000",
-					IP:             "192.18.102.3",
-					Port:           7000,
+					Address:         "192.18.102.3:7000",
+					IP:              "192.18.102.3",
+					Port:            7000,
 					ApplicationType: "Redis",
-					Version:        "6.2.6",
-					Role:           model.RedisRoleMaster,
-					ClusterEnabled: true,
+					Version:         "6.2.6",
+					Role:            model.RedisRoleMaster,
+					ClusterEnabled:  true,
 				},
 				ConnectionStatus: true,
 				ClusterEnabled:   true,
@@ -2132,13 +2135,13 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 			// Warning slave instance (high connection usage)
 			{
 				Instance: &model.RedisInstance{
-					Address:        "192.18.102.3:7001",
-					IP:             "192.18.102.3",
-					Port:           7001,
+					Address:         "192.18.102.3:7001",
+					IP:              "192.18.102.3",
+					Port:            7001,
 					ApplicationType: "Redis",
-					Version:        "6.2.6",
-					Role:           model.RedisRoleSlave,
-					ClusterEnabled: true,
+					Version:         "6.2.6",
+					Role:            model.RedisRoleSlave,
+					ClusterEnabled:  true,
 				},
 				ConnectionStatus: true,
 				ClusterEnabled:   true,
@@ -2154,13 +2157,13 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 			// Critical slave instance (master link down)
 			{
 				Instance: &model.RedisInstance{
-					Address:        "192.18.102.4:7001",
-					IP:             "192.18.102.4",
-					Port:           7001,
+					Address:         "192.18.102.4:7001",
+					IP:              "192.18.102.4",
+					Port:            7001,
 					ApplicationType: "Redis",
-					Version:        "6.2.6",
-					Role:           model.RedisRoleSlave,
-					ClusterEnabled: true,
+					Version:         "6.2.6",
+					Role:            model.RedisRoleSlave,
+					ClusterEnabled:  true,
 				},
 				ConnectionStatus: true,
 				ClusterEnabled:   true,

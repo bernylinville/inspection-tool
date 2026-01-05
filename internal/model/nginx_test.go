@@ -188,6 +188,14 @@ func TestNginxInstance_Methods(t *testing.T) {
 			t.Errorf("String() = %q, want %q", instance.String(), "<nil>")
 		}
 	})
+
+	t.Run("SetAccessLogPath", func(t *testing.T) {
+		instance := NewNginxInstance("web-server", 80)
+		instance.SetAccessLogPath("/var/log/nginx/access.log")
+		if instance.AccessLogPath != "/var/log/nginx/access.log" {
+			t.Errorf("AccessLogPath = %q, want %q", instance.AccessLogPath, "/var/log/nginx/access.log")
+		}
+	})
 }
 
 func TestNewNginxUpstreamStatus(t *testing.T) {

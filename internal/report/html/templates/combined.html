@@ -673,6 +673,7 @@
                                 <th class="mysql-header sortable" data-sort="number">最大连接数</th>
                                 <th class="mysql-header sortable" data-sort="number">当前连接数</th>
                                 <th class="mysql-header">Binlog状态</th>
+                                <th class="mysql-header">非root用户</th>
                                 <th class="mysql-header sortable" data-sort="status">整体状态</th>
                             </tr>
                         </thead>
@@ -688,6 +689,7 @@
                                 <td>{{.MaxConnections}}</td>
                                 <td>{{.CurrentConnections}}</td>
                                 <td>{{.BinlogEnabled}}</td>
+                                <td>{{.NonRootUser}}</td>
                                 <td><span class="badge badge-{{if eq .Status "正常"}}normal{{else if eq .Status "警告"}}warning{{else if eq .Status "严重"}}critical{{else}}failed{{end}}">{{.Status}}</span></td>
                             </tr>
                             {{end}}
@@ -808,6 +810,7 @@
                                 <th class="redis-header">Redis版本</th>
                                 <th class="redis-header">节点角色</th>
                                 <th class="redis-header">集群模式</th>
+                                <th class="redis-header">非root用户</th>
                                 <th class="redis-header">连接状态</th>
                                 <th class="redis-header sortable" data-sort="number">最大连接数</th>
                                 <th class="redis-header sortable" data-sort="number">当前连接数</th>
@@ -827,6 +830,7 @@
                                 <td>{{.Version}}</td>
                                 <td>{{.Role}}</td>
                                 <td>{{.ClusterEnabled}}</td>
+                                <td>{{.NonRootUser}}</td>
                                 <td>{{.ConnectionStatus}}</td>
                                 <td>{{.MaxClients}}</td>
                                 <td>{{.ConnectedClients}}</td>
@@ -858,6 +862,7 @@
                                 <th class="redis-header">Redis版本</th>
                                 <th class="redis-header">节点角色</th>
                                 <th class="redis-header">集群模式</th>
+                                <th class="redis-header">非root用户</th>
                                 <th class="redis-header">连接状态</th>
                                 <th class="redis-header sortable" data-sort="number">最大连接数</th>
                                 <th class="redis-header sortable" data-sort="number">当前连接数</th>
@@ -877,6 +882,7 @@
                                 <td>{{.Version}}</td>
                                 <td>{{.Role}}</td>
                                 <td>{{.ClusterEnabled}}</td>
+                                <td>{{.NonRootUser}}</td>
                                 <td>{{.ConnectionStatus}}</td>
                                 <td>{{.MaxClients}}</td>
                                 <td>{{.ConnectedClients}}</td>
@@ -985,6 +991,8 @@
                             <th class="nginx-header sortable" data-column="app_type">应用类型</th>
                             <th class="nginx-header sortable" data-column="endpoint">端口/容器</th>
                             <th class="nginx-header sortable" data-column="version">版本</th>
+                            <th class="nginx-header" data-column="error_log_path">错误日志路径</th>
+                            <th class="nginx-header" data-column="access_log_path">访问日志路径</th>
                             <th class="nginx-header sortable" data-column="status">运行状态</th>
                             <th class="nginx-header sortable" data-column="connections">连接数</th>
                             <th class="nginx-header sortable" data-column="connection_usage">连接使用率</th>
@@ -1006,6 +1014,8 @@
                             <td>{{.ApplicationType}}</td>
                             <td>{{if .Container}}{{.Container}}{{else}}{{.Port}}{{end}}</td>
                             <td>{{.Version}}</td>
+                            <td>{{.ErrorLogPath}}</td>
+                            <td>{{.AccessLogPath}}</td>
                             <td><span class="status-badge status-{{.Up}}">{{.Up}}</span></td>
                             <td>{{.ActiveConnections}}</td>
                             <td>{{.ConnectionUsagePercent}}</td>

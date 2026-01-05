@@ -485,6 +485,22 @@ func (c *RedisCollector) populateResultFields(result *model.RedisInspectionResul
 		result.Uptime = int64(m.RawValue)
 	}
 
+	// redis_version -> Instance.Version (from redis_version_info label_extract)
+	if m := result.GetMetric("redis_version"); m != nil && !m.IsNA && m.StringValue != "" {
+		if result.Instance != nil {
+			result.Instance.SetVersion(m.StringValue)
+		}
+	}
+
+	// redis_non_root_user -> NonRootUser
+	if m := result.GetMetric("non_root_user"); m != nil && !m.IsNA {
+		if m.RawValue == 1 {
+			result.NonRootUser = "是"
+		} else {
+			result.NonRootUser = "否"
+		}
+	}
+
 	// Derive ClusterState from ClusterEnabled and ConnectionStatus
 	// Since Categraf doesn't collect CLUSTER INFO, we infer state from existing metrics:
 	// - ClusterEnabled=true + ConnectionStatus=true -> "ok"

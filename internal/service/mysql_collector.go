@@ -547,6 +547,11 @@ func (c *MySQLCollector) CollectMetrics(
 		return nil, fmt.Errorf("concurrent metric collection failed: %w", err)
 	}
 
+	// Step 6: Post-process - populate struct fields from metrics
+	for _, result := range resultsMap {
+		c.populateResultFields(result)
+	}
+
 	c.logger.Info().
 		Int("instances", len(instances)).
 		Int("active_metrics", len(filteredMetrics)).
@@ -554,4 +559,99 @@ func (c *MySQLCollector) CollectMetrics(
 		Msg("MySQL metrics collection completed")
 
 	return resultsMap, nil
+}
+
+// populateResultFields maps collected metrics to MySQLInspectionResult struct fields.
+// This method translates metric values to their corresponding struct fields.
+func (c *MySQLCollector) populateResultFields(result *model.MySQLInspectionResult) {
+	if result == nil {
+		return
+	}
+
+	// mysql_non_root_user → NonRootUser
+	if mv := result.GetMetric("non_root_user"); mv != nil && !mv.IsNA {
+		if mv.RawValue == 1 {
+			result.NonRootUser = "是"
+		} else {
+			result.NonRootUser = "否"
+		}
+	}
+
+	// mysql_up → ConnectionStatus
+	if mv := result.GetMetric("mysql_up"); mv != nil && !mv.IsNA {
+		result.ConnectionStatus = mv.RawValue == 1
+	}
+
+	// max_connections → MaxConnections
+	if mv := result.GetMetric("max_connections"); mv != nil && !mv.IsNA {
+		result.MaxConnections = int(mv.RawValue)
+	}
+
+	// current_connections → CurrentConnections
+	if mv := result.GetMetric("current_connections"); mv != nil && !mv.IsNA {
+		result.CurrentConnections = int(mv.RawValue)
+	}
+
+	// binlog_file_count → BinlogEnabled
+	if mv := result.GetMetric("binlog_file_count"); mv != nil && !mv.IsNA {
+		result.BinlogEnabled = mv.RawValue > 0
+	}
+
+	// binlog_expire_seconds → BinlogExpireSeconds
+	if mv := result.GetMetric("binlog_expire_seconds"); mv != nil && !mv.IsNA {
+		result.BinlogExpireSeconds = int(mv.RawValue)
+	}
+
+	// slow_query_log → SlowQueryLogEnabled
+	if mv := result.GetMetric("slow_query_log"); mv != nil && !mv.IsNA {
+		result.SlowQueryLogEnabled = mv.RawValue == 1
+	}
+
+	// slow_query_log_file → SlowQueryLogPath
+	if mv := result.GetMetric("slow_query_log_file"); mv != nil && !mv.IsNA && mv.StringValue != "" {
+		result.SlowQueryLogPath = mv.StringValue
+	}
+
+	// uptime → Uptime
+	if mv := result.GetMetric("uptime"); mv != nil && !mv.IsNA {
+		result.Uptime = int64(mv.RawValue)
+	}
+
+	// MGR related fields
+	if mv := result.GetMetric("mgr_member_count"); mv != nil && !mv.IsNA {
+		result.MGRMemberCount = int(mv.RawValue)
+	}
+
+	if mv := result.GetMetric("mgr_role_primary"); mv != nil && !mv.IsNA {
+		if mv.RawValue == 1 {
+			result.MGRRole = model.MGRRolePrimary
+		} else {
+			result.MGRRole = model.MGRRoleSecondary
+		}
+		// Also extract server_id from member_id label
+		if result.Instance != nil && mv.StringValue != "" {
+			result.Instance.SetServerID(mv.StringValue)
+		}
+	}
+
+	if mv := result.GetMetric("mgr_state_online"); mv != nil && !mv.IsNA {
+		result.MGRStateOnline = mv.RawValue == 1
+	}
+
+	// mysql_version → Instance.Version
+	if mv := result.GetMetric("mysql_version"); mv != nil && !mv.IsNA && mv.StringValue != "" {
+		if result.Instance != nil {
+			result.Instance.SetVersion(mv.StringValue, "")
+		}
+	}
+
+	// server_id → Instance.ServerID (fallback if not set by mgr_role_primary)
+	if mv := result.GetMetric("server_id"); mv != nil && !mv.IsNA {
+		if result.Instance != nil && result.Instance.ServerID == "" {
+			result.Instance.SetServerID(fmt.Sprintf("%.0f", mv.RawValue))
+		}
+	}
+
+	// Set collected timestamp
+	result.CollectedAt = time.Now()
 }

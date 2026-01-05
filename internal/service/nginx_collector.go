@@ -228,6 +228,9 @@ func (c *NginxCollector) DiscoverInstances(ctx context.Context) ([]*model.NginxI
 		if installPath := result.Labels["install_path"]; installPath != "" {
 			instance.SetInstallPath(installPath)
 		}
+		if accessLogPath := result.Labels["access_log_path"]; accessLogPath != "" {
+			instance.SetAccessLogPath(accessLogPath)
+		}
 
 		// 3.8 Get IP address from N9E API
 		ip := c.getIPFromN9E(ctx, hostname)

@@ -104,7 +104,8 @@ func writeNginxInfoResponse(w http.ResponseWriter, hostnames []string) {
 				"port": "80",
 				"app_type": "openresty",
 				"install_path": "/usr/local/openresty",
-				"version": "1.21.4.1"
+				"version": "1.21.4.1",
+				"access_log_path": "/var/log/nginx/access.log"
 			},
 			"value": [%d, "1"]
 		}`, hostname, timestamp)

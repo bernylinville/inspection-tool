@@ -55,6 +55,7 @@ type NginxInstance struct {
 	Version         string `json:"version"`          // 版本号
 	InstallPath     string `json:"install_path"`     // 安装路径
 	ErrorLogPath    string `json:"error_log_path"`   // 错误日志路径
+	AccessLogPath   string `json:"access_log_path"`  // 访问日志路径
 }
 
 // =============================================================================
@@ -119,6 +120,11 @@ func (n *NginxInstance) SetInstallPath(path string) {
 // SetErrorLogPath sets the error log path.
 func (n *NginxInstance) SetErrorLogPath(path string) {
 	n.ErrorLogPath = path
+}
+
+// SetAccessLogPath sets the access log path.
+func (n *NginxInstance) SetAccessLogPath(path string) {
+	n.AccessLogPath = path
 }
 
 // SetIP sets the IP address.
@@ -556,14 +562,14 @@ func (r *NginxInspectionResults) HasAlerts() bool {
 // NginxMetricDefinition defines a Nginx metric to be collected.
 // This struct maps to the YAML configuration in configs/nginx-metrics.yaml.
 type NginxMetricDefinition struct {
-	Name         string   `yaml:"name" json:"name"`                    // 指标唯一标识
-	DisplayName  string   `yaml:"display_name" json:"display_name"`    // 中文显示名称
-	Query        string   `yaml:"query" json:"query"`                  // PromQL 查询表达式
-	Category     string   `yaml:"category" json:"category"`            // 分类 (connection, info, config, log, security, upstream)
-	LabelExtract []string `yaml:"label_extract" json:"label_extract"`  // 从指标标签提取值（可选）
-	Format       string   `yaml:"format" json:"format"`                // 格式化类型（可选：size, duration, percent, timestamp）
-	Status       string   `yaml:"status" json:"status"`                // 状态（pending=待实现）
-	Note         string   `yaml:"note" json:"note"`                    // 备注说明
+	Name         string   `yaml:"name" json:"name"`                   // 指标唯一标识
+	DisplayName  string   `yaml:"display_name" json:"display_name"`   // 中文显示名称
+	Query        string   `yaml:"query" json:"query"`                 // PromQL 查询表达式
+	Category     string   `yaml:"category" json:"category"`           // 分类 (connection, info, config, log, security, upstream)
+	LabelExtract []string `yaml:"label_extract" json:"label_extract"` // 从指标标签提取值（可选）
+	Format       string   `yaml:"format" json:"format"`               // 格式化类型（可选：size, duration, percent, timestamp）
+	Status       string   `yaml:"status" json:"status"`               // 状态（pending=待实现）
+	Note         string   `yaml:"note" json:"note"`                   // 备注说明
 }
 
 // IsPending returns true if this metric is not yet implemented.

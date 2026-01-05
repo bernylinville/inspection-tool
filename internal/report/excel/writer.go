@@ -17,16 +17,16 @@ import (
 
 const (
 	// Sheet names
-	sheetSummary = "巡检概览"
-	sheetDetail  = "详细数据"
-	sheetAlerts  = "异常汇总"
-	sheetMySQL       = "MySQL 巡检" // MySQL inspection sheet
-	sheetMySQLAlerts = "MySQL 异常" // MySQL alerts sheet
-	sheetRedis       = "Redis 巡检" // Redis inspection sheet
-	sheetRedisAlerts = "Redis 异常" // Redis alerts sheet
-	sheetNginx       = "Nginx 巡检" // Nginx inspection sheet
-	sheetNginxAlerts = "Nginx 异常" // Nginx alerts sheet
-	sheetTomcat      = "Tomcat 巡检" // Tomcat inspection sheet
+	sheetSummary      = "巡检概览"
+	sheetDetail       = "详细数据"
+	sheetAlerts       = "异常汇总"
+	sheetMySQL        = "MySQL 巡检"  // MySQL inspection sheet
+	sheetMySQLAlerts  = "MySQL 异常"  // MySQL alerts sheet
+	sheetRedis        = "Redis 巡检"  // Redis inspection sheet
+	sheetRedisAlerts  = "Redis 异常"  // Redis alerts sheet
+	sheetNginx        = "Nginx 巡检"  // Nginx inspection sheet
+	sheetNginxAlerts  = "Nginx 异常"  // Nginx alerts sheet
+	sheetTomcat       = "Tomcat 巡检" // Tomcat inspection sheet
 	sheetTomcatAlerts = "Tomcat 异常" // Tomcat alerts sheet
 
 	// Default sheet to remove
@@ -792,10 +792,9 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 		return err
 	}
 
-	// Define headers
 	headers := []string{
 		"巡检时间", "IP地址", "端口", "数据库版本", "Server ID",
-		"集群模式", "同步状态", "最大连接数", "当前连接数", "Binlog状态", "整体状态",
+		"集群模式", "同步状态", "最大连接数", "当前连接数", "Binlog状态", "非root用户", "整体状态",
 	}
 
 	// Set column widths
@@ -810,7 +809,8 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 		"H": 12, // 最大连接数
 		"I": 12, // 当前连接数
 		"J": 12, // Binlog状态
-		"K": 10, // 整体状态
+		"K": 12, // 非root用户
+		"L": 10, // 整体状态
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetMySQL, col, col, width)
@@ -859,11 +859,13 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 		f.SetCellValue(sheetMySQL, "I"+rowStr, r.CurrentConnections)
 		// J: Binlog状态
 		f.SetCellValue(sheetMySQL, "J"+rowStr, boolToText(r.BinlogEnabled))
-		// K: 整体状态
-		f.SetCellValue(sheetMySQL, "K"+rowStr, mysqlStatusText(r.Status))
+		// K: 非root用户
+		f.SetCellValue(sheetMySQL, "K"+rowStr, r.NonRootUser)
+		// L: 整体状态
+		f.SetCellValue(sheetMySQL, "L"+rowStr, mysqlStatusText(r.Status))
 
 		// Apply conditional format to status column
-		statusCell := "K" + rowStr
+		statusCell := "L" + rowStr
 		switch r.Status {
 		case model.MySQLStatusCritical:
 			f.SetCellStyle(sheetMySQL, statusCell, statusCell, criticalStyle)
@@ -1695,7 +1697,7 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 	// Define headers
 	headers := []string{
 		"巡检时间", "主机标识符", "主机名", "IP地址", "应用类型", "端口/容器", "版本", "安装路径",
-		"错误日志路径", "运行状态", "活跃连接数", "连接使用率", "Worker进程数", "Worker连接数",
+		"错误日志路径", "访问日志路径", "运行状态", "活跃连接数", "连接使用率", "Worker进程数", "Worker连接数",
 		"4xx错误页", "5xx错误页", "最近错误时间", "非root用户", "整体状态",
 	}
 
@@ -1710,16 +1712,17 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 		"G": 15, // 版本
 		"H": 25, // 安装路径
 		"I": 30, // 错误日志路径
-		"J": 10, // 运行状态
-		"K": 12, // 活跃连接数
-		"L": 12, // 连接使用率
-		"M": 12, // Worker进程数
-		"N": 15, // Worker连接数
-		"O": 12, // 4xx错误页
-		"P": 12, // 5xx错误页
-		"Q": 20, // 最近错误时间
-		"R": 12, // 非root用户
-		"S": 10, // 整体状态
+		"J": 30, // 访问日志路径
+		"K": 10, // 运行状态
+		"L": 12, // 活跃连接数
+		"M": 12, // 连接使用率
+		"N": 12, // Worker进程数
+		"O": 15, // Worker连接数
+		"P": 12, // 4xx错误页
+		"Q": 12, // 5xx错误页
+		"R": 20, // 最近错误时间
+		"S": 12, // 非root用户
+		"T": 10, // 整体状态
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetNginx, col, col, width)
@@ -1785,19 +1788,23 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 		if r.Instance != nil {
 			f.SetCellValue(sheetName, "I"+rowStr, r.Instance.ErrorLogPath)
 		}
-		// J: 运行状态
-		if r.Up {
-			f.SetCellValue(sheetName, "J"+rowStr, "运行")
-		} else {
-			f.SetCellValue(sheetName, "J"+rowStr, "停止")
+		// J: 访问日志路径
+		if r.Instance != nil {
+			f.SetCellValue(sheetName, "J"+rowStr, r.Instance.AccessLogPath)
 		}
-		// K: 活跃连接数
-		f.SetCellValue(sheetName, "K"+rowStr, r.ActiveConnections)
-		// L: 连接使用率
+		// K: 运行状态
+		if r.Up {
+			f.SetCellValue(sheetName, "K"+rowStr, "运行")
+		} else {
+			f.SetCellValue(sheetName, "K"+rowStr, "停止")
+		}
+		// L: 活跃连接数
+		f.SetCellValue(sheetName, "L"+rowStr, r.ActiveConnections)
+		// M: 连接使用率
 		if r.ConnectionUsagePercent >= 0 {
-			f.SetCellValue(sheetName, "L"+rowStr, fmt.Sprintf("%.1f%%", r.ConnectionUsagePercent))
+			f.SetCellValue(sheetName, "M"+rowStr, fmt.Sprintf("%.1f%%", r.ConnectionUsagePercent))
 			// Apply conditional format
-			usageCell := "L" + rowStr
+			usageCell := "M" + rowStr
 			if r.ConnectionUsagePercent > 90 {
 				f.SetCellStyle(sheetName, usageCell, usageCell, criticalStyle)
 			} else if r.ConnectionUsagePercent > 70 {
@@ -1806,41 +1813,41 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 				f.SetCellStyle(sheetName, usageCell, usageCell, normalStyle)
 			}
 		} else {
-			f.SetCellValue(sheetName, "L"+rowStr, "N/A")
+			f.SetCellValue(sheetName, "M"+rowStr, "N/A")
 		}
-		// M: Worker进程数
-		f.SetCellValue(sheetName, "M"+rowStr, r.WorkerProcesses)
-		// N: Worker连接数
-		f.SetCellValue(sheetName, "N"+rowStr, r.WorkerConnections)
-		// O: 4xx错误页
+		// N: Worker进程数
+		f.SetCellValue(sheetName, "N"+rowStr, r.WorkerProcesses)
+		// O: Worker连接数
+		f.SetCellValue(sheetName, "O"+rowStr, r.WorkerConnections)
+		// P: 4xx错误页
 		if r.ErrorPage4xxConfigured {
-			f.SetCellValue(sheetName, "O"+rowStr, "已配置")
-		} else {
-			f.SetCellValue(sheetName, "O"+rowStr, "未配置")
-		}
-		// P: 5xx错误页
-		if r.ErrorPage5xxConfigured {
 			f.SetCellValue(sheetName, "P"+rowStr, "已配置")
 		} else {
 			f.SetCellValue(sheetName, "P"+rowStr, "未配置")
 		}
-		// Q: 最近错误时间
+		// Q: 5xx错误页
+		if r.ErrorPage5xxConfigured {
+			f.SetCellValue(sheetName, "Q"+rowStr, "已配置")
+		} else {
+			f.SetCellValue(sheetName, "Q"+rowStr, "未配置")
+		}
+		// R: 最近错误时间
 		if r.LastErrorTimestamp > 0 {
-			f.SetCellValue(sheetName, "Q"+rowStr, time.Unix(r.LastErrorTimestamp, 0).In(w.timezone).Format("2006-01-02 15:04:05"))
+			f.SetCellValue(sheetName, "R"+rowStr, time.Unix(r.LastErrorTimestamp, 0).In(w.timezone).Format("2006-01-02 15:04:05"))
 		} else {
-			f.SetCellValue(sheetName, "Q"+rowStr, "无错误")
+			f.SetCellValue(sheetName, "R"+rowStr, "无错误")
 		}
-		// R: 非root用户
+		// S: 非root用户
 		if r.NonRootUser {
-			f.SetCellValue(sheetName, "R"+rowStr, "是")
+			f.SetCellValue(sheetName, "S"+rowStr, "是")
 		} else {
-			f.SetCellValue(sheetName, "R"+rowStr, "否")
+			f.SetCellValue(sheetName, "S"+rowStr, "否")
 		}
-		// S: 整体状态
-		f.SetCellValue(sheetName, "S"+rowStr, nginxStatusText(r.Status))
+		// T: 整体状态
+		f.SetCellValue(sheetName, "T"+rowStr, nginxStatusText(r.Status))
 
 		// Apply conditional format to status column
-		statusCell := "S" + rowStr
+		statusCell := "T" + rowStr
 		switch r.Status {
 		case model.NginxStatusCritical:
 			f.SetCellStyle(sheetName, statusCell, statusCell, criticalStyle)
