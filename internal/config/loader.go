@@ -77,6 +77,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("thresholds.zombie_processes.critical", 10.0)
 	v.SetDefault("thresholds.load_per_core.warning", 0.7)
 	v.SetDefault("thresholds.load_per_core.critical", 1.0)
+	v.SetDefault("thresholds.ntp_offset.warning", 1.0)
+	v.SetDefault("thresholds.ntp_offset.critical", 5.0)
 
 	// Report defaults
 	v.SetDefault("report.output_dir", "./reports")

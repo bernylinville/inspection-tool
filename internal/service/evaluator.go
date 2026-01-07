@@ -3,6 +3,7 @@ package service
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -15,9 +16,10 @@ import (
 var metricThresholdMap = map[string]string{
 	"cpu_usage":         "cpu_usage",
 	"memory_usage":      "memory_usage",
-	"disk_usage_max":    "disk_usage", // 磁盘使用聚合最大值用于告警判断
+	"disk_usage_max":    "disk_usage",
 	"processes_zombies": "zombie_processes",
 	"load_per_core":     "load_per_core",
+	"ntp_offset":        "ntp_offset",
 }
 
 // HostEvaluationResult contains the evaluation result for a single host.
@@ -153,9 +155,35 @@ func (e *Evaluator) evaluateMetric(hostname, metricName string, value *model.Met
 		return nil
 	}
 
+	// NTP special handling: stratum=0 means not synchronized
+	if metricName == "ntp_offset" {
+		if stratum, ok := value.Labels["stratum"]; ok && stratum == "0" {
+			value.Status = model.MetricStatusCritical
+			value.FormattedValue = "N/A (未同步)"
+			return &model.Alert{
+				Hostname:          hostname,
+				MetricName:        metricName,
+				MetricDisplayName: e.getMetricDisplayName(metricName),
+				CurrentValue:      value.RawValue,
+				FormattedValue:    value.FormattedValue,
+				WarningThreshold:  threshold.Warning,
+				CriticalThreshold: threshold.Critical,
+				Level:             model.AlertLevelCritical,
+				Message:           "NTP 时间未同步 (stratum=0)",
+				Labels:            value.Labels,
+			}
+		}
+	}
+
+	// NTP offset uses absolute value for evaluation
+	evalValue := value.RawValue
+	if metricName == "ntp_offset" {
+		evalValue = math.Abs(value.RawValue)
+	}
+
 	// Evaluate and set status
-	level := e.evaluateThreshold(value.RawValue, threshold)
-	e.setMetricStatus(value, threshold)
+	level := e.evaluateThreshold(evalValue, threshold)
+	e.setMetricStatusByValue(value, evalValue, threshold)
 
 	// Only generate alert for warning or critical
 	if level == model.AlertLevelNormal {
@@ -181,9 +209,13 @@ func (e *Evaluator) evaluateMetric(hostname, metricName string, value *model.Met
 
 // setMetricStatus sets the Status field of a MetricValue based on threshold evaluation.
 func (e *Evaluator) setMetricStatus(value *model.MetricValue, threshold *config.ThresholdPair) {
-	if value.RawValue >= threshold.Critical {
+	e.setMetricStatusByValue(value, value.RawValue, threshold)
+}
+
+func (e *Evaluator) setMetricStatusByValue(value *model.MetricValue, evalValue float64, threshold *config.ThresholdPair) {
+	if evalValue >= threshold.Critical {
 		value.Status = model.MetricStatusCritical
-	} else if value.RawValue >= threshold.Warning {
+	} else if evalValue >= threshold.Warning {
 		value.Status = model.MetricStatusWarning
 	} else {
 		value.Status = model.MetricStatusNormal
@@ -224,6 +256,8 @@ func (e *Evaluator) getThreshold(metricName string) *config.ThresholdPair {
 		return &e.thresholds.ZombieProcesses
 	case "load_per_core":
 		return &e.thresholds.LoadPerCore
+	case "ntp_offset":
+		return &e.thresholds.NTPOffset
 	default:
 		return nil
 	}
@@ -347,6 +381,8 @@ func (e *Evaluator) formatMetricValue(metricName string, value float64) string {
 			return fmt.Sprintf("%.0f", value)
 		}
 		return fmt.Sprintf("%.2f", value)
+	case model.MetricFormatNTPOffset:
+		return formatNTPOffset(value)
 	default:
 		// Default: use unit hint if available
 		if def.Unit == "%" {
@@ -395,4 +431,12 @@ func formatUptime(seconds float64) string {
 		return fmt.Sprintf("%d时%d分", hours, minutes)
 	}
 	return fmt.Sprintf("%d分钟", minutes)
+}
+
+func formatNTPOffset(seconds float64) string {
+	msValue := seconds * 1000
+	if msValue >= 0 {
+		return fmt.Sprintf("+%.1fms", msValue)
+	}
+	return fmt.Sprintf("%.1fms", msValue)
 }

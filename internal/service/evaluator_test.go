@@ -32,6 +32,10 @@ func createTestThresholds() *config.ThresholdsConfig {
 			Warning:  0.7,
 			Critical: 1.0,
 		},
+		NTPOffset: config.ThresholdPair{
+			Warning:  1.0,
+			Critical: 5.0,
+		},
 	}
 }
 
@@ -44,6 +48,7 @@ func createTestMetricDefs() []*model.MetricDefinition {
 		{Name: "processes_zombies", DisplayName: "僵尸进程数", Unit: "个"},
 		{Name: "load_per_core", DisplayName: "单核负载", Unit: ""},
 		{Name: "uptime", DisplayName: "运行时间", Unit: "seconds"},
+		{Name: "ntp_offset", DisplayName: "NTP 时间偏差", Unit: "ms", Format: model.MetricFormatNTPOffset},
 	}
 }
 
@@ -840,6 +845,135 @@ func TestEvaluator_determineHostStatus(t *testing.T) {
 				t.Errorf("expected status %s, got %s", tt.expectedStatus, status)
 			}
 		})
+	}
+}
+
+func TestEvaluator_NTPOffset_Normal(t *testing.T) {
+	evaluator := createTestEvaluator()
+
+	metrics := model.NewHostMetrics("server-01")
+	metrics.SetMetric(&model.MetricValue{
+		Name:     "ntp_offset",
+		RawValue: 0.5,
+		Labels:   map[string]string{"stratum": "3"},
+	})
+
+	result := evaluator.EvaluateHost("server-01", metrics)
+
+	if len(result.Alerts) != 0 {
+		t.Errorf("expected 0 alerts for normal NTP offset, got %d", len(result.Alerts))
+	}
+	metric := result.Metrics["ntp_offset"]
+	if metric.Status != model.MetricStatusNormal {
+		t.Errorf("expected normal status, got %s", metric.Status)
+	}
+}
+
+func TestEvaluator_NTPOffset_Warning(t *testing.T) {
+	evaluator := createTestEvaluator()
+
+	metrics := model.NewHostMetrics("server-01")
+	metrics.SetMetric(&model.MetricValue{
+		Name:     "ntp_offset",
+		RawValue: 1.5,
+		Labels:   map[string]string{"stratum": "3"},
+	})
+
+	result := evaluator.EvaluateHost("server-01", metrics)
+
+	if len(result.Alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(result.Alerts))
+	}
+	if result.Alerts[0].Level != model.AlertLevelWarning {
+		t.Errorf("expected warning level, got %s", result.Alerts[0].Level)
+	}
+}
+
+func TestEvaluator_NTPOffset_NegativeValue_Warning(t *testing.T) {
+	evaluator := createTestEvaluator()
+
+	metrics := model.NewHostMetrics("server-01")
+	metrics.SetMetric(&model.MetricValue{
+		Name:     "ntp_offset",
+		RawValue: -2.0,
+		Labels:   map[string]string{"stratum": "3"},
+	})
+
+	result := evaluator.EvaluateHost("server-01", metrics)
+
+	if len(result.Alerts) != 1 {
+		t.Fatalf("expected 1 alert for negative offset, got %d", len(result.Alerts))
+	}
+	if result.Alerts[0].Level != model.AlertLevelWarning {
+		t.Errorf("expected warning level, got %s", result.Alerts[0].Level)
+	}
+}
+
+func TestEvaluator_NTPOffset_Critical(t *testing.T) {
+	evaluator := createTestEvaluator()
+
+	metrics := model.NewHostMetrics("server-01")
+	metrics.SetMetric(&model.MetricValue{
+		Name:     "ntp_offset",
+		RawValue: 6.0,
+		Labels:   map[string]string{"stratum": "3"},
+	})
+
+	result := evaluator.EvaluateHost("server-01", metrics)
+
+	if len(result.Alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(result.Alerts))
+	}
+	if result.Alerts[0].Level != model.AlertLevelCritical {
+		t.Errorf("expected critical level, got %s", result.Alerts[0].Level)
+	}
+}
+
+func TestEvaluator_NTPOffset_Stratum0_Critical(t *testing.T) {
+	evaluator := createTestEvaluator()
+
+	metrics := model.NewHostMetrics("server-01")
+	metrics.SetMetric(&model.MetricValue{
+		Name:     "ntp_offset",
+		RawValue: 0,
+		Labels:   map[string]string{"stratum": "0"},
+	})
+
+	result := evaluator.EvaluateHost("server-01", metrics)
+
+	if len(result.Alerts) != 1 {
+		t.Fatalf("expected 1 alert for stratum=0, got %d", len(result.Alerts))
+	}
+	alert := result.Alerts[0]
+	if alert.Level != model.AlertLevelCritical {
+		t.Errorf("expected critical level for stratum=0, got %s", alert.Level)
+	}
+	if alert.Message != "NTP 时间未同步 (stratum=0)" {
+		t.Errorf("unexpected message: %s", alert.Message)
+	}
+	metric := result.Metrics["ntp_offset"]
+	if metric.FormattedValue != "N/A (未同步)" {
+		t.Errorf("expected 'N/A (未同步)', got %s", metric.FormattedValue)
+	}
+}
+
+func TestFormatNTPOffset(t *testing.T) {
+	tests := []struct {
+		value    float64
+		expected string
+	}{
+		{0.0, "+0.0ms"},
+		{0.015, "+15.0ms"},
+		{-0.015, "-15.0ms"},
+		{1.5, "+1500.0ms"},
+		{-2.5, "-2500.0ms"},
+	}
+
+	for _, tt := range tests {
+		result := formatNTPOffset(tt.value)
+		if result != tt.expected {
+			t.Errorf("formatNTPOffset(%f) = %s, want %s", tt.value, result, tt.expected)
+		}
 	}
 }
 

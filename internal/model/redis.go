@@ -106,13 +106,13 @@ func (m RedisClusterMode) GetExpectedSlaveCount() int {
 
 // RedisInstance represents a Redis instance (master or slave node).
 type RedisInstance struct {
-	Address         string           `json:"address"`          // 实例地址 (IP:Port)
-	IP              string           `json:"ip"`               // IP 地址
-	Port            int              `json:"port"`             // 端口号
-	ApplicationType string           `json:"application_type"` // 应用类型，固定为 "Redis"
-	Version         string           `json:"version"`          // Redis 版本（MVP 阶段显示 N/A）
-	Role            RedisRole        `json:"role"`             // 节点角色 (master/slave)
-	ClusterEnabled  bool             `json:"cluster_enabled"`  // 是否启用集群
+	Address         string    `json:"address"`          // 实例地址 (IP:Port)
+	IP              string    `json:"ip"`               // IP 地址
+	Port            int       `json:"port"`             // 端口号
+	ApplicationType string    `json:"application_type"` // 应用类型，固定为 "Redis"
+	Version         string    `json:"version"`          // Redis 版本（MVP 阶段显示 N/A）
+	Role            RedisRole `json:"role"`             // 节点角色 (master/slave)
+	ClusterEnabled  bool      `json:"cluster_enabled"`  // 是否启用集群
 }
 
 // =============================================================================
@@ -235,11 +235,12 @@ type RedisInspectionResult struct {
 	ClusterState   string `json:"cluster_state"`   // 集群状态描述
 
 	// 复制相关 (仅 slave 节点)
-	MasterLinkStatus bool  `json:"master_link_status"` // redis_master_link_status = 1
-	MasterReplOffset int64 `json:"master_repl_offset"` // 已知的 master 复制偏移量
-	SlaveReplOffset  int64 `json:"slave_repl_offset"`  // slave 复制偏移量
-	ReplicationLag   int64 `json:"replication_lag"`    // 复制延迟（字节）
-	MasterPort       int   `json:"master_port"`        // 对应的 master 端口
+	MasterLinkStatus bool   `json:"master_link_status"` // redis_master_link_status = 1
+	MasterReplOffset int64  `json:"master_repl_offset"` // 已知的 master 复制偏移量
+	SlaveReplOffset  int64  `json:"slave_repl_offset"`  // slave 复制偏移量
+	ReplicationLag   int64  `json:"replication_lag"`    // 复制延迟（字节）
+	MasterHost       string `json:"master_host"`        // 对应的 master IP 地址
+	MasterPort       int    `json:"master_port"`        // 对应的 master 端口
 
 	// 连接数
 	MaxClients       int `json:"max_clients"`       // 最大连接数
@@ -568,19 +569,25 @@ func (r *RedisInspectionResults) HasMultipleClusters() bool {
 
 // RedisMetricDefinition defines a Redis metric from redis-metrics.yaml.
 type RedisMetricDefinition struct {
-	Name        string `yaml:"name"`         // Metric unique identifier
-	DisplayName string `yaml:"display_name"` // Chinese display name
-	Query       string `yaml:"query"`        // PromQL query expression
-	Category    string `yaml:"category"`     // Category: connection, cluster, replication, status, info, security
-	Format      string `yaml:"format"`       // Format type: size, duration, percent (optional)
-	Status      string `yaml:"status"`       // Status: pending = not yet implemented (optional)
-	Note        string `yaml:"note"`         // Note/description
+	Name         string `yaml:"name"`          // Metric unique identifier
+	DisplayName  string `yaml:"display_name"`  // Chinese display name
+	Query        string `yaml:"query"`         // PromQL query expression
+	Category     string `yaml:"category"`      // Category: connection, cluster, replication, status, info, security
+	LabelExtract string `yaml:"label_extract"` // Extract value from metric label instead of numeric value (optional)
+	Format       string `yaml:"format"`        // Format type: size, duration, percent (optional)
+	Status       string `yaml:"status"`        // Status: pending = not yet implemented (optional)
+	Note         string `yaml:"note"`          // Note/description
 }
 
 // IsPending returns true if this metric is not yet implemented.
 // A metric is considered pending if its status is "pending" or if it has no query.
 func (m *RedisMetricDefinition) IsPending() bool {
 	return m.Status == "pending" || m.Query == ""
+}
+
+// HasLabelExtract returns true if this metric extracts value from a label.
+func (m *RedisMetricDefinition) HasLabelExtract() bool {
+	return m.LabelExtract != ""
 }
 
 // GetDisplayName returns the display name, falling back to name if not set.

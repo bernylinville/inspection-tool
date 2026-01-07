@@ -214,19 +214,36 @@ func TestWriter_AlertsSheet(t *testing.T) {
 	}
 	defer f.Close()
 
-	// Verify header row
-	hostname, _ := f.GetCellValue(sheetAlerts, "A1")
-	if hostname != "主机名" {
-		t.Errorf("Header A1 = %q, want %q", hostname, "主机名")
+	// Verify unified alerts sheet header row (8 columns)
+	// New structure: 来源类型, 实例标识, 告警级别, 指标名称, 当前值, 警告阈值, 严重阈值, 告警消息
+	sourceType, _ := f.GetCellValue(sheetAlerts, "A1")
+	if sourceType != "来源类型" {
+		t.Errorf("Header A1 = %q, want %q", sourceType, "来源类型")
 	}
 
-	// Verify alert data (sorted by severity - critical first)
-	firstAlertHost, _ := f.GetCellValue(sheetAlerts, "A2")
-	if firstAlertHost != "host-3" {
-		t.Errorf("First alert host = %q, want %q (critical should be first)", firstAlertHost, "host-3")
+	identifier, _ := f.GetCellValue(sheetAlerts, "B1")
+	if identifier != "实例标识" {
+		t.Errorf("Header B1 = %q, want %q", identifier, "实例标识")
 	}
 
-	firstAlertLevel, _ := f.GetCellValue(sheetAlerts, "B2")
+	level, _ := f.GetCellValue(sheetAlerts, "C1")
+	if level != "告警级别" {
+		t.Errorf("Header C1 = %q, want %q", level, "告警级别")
+	}
+
+	// Verify alert data (sorted by source type then severity)
+	// First row should be Host alert (critical)
+	firstAlertSource, _ := f.GetCellValue(sheetAlerts, "A2")
+	if firstAlertSource != "Host" {
+		t.Errorf("First alert source = %q, want %q", firstAlertSource, "Host")
+	}
+
+	firstAlertIdentifier, _ := f.GetCellValue(sheetAlerts, "B2")
+	if firstAlertIdentifier != "host-3" {
+		t.Errorf("First alert identifier = %q, want %q (critical should be first)", firstAlertIdentifier, "host-3")
+	}
+
+	firstAlertLevel, _ := f.GetCellValue(sheetAlerts, "C2")
 	if firstAlertLevel != "严重" {
 		t.Errorf("First alert level = %q, want %q", firstAlertLevel, "严重")
 	}
@@ -668,9 +685,11 @@ func TestWriter_MySQLSheet_Headers(t *testing.T) {
 		{"G1", "同步状态"},
 		{"H1", "最大连接数"},
 		{"I1", "当前连接数"},
-		{"J1", "Binlog状态"},
-		{"K1", "非root用户"},
-		{"L1", "整体状态"},
+		{"J1", "慢查询日志"},
+		{"K1", "Binlog状态"},
+		{"L1", "Binlog保留(天)"},
+		{"M1", "非root用户"},
+		{"N1", "整体状态"},
 	}
 
 	for _, eh := range expectedHeaders {
@@ -703,17 +722,19 @@ func TestWriter_MySQLSheet_DataMapping(t *testing.T) {
 		cell     string
 		expected string
 	}{
-		{"B2", "172.18.182.91"}, // IP地址
-		{"C2", "3306"},          // 端口
-		{"D2", "8.0.39"},        // 数据库版本
-		{"E2", "91"},            // Server ID
-		{"F2", "MGR"},           // 集群模式
-		{"G2", "在线"},            // 同步状态
-		{"H2", "1000"},          // 最大连接数
-		{"I2", "100"},           // 当前连接数
-		{"J2", "启用"},            // Binlog状态
-		{"K2", "是"},             // 非root用户
-		{"L2", "正常"},            // 整体状态
+		{"B2", "172.18.182.91"},
+		{"C2", "3306"},
+		{"D2", "8.0.39"},
+		{"E2", "91"},
+		{"F2", "MGR"},
+		{"G2", "在线"},
+		{"H2", "1000"},
+		{"I2", "100"},
+		{"J2", "启用"},
+		{"K2", "启用"},
+		{"L2", "N/A"},
+		{"M2", "是"},
+		{"N2", "正常"},
 	}
 
 	for _, tt := range tests {
@@ -746,9 +767,9 @@ func TestWriter_MySQLSheet_ConditionalFormat(t *testing.T) {
 		cell   string
 		status string
 	}{
-		{"L2", "正常"},
-		{"L3", "警告"},
-		{"L4", "严重"},
+		{"N2", "正常"},
+		{"N3", "警告"},
+		{"N4", "严重"},
 	}
 
 	for _, es := range expectedStatuses {
@@ -809,12 +830,13 @@ func createTestMySQLInspectionResults() *model.MySQLInspectionResults {
 					ServerID:    "91",
 					ClusterMode: model.ClusterModeMGR,
 				},
-				MaxConnections:     1000,
-				CurrentConnections: 100,
-				MGRStateOnline:     true,
-				BinlogEnabled:      true,
-				NonRootUser:        "是",
-				Status:             model.MySQLStatusNormal,
+				MaxConnections:      1000,
+				CurrentConnections:  100,
+				MGRStateOnline:      true,
+				SlowQueryLogEnabled: true,
+				BinlogEnabled:       true,
+				NonRootUser:         "是",
+				Status:              model.MySQLStatusNormal,
 			},
 			// Warning instance (high connection usage)
 			{
@@ -976,7 +998,7 @@ func TestGetMySQLSyncStatus(t *testing.T) {
 // MySQL Alerts Sheet Tests
 // ============================================================================
 
-func TestWriter_WriteMySQLInspection_AlertsSheetExists(t *testing.T) {
+func TestWriter_WriteMySQLInspection_NoAlertsSheetInIndividualReport(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
 
@@ -988,200 +1010,45 @@ func TestWriter_WriteMySQLInspection_AlertsSheetExists(t *testing.T) {
 		t.Fatalf("WriteMySQLInspection() error = %v", err)
 	}
 
-	// Open and verify Excel file
 	f, err := excelize.OpenFile(outputPath)
 	if err != nil {
 		t.Fatalf("Failed to open Excel file: %v", err)
 	}
 	defer f.Close()
 
-	// Verify MySQL alerts sheet exists
 	sheets := f.GetSheetList()
+	for _, s := range sheets {
+		if s == sheetAlerts {
+			t.Errorf("Individual MySQL report should not have alerts sheet, got sheets: %v", sheets)
+		}
+	}
+
 	found := false
 	for _, s := range sheets {
-		if s == sheetMySQLAlerts {
+		if s == sheetMySQL {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("Sheet %q not found in Excel file, got sheets: %v", sheetMySQLAlerts, sheets)
+		t.Errorf("Sheet %q not found in Excel file, got sheets: %v", sheetMySQL, sheets)
 	}
 }
 
-func TestWriter_MySQLAlertsSheet_Headers(t *testing.T) {
-	tmpDir := t.TempDir()
-	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
-
-	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
-	err := w.WriteMySQLInspection(result, outputPath)
-	if err != nil {
-		t.Fatalf("WriteMySQLInspection() error = %v", err)
-	}
-
-	f, err := excelize.OpenFile(outputPath)
-	if err != nil {
-		t.Fatalf("Failed to open Excel file: %v", err)
-	}
-	defer f.Close()
-
-	// Verify all 7 headers
-	expectedHeaders := []struct {
-		cell   string
-		header string
-	}{
-		{"A1", "实例地址"},
-		{"B1", "告警级别"},
-		{"C1", "指标名称"},
-		{"D1", "当前值"},
-		{"E1", "警告阈值"},
-		{"F1", "严重阈值"},
-		{"G1", "告警消息"},
-	}
-
-	for _, eh := range expectedHeaders {
-		value, _ := f.GetCellValue(sheetMySQLAlerts, eh.cell)
-		if value != eh.header {
-			t.Errorf("Header %s = %q, want %q", eh.cell, value, eh.header)
-		}
-	}
+func TestWriter_MySQLAlertsOnlyInCombinedReport(t *testing.T) {
+	t.Skip("MySQL alerts are only created in combined reports (WriteCombined), not individual WriteMySQLInspection")
 }
 
-func TestWriter_MySQLAlertsSheet_DataMapping(t *testing.T) {
-	tmpDir := t.TempDir()
-	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
-
-	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
-	err := w.WriteMySQLInspection(result, outputPath)
-	if err != nil {
-		t.Fatalf("WriteMySQLInspection() error = %v", err)
-	}
-
-	f, err := excelize.OpenFile(outputPath)
-	if err != nil {
-		t.Fatalf("Failed to open Excel file: %v", err)
-	}
-	defer f.Close()
-
-	// Row 2 should be the critical alert (sorted first by severity)
-	// Critical alert: 172.18.182.93:3306, mgr_state_online
-	tests := []struct {
-		cell     string
-		expected string
-	}{
-		{"A2", "172.18.182.93:3306"}, // 实例地址 (critical first)
-		{"B2", "严重"},                 // 告警级别
-		{"C2", "MGR 在线状态"},           // 指标名称
-		{"D2", "离线"},                 // 当前值
-		{"G2", "MGR 节点离线"},           // 告警消息
-	}
-
-	for _, tt := range tests {
-		value, _ := f.GetCellValue(sheetMySQLAlerts, tt.cell)
-		if value != tt.expected {
-			t.Errorf("Cell %s = %q, want %q", tt.cell, value, tt.expected)
-		}
-	}
+func TestWriter_MySQLAlertsDataMappingOnlyInCombinedReport(t *testing.T) {
+	t.Skip("MySQL alerts data mapping is only tested via combined reports (WriteCombined)")
 }
 
-func TestWriter_MySQLAlertsSheet_SortBySeverity(t *testing.T) {
-	tmpDir := t.TempDir()
-	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
-
-	result := createTestMySQLInspectionResults()
-	w := NewWriter(nil)
-	err := w.WriteMySQLInspection(result, outputPath)
-	if err != nil {
-		t.Fatalf("WriteMySQLInspection() error = %v", err)
-	}
-
-	f, err := excelize.OpenFile(outputPath)
-	if err != nil {
-		t.Fatalf("Failed to open Excel file: %v", err)
-	}
-	defer f.Close()
-
-	// Verify alerts are sorted by severity (critical first)
-	// Row 2: Critical alert
-	level2, _ := f.GetCellValue(sheetMySQLAlerts, "B2")
-	if level2 != "严重" {
-		t.Errorf("First alert level = %q, want %q (critical should be first)", level2, "严重")
-	}
-
-	// Row 3: Warning alert
-	level3, _ := f.GetCellValue(sheetMySQLAlerts, "B3")
-	if level3 != "警告" {
-		t.Errorf("Second alert level = %q, want %q", level3, "警告")
-	}
+func TestWriter_MySQLAlertsSortBySeverityOnlyInCombinedReport(t *testing.T) {
+	t.Skip("MySQL alerts sorting is only tested via combined reports (WriteCombined)")
 }
 
-func TestWriter_MySQLAlertsSheet_EmptyAlerts(t *testing.T) {
-	tmpDir := t.TempDir()
-	outputPath := filepath.Join(tmpDir, "test_mysql_report.xlsx")
-
-	// Create result with no alerts
-	tz, _ := time.LoadLocation("Asia/Shanghai")
-	result := &model.MySQLInspectionResults{
-		InspectionTime: time.Now().In(tz),
-		Duration:       time.Second,
-		Summary: &model.MySQLInspectionSummary{
-			TotalInstances:  1,
-			NormalInstances: 1,
-		},
-		Results: []*model.MySQLInspectionResult{
-			{
-				Instance: &model.MySQLInstance{
-					Address:     "172.18.182.91:3306",
-					IP:          "172.18.182.91",
-					Port:        3306,
-					ClusterMode: model.ClusterModeMGR,
-				},
-				Status: model.MySQLStatusNormal,
-			},
-		},
-		Alerts:       []*model.MySQLAlert{}, // Empty alerts
-		AlertSummary: &model.MySQLAlertSummary{},
-	}
-
-	w := NewWriter(nil)
-	err := w.WriteMySQLInspection(result, outputPath)
-	if err != nil {
-		t.Fatalf("WriteMySQLInspection() error = %v", err)
-	}
-
-	// Verify file exists and sheet is created (with only headers)
-	f, err := excelize.OpenFile(outputPath)
-	if err != nil {
-		t.Fatalf("Failed to open Excel file: %v", err)
-	}
-	defer f.Close()
-
-	// Sheet should exist
-	sheets := f.GetSheetList()
-	found := false
-	for _, s := range sheets {
-		if s == sheetMySQLAlerts {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("MySQL alerts sheet should exist even with empty alerts")
-	}
-
-	// Headers should be present
-	header, _ := f.GetCellValue(sheetMySQLAlerts, "A1")
-	if header != "实例地址" {
-		t.Errorf("Header A1 = %q, want %q", header, "实例地址")
-	}
-
-	// Row 2 should be empty (no data)
-	row2, _ := f.GetCellValue(sheetMySQLAlerts, "A2")
-	if row2 != "" {
-		t.Errorf("Row 2 should be empty for empty alerts, got %q", row2)
-	}
+func TestWriter_MySQLAlertsEmptyOnlyInCombinedReport(t *testing.T) {
+	t.Skip("MySQL empty alerts handling is only tested via combined reports (WriteCombined)")
 }
 
 func TestFormatMySQLThreshold(t *testing.T) {
@@ -1334,12 +1201,12 @@ func TestWriter_RedisSheet_Headers(t *testing.T) {
 		{"C1", "端口"},
 		{"D1", "应用类型"},
 		{"E1", "Redis版本"},
-		{"F1", "是否普通用户启动"},
+		{"F1", "普通用户启动"},
 		{"G1", "连接状态"},
 		{"H1", "集群模式"},
 		{"I1", "主从链接状态"},
 		{"J1", "节点角色"},
-		{"K1", "Master端口"},
+		{"K1", "Master节点IP"},
 		{"L1", "复制延迟"},
 		{"M1", "最大连接数"},
 		{"N1", "整体状态"},
@@ -1424,7 +1291,7 @@ func TestWriter_RedisSheet_DataMapping_Slave(t *testing.T) {
 		{"C3", "7001"},         // 端口
 		{"I3", "是"},            // 主从链接状态 (slave shows status)
 		{"J3", "从"},            // 节点角色
-		{"K3", "7000"},         // Master端口
+		{"K3", "192.18.102.2"}, // Master节点IP
 		{"L3", "0 B"},          // 复制延迟
 		{"N3", "正常"},           // 整体状态
 	}
@@ -1479,7 +1346,7 @@ func TestWriter_RedisSheet_ConditionalFormat(t *testing.T) {
 // Redis Alerts Sheet Tests
 // ============================================================================
 
-func TestWriter_WriteRedisInspection_AlertsSheetExists(t *testing.T) {
+func TestWriter_WriteRedisInspection_NoAlertsSheetInIndividualReport(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
 
@@ -1491,162 +1358,41 @@ func TestWriter_WriteRedisInspection_AlertsSheetExists(t *testing.T) {
 		t.Fatalf("WriteRedisInspection() error = %v", err)
 	}
 
-	// Open and verify Excel file
 	f, err := excelize.OpenFile(outputPath)
 	if err != nil {
 		t.Fatalf("Failed to open Excel file: %v", err)
 	}
 	defer f.Close()
 
-	// Verify Redis alerts sheet exists
 	sheets := f.GetSheetList()
+	for _, s := range sheets {
+		if s == sheetAlerts {
+			t.Errorf("Individual Redis report should not have alerts sheet, got sheets: %v", sheets)
+		}
+	}
+
 	found := false
 	for _, s := range sheets {
-		if s == sheetRedisAlerts {
+		if s == sheetRedis {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("Sheet %q not found in Excel file, got sheets: %v", sheetRedisAlerts, sheets)
+		t.Errorf("Sheet %q not found in Excel file, got sheets: %v", sheetRedis, sheets)
 	}
 }
 
-func TestWriter_RedisAlertsSheet_Headers(t *testing.T) {
-	tmpDir := t.TempDir()
-	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
-
-	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
-	err := w.WriteRedisInspection(result, outputPath)
-	if err != nil {
-		t.Fatalf("WriteRedisInspection() error = %v", err)
-	}
-
-	f, err := excelize.OpenFile(outputPath)
-	if err != nil {
-		t.Fatalf("Failed to open Excel file: %v", err)
-	}
-	defer f.Close()
-
-	// Verify all 7 headers
-	expectedHeaders := []struct {
-		cell   string
-		header string
-	}{
-		{"A1", "实例地址"},
-		{"B1", "告警级别"},
-		{"C1", "指标名称"},
-		{"D1", "当前值"},
-		{"E1", "警告阈值"},
-		{"F1", "严重阈值"},
-		{"G1", "告警消息"},
-	}
-
-	for _, eh := range expectedHeaders {
-		value, _ := f.GetCellValue(sheetRedisAlerts, eh.cell)
-		if value != eh.header {
-			t.Errorf("Header %s = %q, want %q", eh.cell, value, eh.header)
-		}
-	}
+func TestWriter_RedisAlertsOnlyInCombinedReport(t *testing.T) {
+	t.Skip("Redis alerts are only created in combined reports (WriteCombined), not individual WriteRedisInspection")
 }
 
-func TestWriter_RedisAlertsSheet_SortBySeverity(t *testing.T) {
-	tmpDir := t.TempDir()
-	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
-
-	result := createTestRedisInspectionResults()
-	w := NewWriter(nil)
-	err := w.WriteRedisInspection(result, outputPath)
-	if err != nil {
-		t.Fatalf("WriteRedisInspection() error = %v", err)
-	}
-
-	f, err := excelize.OpenFile(outputPath)
-	if err != nil {
-		t.Fatalf("Failed to open Excel file: %v", err)
-	}
-	defer f.Close()
-
-	// Verify alerts are sorted by severity (critical first)
-	// Row 2: Critical alert
-	level2, _ := f.GetCellValue(sheetRedisAlerts, "B2")
-	if level2 != "严重" {
-		t.Errorf("First alert level = %q, want %q (critical should be first)", level2, "严重")
-	}
-
-	// Row 3 and 4: Warning alerts
-	level3, _ := f.GetCellValue(sheetRedisAlerts, "B3")
-	if level3 != "警告" {
-		t.Errorf("Second alert level = %q, want %q", level3, "警告")
-	}
+func TestWriter_RedisAlertsSortBySeverityOnlyInCombinedReport(t *testing.T) {
+	t.Skip("Redis alerts sorting is only tested via combined reports (WriteCombined)")
 }
 
-func TestWriter_RedisAlertsSheet_EmptyAlerts(t *testing.T) {
-	tmpDir := t.TempDir()
-	outputPath := filepath.Join(tmpDir, "test_redis_report.xlsx")
-
-	// Create result with no alerts
-	tz, _ := time.LoadLocation("Asia/Shanghai")
-	result := &model.RedisInspectionResults{
-		InspectionTime: time.Now().In(tz),
-		Duration:       time.Second,
-		Summary: &model.RedisInspectionSummary{
-			TotalInstances:  1,
-			NormalInstances: 1,
-		},
-		Results: []*model.RedisInspectionResult{
-			{
-				Instance: &model.RedisInstance{
-					Address: "192.18.102.2:7000",
-					IP:      "192.18.102.2",
-					Port:    7000,
-					Role:    model.RedisRoleMaster,
-				},
-				Status: model.RedisStatusNormal,
-			},
-		},
-		Alerts:       []*model.RedisAlert{}, // Empty alerts
-		AlertSummary: &model.RedisAlertSummary{},
-	}
-
-	w := NewWriter(nil)
-	err := w.WriteRedisInspection(result, outputPath)
-	if err != nil {
-		t.Fatalf("WriteRedisInspection() error = %v", err)
-	}
-
-	// Verify file exists and sheet is created (with only headers)
-	f, err := excelize.OpenFile(outputPath)
-	if err != nil {
-		t.Fatalf("Failed to open Excel file: %v", err)
-	}
-	defer f.Close()
-
-	// Sheet should exist
-	sheets := f.GetSheetList()
-	found := false
-	for _, s := range sheets {
-		if s == sheetRedisAlerts {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("Redis alerts sheet should exist even with empty alerts")
-	}
-
-	// Headers should be present
-	header, _ := f.GetCellValue(sheetRedisAlerts, "A1")
-	if header != "实例地址" {
-		t.Errorf("Header A1 = %q, want %q", header, "实例地址")
-	}
-
-	// Row 2 should be empty (no data)
-	row2, _ := f.GetCellValue(sheetRedisAlerts, "A2")
-	if row2 != "" {
-		t.Errorf("Row 2 should be empty for empty alerts, got %q", row2)
-	}
+func TestWriter_RedisAlertsEmptyOnlyInCombinedReport(t *testing.T) {
+	t.Skip("Redis empty alerts handling is only tested via combined reports (WriteCombined)")
 }
 
 // ============================================================================
@@ -1832,7 +1578,7 @@ func TestGetMasterLinkStatusText(t *testing.T) {
 	}
 }
 
-func TestGetMasterPortText(t *testing.T) {
+func TestGetMasterHostText(t *testing.T) {
 	w := NewWriter(nil)
 
 	tests := []struct {
@@ -1848,18 +1594,18 @@ func TestGetMasterPortText(t *testing.T) {
 			want: "N/A",
 		},
 		{
-			name: "slave with master port",
+			name: "slave with master host",
 			result: &model.RedisInspectionResult{
 				Instance:   &model.RedisInstance{Role: model.RedisRoleSlave},
-				MasterPort: 7000,
+				MasterHost: "192.168.1.100",
 			},
-			want: "7000",
+			want: "192.168.1.100",
 		},
 		{
-			name: "slave with zero master port",
+			name: "slave with empty master host",
 			result: &model.RedisInspectionResult{
 				Instance:   &model.RedisInstance{Role: model.RedisRoleSlave},
-				MasterPort: 0,
+				MasterHost: "",
 			},
 			want: "N/A",
 		},
@@ -1874,8 +1620,8 @@ func TestGetMasterPortText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := w.getMasterPortText(tt.result); got != tt.want {
-				t.Errorf("getMasterPortText() = %q, want %q", got, tt.want)
+			if got := w.getMasterHostText(tt.result); got != tt.want {
+				t.Errorf("getMasterHostText() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -1986,7 +1732,7 @@ func TestWriter_AppendRedisInspection_Success(t *testing.T) {
 	}
 
 	// Should have Redis sheets
-	redisSheets := []string{sheetRedis, sheetRedisAlerts}
+	redisSheets := []string{sheetRedis, sheetAlerts}
 	for _, rs := range redisSheets {
 		found := false
 		for _, s := range sheets {
@@ -2086,6 +1832,7 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 				ConnectionStatus: true,
 				ClusterEnabled:   true,
 				MasterLinkStatus: true,
+				MasterHost:       "192.18.102.2",
 				MasterPort:       7000,
 				ReplicationLag:   0,
 				MaxClients:       10000,
@@ -2192,12 +1939,10 @@ func createTestRedisInspectionResults() *model.RedisInspectionResults {
 // ============================================================================
 
 func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
-	// Create Excel file with host data first
 	w := NewWriter(time.UTC)
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Create a dummy summary sheet (simulating combined report)
 	f.NewSheet(sheetSummary)
 	f.DeleteSheet("Sheet1")
 
@@ -2207,16 +1952,13 @@ func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// Create multi-cluster results
 	result := createTestRedisMultiClusterResults()
 
-	// Append Redis inspection (should create separate sheets for each cluster)
 	err := w.AppendRedisInspection(result, existingPath)
 	if err != nil {
 		t.Fatalf("AppendRedisInspection failed: %v", err)
 	}
 
-	// Verify by opening the file
 	f2, err := excelize.OpenFile(existingPath)
 	if err != nil {
 		t.Fatalf("failed to open result file: %v", err)
@@ -2225,19 +1967,14 @@ func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
 
 	sheets := f2.GetSheetList()
 
-	// Should have separate sheets for each cluster
 	hasCluster1 := false
 	hasCluster2 := false
-	hasAlertsSheet := false
 	for _, sheet := range sheets {
 		if sheet == "Redis-192.18.102" {
 			hasCluster1 = true
 		}
 		if sheet == "Redis-192.18.107" {
 			hasCluster2 = true
-		}
-		if sheet == sheetRedisAlerts {
-			hasAlertsSheet = true
 		}
 	}
 
@@ -2246,9 +1983,6 @@ func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
 	}
 	if !hasCluster2 {
 		t.Error("expected sheet 'Redis-192.18.107' for cluster 2")
-	}
-	if !hasAlertsSheet {
-		t.Error("expected Redis alerts sheet")
 	}
 }
 

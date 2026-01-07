@@ -5,12 +5,12 @@ import "time"
 
 // Config is the root configuration structure for the inspection tool.
 type Config struct {
-	Datasources DatasourcesConfig     `mapstructure:"datasources" validate:"required"`
-	Inspection  InspectionConfig      `mapstructure:"inspection"`
-	Thresholds  ThresholdsConfig      `mapstructure:"thresholds"`
-	Report      ReportConfig          `mapstructure:"report"`
-	Logging     LoggingConfig         `mapstructure:"logging"`
-	HTTP        HTTPConfig            `mapstructure:"http"`
+	Datasources DatasourcesConfig      `mapstructure:"datasources" validate:"required"`
+	Inspection  InspectionConfig       `mapstructure:"inspection"`
+	Thresholds  ThresholdsConfig       `mapstructure:"thresholds"`
+	Report      ReportConfig           `mapstructure:"report"`
+	Logging     LoggingConfig          `mapstructure:"logging"`
+	HTTP        HTTPConfig             `mapstructure:"http"`
 	MySQL       MySQLInspectionConfig  `mapstructure:"mysql"`
 	Redis       RedisInspectionConfig  `mapstructure:"redis"`
 	Nginx       NginxInspectionConfig  `mapstructure:"nginx"`
@@ -58,6 +58,7 @@ type ThresholdsConfig struct {
 	DiskUsage       ThresholdPair `mapstructure:"disk_usage"`
 	ZombieProcesses ThresholdPair `mapstructure:"zombie_processes"`
 	LoadPerCore     ThresholdPair `mapstructure:"load_per_core"`
+	NTPOffset       ThresholdPair `mapstructure:"ntp_offset"` // NTP 时间偏差阈值（秒），使用绝对值判断
 }
 
 // ThresholdPair defines warning and critical thresholds for a metric.

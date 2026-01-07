@@ -376,10 +376,18 @@
                                 <th class="sortable" data-sort="number">内存%</th>
                                 <th class="sortable" data-sort="number">磁盘%</th>
                                 <th>运行时间</th>
+                                <th>最后一次重启</th>
+                                <th>NTP偏差</th>
                                 <th>1分钟负载</th>
                                 <th>每核负载</th>
                                 <th>僵尸进程</th>
                                 <th>总进程</th>
+                                <th>公网访问</th>
+                                <th>密码过期</th>
+                                <th>密码策略</th>
+                                <th>打开句柄</th>
+                                <th>句柄上限</th>
+                                <th>系统参数</th>
                                 {{range .DiskPaths}}
                                 <th>磁盘:{{.}}</th>
                                 {{end}}
@@ -397,10 +405,18 @@
                                 <td>{{with index .Metrics "memory_usage"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "disk_usage_max"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "uptime"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{if .BootTime}}{{.BootTime}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "ntp_offset"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "load_1m"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "load_per_core"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "processes_zombies"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "processes_total"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "public_network"}}{{if .IsNA}}N/A{{else}}{{if eq .RawValue 1.0}}成功{{else}}失败{{end}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{.PasswordExpiryDisplay}}</td>
+                                <td>{{.PasswordPolicyDisplay}}</td>
+                                <td>{{with index .Metrics "open_files"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "max_files"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{.SysctlParamsDisplay}}</td>
                                 {{$metrics := .Metrics}}
                                 {{range $.DiskPaths}}
                                 <td>{{with index $metrics (printf "disk_usage:%s" .)}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>

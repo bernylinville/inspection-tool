@@ -318,6 +318,15 @@
         .badge-critical { background: #ffc7ce; color: #9c0006; }
         .badge-failed { background: #d9d9d9; color: #666; }
 
+        .source-host { background: #d6e3f8; color: #1a4971; }
+        .source-mysql { background: #d5e8d4; color: #2d5016; }
+        .source-redis { background: #f8d7da; color: #721c24; }
+        .source-nginx { background: #d4edda; color: #155724; }
+        .source-tomcat { background: #ffe8cc; color: #8a4500; }
+
+        .unified-section { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+        .unified-alerts { border-left: 4px solid #e74c3c; }
+
         /* Nginx specific badges */
         .status-badge {
             display: inline-block;
@@ -525,7 +534,68 @@
             </div>
         </section>
 
-        <!-- Host Details Section -->
+        {{if .BaselineChecks}}
+        <section class="baseline-section">
+            <h3 class="section-title">基线检查</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table id="baseline-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="string">巡检时间</th>
+                                <th class="sortable" data-sort="string">主机名</th>
+                                <th>IP地址</th>
+                                <th>操作系统</th>
+                                <th>内核版本</th>
+                                <th>运行时间</th>
+                                <th>密码过期</th>
+                                <th>密码策略</th>
+                                <th>文件句柄</th>
+                                <th>公网访问</th>
+                                <th>tcp_syncookies</th>
+                                <th>tcp_max_syn_backlog</th>
+                                <th>somaxconn</th>
+                                <th>ip_local_port_range</th>
+                                <th>swappiness</th>
+                                <th>file-max</th>
+                                <th>tcp_tw_reuse</th>
+                                <th>tcp_fin_timeout</th>
+                                <th>tcp_keepalive_time</th>
+                                <th>pid_max</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .BaselineChecks}}
+                            <tr>
+                                <td>{{.InspectionTime}}</td>
+                                <td>{{.Hostname}}</td>
+                                <td>{{.IP}}</td>
+                                <td>{{.OS}}</td>
+                                <td>{{.KernelVersion}}</td>
+                                <td>{{.Uptime}}</td>
+                                <td>{{.PasswordExpiry}}</td>
+                                <td>{{.PasswordPolicy}}</td>
+                                <td>{{.FileHandles}}</td>
+                                <td>{{.PublicNetwork}}</td>
+                                <td>{{.SysctlTCPSyncookies}}</td>
+                                <td>{{.SysctlTCPMaxSynBacklog}}</td>
+                                <td>{{.SysctlSomaxconn}}</td>
+                                <td>{{.SysctlIPLocalPortRange}}</td>
+                                <td>{{.SysctlSwappiness}}</td>
+                                <td>{{.SysctlFileMax}}</td>
+                                <td>{{.SysctlTCPTWReuse}}</td>
+                                <td>{{.SysctlTCPFinTimeout}}</td>
+                                <td>{{.SysctlTCPKeepaliveTime}}</td>
+                                <td>{{.SysctlPIDMax}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {{end}}
+
         <section class="hosts-section">
             <h3 class="section-title">主机详情</h3>
             <div class="table-container">
@@ -542,6 +612,7 @@
                                 <th class="sortable" data-sort="number">内存%</th>
                                 <th class="sortable" data-sort="number">磁盘%</th>
                                 <th>运行时间</th>
+                                <th>NTP偏差</th>
                                 <th>1分钟负载</th>
                                 <th>每核负载</th>
                                 <th>僵尸进程</th>
@@ -563,6 +634,7 @@
                                 <td>{{with index .Metrics "memory_usage"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "disk_usage_max"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "uptime"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
+                                <td>{{with index .Metrics "ntp_offset"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "load_1m"}}{{if .IsNA}}N/A{{else}}{{.Value}}{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "load_per_core"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
                                 <td>{{with index .Metrics "processes_zombies"}}{{if .IsNA}}N/A{{else}}<span class="{{.StatusClass}}">{{.Value}}</span>{{end}}{{else}}N/A{{end}}</td>
@@ -578,43 +650,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- Host Alerts Section -->
-        {{if .HostAlerts}}
-        <section class="alerts-section">
-            <h3 class="section-title">异常汇总</h3>
-            <div class="table-container">
-                <div class="table-wrapper">
-                    <table id="host-alerts-table">
-                        <thead>
-                            <tr>
-                                <th>主机名</th>
-                                <th>告警级别</th>
-                                <th>指标名称</th>
-                                <th>当前值</th>
-                                <th>警告阈值</th>
-                                <th>严重阈值</th>
-                                <th>告警消息</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{range .HostAlerts}}
-                            <tr>
-                                <td>{{.Hostname}}</td>
-                                <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
-                                <td>{{.MetricDisplayName}}</td>
-                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
-                                <td>{{.WarningThreshold}}</td>
-                                <td>{{.CriticalThreshold}}</td>
-                                <td>{{.Message}}</td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-        {{end}}
         {{end}}
 
         {{if .HasMySQL}}
@@ -698,43 +733,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- MySQL Alerts Section -->
-        {{if .MySQLAlerts}}
-        <section class="mysql-alerts-section">
-            <h3 class="section-title mysql">MySQL 异常汇总</h3>
-            <div class="table-container">
-                <div class="table-wrapper">
-                    <table id="mysql-alerts-table">
-                        <thead>
-                            <tr>
-                                <th class="mysql-header">实例地址</th>
-                                <th class="mysql-header">告警级别</th>
-                                <th class="mysql-header">指标名称</th>
-                                <th class="mysql-header">当前值</th>
-                                <th class="mysql-header">警告阈值</th>
-                                <th class="mysql-header">严重阈值</th>
-                                <th class="mysql-header">告警消息</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{range .MySQLAlerts}}
-                            <tr>
-                                <td>{{.Address}}</td>
-                                <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
-                                <td>{{.MetricDisplayName}}</td>
-                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
-                                <td>{{.WarningThreshold}}</td>
-                                <td>{{.CriticalThreshold}}</td>
-                                <td>{{.Message}}</td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-        {{end}}
         {{end}}
 
         {{if .HasRedis}}
@@ -900,43 +898,6 @@
             </div>
         </section>
         {{end}}
-
-        <!-- Redis Alerts Section -->
-        {{if .RedisAlerts}}
-        <section class="redis-alerts-section">
-            <h3 class="section-title redis">Redis 异常汇总</h3>
-            <div class="table-container">
-                <div class="table-wrapper">
-                    <table id="redis-alerts-table">
-                        <thead>
-                            <tr>
-                                <th class="redis-header">实例地址</th>
-                                <th class="redis-header">告警级别</th>
-                                <th class="redis-header">指标名称</th>
-                                <th class="redis-header">当前值</th>
-                                <th class="redis-header">警告阈值</th>
-                                <th class="redis-header">严重阈值</th>
-                                <th class="redis-header">告警消息</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {{range .RedisAlerts}}
-                            <tr>
-                                <td>{{.Address}}</td>
-                                <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
-                                <td>{{.MetricDisplayName}}</td>
-                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
-                                <td>{{.WarningThreshold}}</td>
-                                <td>{{.CriticalThreshold}}</td>
-                                <td>{{.Message}}</td>
-                            </tr>
-                            {{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-        {{end}}
         {{end}}
 
         {{if .HasNginx}}
@@ -1032,41 +993,6 @@
                 </table>
             </div>
         </section>
-
-        <!-- Nginx Alerts Section -->
-        {{if .NginxAlerts}}
-        <section class="alerts-section">
-            <h3 class="section-title nginx">Nginx 异常汇总</h3>
-            <div class="table-container">
-                <table id="nginx-alerts-table" class="table nginx-table">
-                    <thead>
-                        <tr>
-                            <th class="nginx-header">标识符</th>
-                            <th class="nginx-header">告警级别</th>
-                            <th class="nginx-header">指标名称</th>
-                            <th class="nginx-header">当前值</th>
-                            <th class="nginx-header">警告阈值</th>
-                            <th class="nginx-header">严重阈值</th>
-                            <th class="nginx-header">告警消息</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{range .NginxAlerts}}
-                        <tr>
-                            <td>{{.Identifier}}</td>
-                            <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
-                            <td>{{.MetricDisplayName}}</td>
-                            <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
-                            <td>{{.WarningThreshold}}</td>
-                            <td>{{.CriticalThreshold}}</td>
-                            <td>{{.Message}}</td>
-                        </tr>
-                        {{end}}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-        {{end}}
         {{end}}
 
         {{if .HasTomcat}}
@@ -1142,41 +1068,64 @@
                 </table>
             </div>
         </section>
+        {{end}}
 
-        <!-- Tomcat Alerts Section -->
-        {{if .TomcatAlerts}}
-        <section class="alerts-section">
-            <h3 class="section-title tomcat">Tomcat 异常汇总</h3>
+        {{if .UnifiedAlerts}}
+        <!-- ============================================================ -->
+        <!-- Unified Alerts Section -->
+        <!-- ============================================================ -->
+        <div class="section-header unified-section">
+            <h2>⚠️ 异常汇总</h2>
+        </div>
+
+        <section class="alerts-section unified-alerts">
+            <div class="summary-cards">
+                <div class="summary-card {{if gt .UnifiedAlertSummary.CriticalCount 0}}critical{{else if gt .UnifiedAlertSummary.WarningCount 0}}warning{{else}}normal{{end}}">
+                    <div class="card-label">总告警</div>
+                    <div class="card-value">{{.UnifiedAlertSummary.TotalAlerts}}</div>
+                </div>
+                <div class="summary-card {{if gt .UnifiedAlertSummary.WarningCount 0}}warning{{else}}normal{{end}}">
+                    <div class="card-label">警告</div>
+                    <div class="card-value">{{.UnifiedAlertSummary.WarningCount}}</div>
+                </div>
+                <div class="summary-card {{if gt .UnifiedAlertSummary.CriticalCount 0}}critical{{else}}normal{{end}}">
+                    <div class="card-label">严重</div>
+                    <div class="card-value">{{.UnifiedAlertSummary.CriticalCount}}</div>
+                </div>
+            </div>
             <div class="table-container">
-                <table id="tomcat-alerts-table" class="data-table">
-                    <thead>
-                        <tr>
-                            <th class="sortable" data-sort="text">实例标识</th>
-                            <th class="sortable" data-sort="level">告警级别</th>
-                            <th class="sortable" data-sort="text">指标名称</th>
-                            <th class="sortable" data-sort="text">当前值</th>
-                            <th>警告阈值</th>
-                            <th>严重阈值</th>
-                            <th>告警消息</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{range .TomcatAlerts}}
-                        <tr>
-                            <td>{{.Identifier}}</td>
-                            <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
-                            <td>{{.MetricDisplayName}}</td>
-                            <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
-                            <td>{{.WarningThreshold}}</td>
-                            <td>{{.CriticalThreshold}}</td>
-                            <td>{{.Message}}</td>
-                        </tr>
-                        {{end}}
-                    </tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table id="unified-alerts-table">
+                        <thead>
+                            <tr>
+                                <th>来源类型</th>
+                                <th>实例标识</th>
+                                <th>告警级别</th>
+                                <th>指标名称</th>
+                                <th>当前值</th>
+                                <th>警告阈值</th>
+                                <th>严重阈值</th>
+                                <th>告警消息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .UnifiedAlerts}}
+                            <tr>
+                                <td><span class="badge {{.SourceTypeClass}}">{{.SourceType}}</span></td>
+                                <td>{{.Identifier}}</td>
+                                <td><span class="badge badge-{{if eq .Level "严重"}}critical{{else}}warning{{end}}">{{.Level}}</span></td>
+                                <td>{{.MetricDisplayName}}</td>
+                                <td class="{{.LevelClass}}">{{.CurrentValue}}</td>
+                                <td>{{.WarningThreshold}}</td>
+                                <td>{{.CriticalThreshold}}</td>
+                                <td>{{.Message}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
-        {{end}}
         {{end}}
 
         <!-- Footer -->

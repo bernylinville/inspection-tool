@@ -41,18 +41,22 @@ type TemplateData struct {
 
 // HostData represents host data formatted for template rendering.
 type HostData struct {
-	Hostname      string
-	IP            string
-	Status        string
-	StatusClass   string
-	OS            string
-	OSVersion     string
-	KernelVersion string
-	CPUCores      int
-	CPUModel      string
-	MemoryTotal   string
-	Metrics       map[string]*MetricData
-	AlertCount    int
+	Hostname              string
+	IP                    string
+	Status                string
+	StatusClass           string
+	OS                    string
+	OSVersion             string
+	KernelVersion         string
+	CPUCores              int
+	CPUModel              string
+	MemoryTotal           string
+	Metrics               map[string]*MetricData
+	AlertCount            int
+	BootTime              string
+	PasswordExpiryDisplay string
+	PasswordPolicyDisplay string
+	SysctlParamsDisplay   string
 }
 
 // MetricData represents metric data formatted for template rendering.
@@ -63,6 +67,7 @@ type MetricData struct {
 	Status      string
 	StatusClass string
 	IsNA        bool
+	RawValue    float64
 }
 
 // AlertData represents alert data formatted for template rendering.
@@ -197,20 +202,90 @@ func (w *Writer) convertHostData(host *model.HostResult) *HostData {
 		metrics[name] = w.convertMetricData(metric)
 	}
 
+	passwordExpiryDisplay := w.buildPasswordExpiryDisplay(host)
+	passwordPolicyDisplay := w.buildPasswordPolicyDisplay(host)
+	sysctlParamsDisplay := w.buildSysctlParamsDisplay(host)
+
 	return &HostData{
-		Hostname:      host.Hostname,
-		IP:            host.IP,
-		Status:        statusText(host.Status),
-		StatusClass:   statusClass(host.Status),
-		OS:            host.OS,
-		OSVersion:     host.OSVersion,
-		KernelVersion: host.KernelVersion,
-		CPUCores:      host.CPUCores,
-		CPUModel:      host.CPUModel,
-		MemoryTotal:   formatSize(host.MemoryTotal),
-		Metrics:       metrics,
-		AlertCount:    len(host.Alerts),
+		Hostname:              host.Hostname,
+		IP:                    host.IP,
+		Status:                statusText(host.Status),
+		StatusClass:           statusClass(host.Status),
+		OS:                    host.OS,
+		OSVersion:             host.OSVersion,
+		KernelVersion:         host.KernelVersion,
+		CPUCores:              host.CPUCores,
+		CPUModel:              host.CPUModel,
+		MemoryTotal:           formatSize(host.MemoryTotal),
+		Metrics:               metrics,
+		AlertCount:            len(host.Alerts),
+		BootTime:              host.BootTime,
+		PasswordExpiryDisplay: passwordExpiryDisplay,
+		PasswordPolicyDisplay: passwordPolicyDisplay,
+		SysctlParamsDisplay:   sysctlParamsDisplay,
 	}
+}
+
+// buildPasswordExpiryDisplay generates a password expiry display string from metrics.
+// Format: "root:永不过期, admin:30天" or "N/A" if no data
+func (w *Writer) buildPasswordExpiryDisplay(host *model.HostResult) string {
+	var parts []string
+	for name, metric := range host.Metrics {
+		if strings.HasPrefix(name, "password_expiry:") && !metric.IsNA {
+			user := strings.TrimPrefix(name, "password_expiry:")
+			var display string
+			if metric.RawValue == 99999 || metric.RawValue < 0 {
+				display = "永不过期"
+			} else {
+				display = fmt.Sprintf("%.0f天", metric.RawValue)
+			}
+			parts = append(parts, fmt.Sprintf("%s:%s", user, display))
+		}
+	}
+	if len(parts) == 0 {
+		return "N/A"
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
+}
+
+// buildPasswordPolicyDisplay generates a password policy display string from metrics.
+func (w *Writer) buildPasswordPolicyDisplay(host *model.HostResult) string {
+	metric := host.GetMetric("password_policy")
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	return metric.FormattedValue
+}
+
+// buildSysctlParamsDisplay generates a sysctl params display string from metrics.
+// Format: "param1=value1, param2=value2" or "N/A" if no data
+func (w *Writer) buildSysctlParamsDisplay(host *model.HostResult) string {
+	sysctlParams := []string{
+		"net.ipv4.tcp_syncookies",
+		"net.ipv4.tcp_max_syn_backlog",
+		"net.core.somaxconn",
+		"net.ipv4.ip_local_port_range",
+		"vm.swappiness",
+		"fs.file-max",
+		"net.ipv4.tcp_tw_reuse",
+		"net.ipv4.tcp_fin_timeout",
+		"net.ipv4.tcp_keepalive_time",
+		"kernel.pid_max",
+	}
+
+	var parts []string
+	for _, param := range sysctlParams {
+		metricName := "sysctl_params:" + param
+		metric := host.GetMetric(metricName)
+		if metric != nil && !metric.IsNA {
+			parts = append(parts, fmt.Sprintf("%s=%.0f", param, metric.RawValue))
+		}
+	}
+	if len(parts) == 0 {
+		return "N/A"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // convertMetricData converts a MetricValue to MetricData for template rendering.
@@ -220,6 +295,7 @@ func (w *Writer) convertMetricData(metric *model.MetricValue) *MetricData {
 			Value:       "N/A",
 			IsNA:        true,
 			StatusClass: "",
+			RawValue:    0,
 		}
 	}
 
@@ -229,6 +305,7 @@ func (w *Writer) convertMetricData(metric *model.MetricValue) *MetricData {
 		Status:      string(metric.Status),
 		StatusClass: metricStatusClass(metric.Status),
 		IsNA:        metric.IsNA,
+		RawValue:    metric.RawValue,
 	}
 }
 
@@ -696,21 +773,50 @@ func (w *Writer) convertMySQLAlerts(alerts []*model.MySQLAlert) []*MySQLAlertDat
 }
 
 // ============================================================================
+// Baseline Check Data Structures
+// ============================================================================
+
+// BaselineCheckData represents baseline check data for a single host.
+type BaselineCheckData struct {
+	InspectionTime string
+	Hostname       string
+	IP             string
+	OS             string
+	KernelVersion  string
+	Uptime         string
+	PasswordExpiry string
+	PasswordPolicy string
+	FileHandles    string
+	PublicNetwork  string
+	// Sysctl parameters
+	SysctlTCPSyncookies    string
+	SysctlTCPMaxSynBacklog string
+	SysctlSomaxconn        string
+	SysctlIPLocalPortRange string
+	SysctlSwappiness       string
+	SysctlFileMax          string
+	SysctlTCPTWReuse       string
+	SysctlTCPFinTimeout    string
+	SysctlTCPKeepaliveTime string
+	SysctlPIDMax           string
+}
+
+// ============================================================================
 // Combined Report (Host + MySQL) Data Structures and Methods
 // ============================================================================
 
 // CombinedTemplateData holds both Host and MySQL inspection data for combined template.
 type CombinedTemplateData struct {
-	Title          string
-	InspectionTime string
-	Duration       string
-	// Host data
+	Title            string
+	InspectionTime   string
+	Duration         string
 	HasHost          bool
 	HostSummary      *model.InspectionSummary
 	HostAlertSummary *model.AlertSummary
 	Hosts            []*HostData
 	HostAlerts       []*AlertData
 	DiskPaths        []string
+	BaselineChecks   []*BaselineCheckData
 	// MySQL data
 	HasMySQL          bool
 	MySQLSummary      *model.MySQLInspectionSummary
@@ -732,14 +838,15 @@ type CombinedTemplateData struct {
 	NginxInstances    []*NginxInstanceData
 	NginxAlerts       []*NginxAlertData
 	// Tomcat data
-	HasTomcat          bool
-	TomcatSummary      *model.TomcatInspectionSummary
-	TomcatAlertSummary *model.TomcatAlertSummary
-	TomcatInstances    []*TomcatInstanceData
-	TomcatAlerts       []*TomcatAlertData
-	// Common
-	Version     string
-	GeneratedAt string
+	HasTomcat           bool
+	TomcatSummary       *model.TomcatInspectionSummary
+	TomcatAlertSummary  *model.TomcatAlertSummary
+	TomcatInstances     []*TomcatInstanceData
+	TomcatAlerts        []*TomcatAlertData
+	UnifiedAlerts       []*UnifiedAlertData
+	UnifiedAlertSummary *UnifiedAlertSummary
+	Version             string
+	GeneratedAt         string
 }
 
 // WriteCombined generates an HTML report combining Host, MySQL, Redis, Nginx, and Tomcat inspection results.
@@ -842,6 +949,8 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 
 		// Convert host alerts
 		data.HostAlerts = w.convertAlerts(hostResult.Alerts)
+
+		data.BaselineChecks = w.prepareBaselineChecks(hostResult)
 	}
 
 	// Fill MySQL data if available
@@ -930,7 +1039,84 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 		data.TomcatAlerts = w.convertTomcatAlerts(tomcatResult.Alerts)
 	}
 
+	data.UnifiedAlerts, data.UnifiedAlertSummary = w.collectUnifiedAlerts(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult)
+
 	return data
+}
+
+func (w *Writer) prepareBaselineChecks(result *model.InspectionResult) []*BaselineCheckData {
+	if result == nil || len(result.Hosts) == 0 {
+		return nil
+	}
+
+	inspectionTimeStr := result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+	checks := make([]*BaselineCheckData, 0, len(result.Hosts))
+
+	for _, host := range result.Hosts {
+		check := &BaselineCheckData{
+			InspectionTime: inspectionTimeStr,
+			Hostname:       host.Hostname,
+			IP:             host.IP,
+			OS:             fmt.Sprintf("%s %s", host.OS, host.OSVersion),
+			KernelVersion:  host.KernelVersion,
+			Uptime:         w.getMetricValue(host.Metrics["uptime"]),
+			PasswordExpiry: w.buildPasswordExpiryDisplay(host),
+			PasswordPolicy: w.buildPasswordPolicyDisplay(host),
+			FileHandles:    w.buildFileHandlesDisplay(host),
+			PublicNetwork:  w.buildPublicNetworkDisplay(host),
+		}
+
+		check.SysctlTCPSyncookies = w.getSysctlValue(host, "net.ipv4.tcp_syncookies")
+		check.SysctlTCPMaxSynBacklog = w.getSysctlValue(host, "net.ipv4.tcp_max_syn_backlog")
+		check.SysctlSomaxconn = w.getSysctlValue(host, "net.core.somaxconn")
+		check.SysctlIPLocalPortRange = w.getSysctlValue(host, "net.ipv4.ip_local_port_range")
+		check.SysctlSwappiness = w.getSysctlValue(host, "vm.swappiness")
+		check.SysctlFileMax = w.getSysctlValue(host, "fs.file-max")
+		check.SysctlTCPTWReuse = w.getSysctlValue(host, "net.ipv4.tcp_tw_reuse")
+		check.SysctlTCPFinTimeout = w.getSysctlValue(host, "net.ipv4.tcp_fin_timeout")
+		check.SysctlTCPKeepaliveTime = w.getSysctlValue(host, "net.ipv4.tcp_keepalive_time")
+		check.SysctlPIDMax = w.getSysctlValue(host, "kernel.pid_max")
+
+		checks = append(checks, check)
+	}
+
+	return checks
+}
+
+func (w *Writer) getMetricValue(metric *model.MetricValue) string {
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	return metric.FormattedValue
+}
+
+func (w *Writer) buildFileHandlesDisplay(host *model.HostResult) string {
+	openFiles := host.GetMetric("open_files")
+	maxFiles := host.GetMetric("max_files")
+	if openFiles == nil || openFiles.IsNA || maxFiles == nil || maxFiles.IsNA {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.0f / %.0f", openFiles.RawValue, maxFiles.RawValue)
+}
+
+func (w *Writer) buildPublicNetworkDisplay(host *model.HostResult) string {
+	metric := host.GetMetric("public_network")
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	if metric.RawValue == 1 {
+		return "可访问"
+	}
+	return "不可访问"
+}
+
+func (w *Writer) getSysctlValue(host *model.HostResult, paramName string) string {
+	metricName := "sysctl_params:" + paramName
+	metric := host.GetMetric(metricName)
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.0f", metric.RawValue)
 }
 
 // ============================================================================
@@ -1812,4 +1998,184 @@ func (w *Writer) WriteTomcatInspection(result *model.TomcatInspectionResults, ou
 	}
 
 	return nil
+}
+
+type UnifiedAlertData struct {
+	SourceType        string
+	SourceTypeClass   string
+	Identifier        string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+type UnifiedAlertSummary struct {
+	TotalAlerts   int
+	WarningCount  int
+	CriticalCount int
+}
+
+func (w *Writer) collectUnifiedAlerts(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults) ([]*UnifiedAlertData, *UnifiedAlertSummary) {
+	var alerts []*UnifiedAlertData
+	summary := &UnifiedAlertSummary{}
+
+	if hostResult != nil {
+		for _, alert := range hostResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Host",
+					SourceTypeClass:   "source-host",
+					Identifier:        alert.Hostname,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if mysqlResult != nil {
+		for _, alert := range mysqlResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "MySQL",
+					SourceTypeClass:   "source-mysql",
+					Identifier:        alert.Address,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if redisResult != nil {
+		for _, alert := range redisResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Redis",
+					SourceTypeClass:   "source-redis",
+					Identifier:        alert.Address,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if nginxResult != nil {
+		for _, alert := range nginxResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Nginx",
+					SourceTypeClass:   "source-nginx",
+					Identifier:        alert.Identifier,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if tomcatResult != nil {
+		for _, alert := range tomcatResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Tomcat",
+					SourceTypeClass:   "source-tomcat",
+					Identifier:        alert.Identifier,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	sort.Slice(alerts, func(i, j int) bool {
+		pi := alertLevelPriorityFromClass(alerts[i].LevelClass)
+		pj := alertLevelPriorityFromClass(alerts[j].LevelClass)
+		if pi != pj {
+			return pi > pj
+		}
+		if alerts[i].SourceType != alerts[j].SourceType {
+			return alerts[i].SourceType < alerts[j].SourceType
+		}
+		return alerts[i].Identifier < alerts[j].Identifier
+	})
+
+	return alerts, summary
+}
+
+func alertLevelPriorityFromClass(levelClass string) int {
+	switch levelClass {
+	case "status-critical":
+		return 2
+	case "status-warning":
+		return 1
+	default:
+		return 0
+	}
 }

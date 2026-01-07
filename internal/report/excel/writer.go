@@ -17,17 +17,14 @@ import (
 
 const (
 	// Sheet names
-	sheetSummary      = "巡检概览"
-	sheetDetail       = "详细数据"
-	sheetAlerts       = "异常汇总"
-	sheetMySQL        = "MySQL 巡检"  // MySQL inspection sheet
-	sheetMySQLAlerts  = "MySQL 异常"  // MySQL alerts sheet
-	sheetRedis        = "Redis 巡检"  // Redis inspection sheet
-	sheetRedisAlerts  = "Redis 异常"  // Redis alerts sheet
-	sheetNginx        = "Nginx 巡检"  // Nginx inspection sheet
-	sheetNginxAlerts  = "Nginx 异常"  // Nginx alerts sheet
-	sheetTomcat       = "Tomcat 巡检" // Tomcat inspection sheet
-	sheetTomcatAlerts = "Tomcat 异常" // Tomcat alerts sheet
+	sheetSummary       = "巡检概览"
+	sheetBaselineCheck = "基线检查"
+	sheetDetail        = "详细数据"
+	sheetAlerts        = "异常汇总"
+	sheetMySQL         = "MySQL 巡检"
+	sheetRedis         = "Redis 巡检"
+	sheetNginx         = "Nginx 巡检"
+	sheetTomcat        = "Tomcat 巡检"
 
 	// Default sheet to remove
 	defaultSheet = "Sheet1"
@@ -89,12 +86,19 @@ func (w *Writer) Write(result *model.InspectionResult, outputPath string) error 
 		return fmt.Errorf("failed to create summary sheet: %w", err)
 	}
 
+	if err := w.createBaselineCheckSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create baseline check sheet: %w", err)
+	}
+
 	if err := w.createDetailSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create detail sheet: %w", err)
 	}
 
-	if err := w.createAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create alerts sheet: %w", err)
+	unifiedAlerts := w.collectUnifiedAlerts(result, nil, nil, nil, nil)
+	if len(unifiedAlerts) > 0 {
+		if err := w.createUnifiedAlertsSheet(f, unifiedAlerts); err != nil {
+			return fmt.Errorf("failed to create unified alerts sheet: %w", err)
+		}
 	}
 
 	// Remove default Sheet1
@@ -255,32 +259,28 @@ func (w *Writer) createDetailSheet(f *excelize.File, result *model.InspectionRes
 		return err
 	}
 
-	// Define headers
 	headers := []string{
-		"主机名", "IP地址", "状态", "操作系统", "系统版本", "内核版本",
-		"CPU核心数", "CPU利用率", "内存利用率", "磁盘最大利用率",
-		"运行时间", "1分钟负载", "每核负载", "僵尸进程", "总进程数",
+		"主机名", "IP地址", "状态", "内核版本",
+		"CPU利用率", "内存利用率", "内存空闲", "磁盘最大利用率",
+		"运行时间", "NTP时间偏差", "僵尸进程", "打开句柄数", "句柄最大值",
 	}
 
-	// Get unique disk paths from all hosts
 	diskPaths := w.collectDiskPaths(result.Hosts)
 	for _, path := range diskPaths {
 		headers = append(headers, fmt.Sprintf("磁盘:%s", path))
 	}
 
-	// Set column widths
 	colWidths := map[string]float64{
-		"A": 20, "B": 15, "C": 10, "D": 12, "E": 20, "F": 30,
-		"G": 10, "H": 12, "I": 12, "J": 14,
-		"K": 15, "L": 12, "M": 10, "N": 10, "O": 10,
+		"A": 20, "B": 15, "C": 10, "D": 25,
+		"E": 12, "F": 12, "G": 12, "H": 14,
+		"I": 15, "J": 14, "K": 10, "L": 12, "M": 12,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetDetail, col, col, width)
 	}
 
-	// Set disk column widths
 	for i := range diskPaths {
-		col := columnName(16 + i) // Starting from column P
+		col := columnName(14 + i)
 		f.SetColWidth(sheetDetail, col, col, 15)
 	}
 
@@ -307,33 +307,27 @@ func (w *Writer) createDetailSheet(f *excelize.File, result *model.InspectionRes
 		row := i + 2 // Start from row 2
 		rowStr := fmt.Sprintf("%d", row)
 
-		// Basic info
 		f.SetCellValue(sheetDetail, "A"+rowStr, host.Hostname)
 		f.SetCellValue(sheetDetail, "B"+rowStr, host.IP)
 		f.SetCellValue(sheetDetail, "C"+rowStr, statusText(host.Status))
-		f.SetCellValue(sheetDetail, "D"+rowStr, host.OS)
-		f.SetCellValue(sheetDetail, "E"+rowStr, host.OSVersion)
-		f.SetCellValue(sheetDetail, "F"+rowStr, host.KernelVersion)
-		f.SetCellValue(sheetDetail, "G"+rowStr, host.CPUCores)
+		f.SetCellValue(sheetDetail, "D"+rowStr, host.KernelVersion)
 
-		// Metrics
-		w.setMetricCell(f, sheetDetail, "H"+rowStr, host.Metrics["cpu_usage"], warningStyle, criticalStyle, normalStyle)
-		w.setMetricCell(f, sheetDetail, "I"+rowStr, host.Metrics["memory_usage"], warningStyle, criticalStyle, normalStyle)
-		w.setMetricCell(f, sheetDetail, "J"+rowStr, host.Metrics["disk_usage_max"], warningStyle, criticalStyle, normalStyle)
-		w.setMetricCell(f, sheetDetail, "K"+rowStr, host.Metrics["uptime"], 0, 0, 0)
-		w.setMetricCell(f, sheetDetail, "L"+rowStr, host.Metrics["load_1m"], 0, 0, 0)
-		w.setMetricCell(f, sheetDetail, "M"+rowStr, host.Metrics["load_per_core"], warningStyle, criticalStyle, normalStyle)
-		w.setMetricCell(f, sheetDetail, "N"+rowStr, host.Metrics["processes_zombies"], warningStyle, criticalStyle, normalStyle)
-		w.setMetricCell(f, sheetDetail, "O"+rowStr, host.Metrics["processes_total"], 0, 0, 0)
+		w.setMetricCell(f, sheetDetail, "E"+rowStr, host.Metrics["cpu_usage"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "F"+rowStr, host.Metrics["memory_usage"], warningStyle, criticalStyle, normalStyle)
+		w.setMemoryFreeCell(f, sheetDetail, "G"+rowStr, host.Metrics["memory_available"])
+		w.setMetricCell(f, sheetDetail, "H"+rowStr, host.Metrics["disk_usage_max"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "I"+rowStr, host.Metrics["uptime"], 0, 0, 0)
+		w.setMetricCell(f, sheetDetail, "J"+rowStr, host.Metrics["ntp_offset"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "K"+rowStr, host.Metrics["processes_zombies"], warningStyle, criticalStyle, normalStyle)
+		w.setMetricCell(f, sheetDetail, "L"+rowStr, host.Metrics["open_files"], 0, 0, 0)
+		w.setMetricCell(f, sheetDetail, "M"+rowStr, host.Metrics["max_files"], 0, 0, 0)
 
-		// Disk usage by path
 		for j, path := range diskPaths {
-			col := columnName(16 + j)
+			col := columnName(14 + j)
 			metricName := fmt.Sprintf("disk_usage:%s", path)
 			w.setMetricCell(f, sheetDetail, col+rowStr, host.Metrics[metricName], warningStyle, criticalStyle, normalStyle)
 		}
 
-		// Apply status style to entire row
 		statusStyle := w.getStatusStyle(host.Status, normalStyle, warningStyle, criticalStyle)
 		if statusStyle > 0 {
 			f.SetCellStyle(sheetDetail, "C"+rowStr, "C"+rowStr, statusStyle)
@@ -433,6 +427,362 @@ func (w *Writer) createAlertsSheet(f *excelize.File, result *model.InspectionRes
 	return nil
 }
 
+var sysctlParamNames = []string{
+	"net.ipv4.ip_local_port_range_min",
+	"net.ipv4.ip_local_port_range_max",
+	"net.netfilter.nf_conntrack_max",
+	"net.ipv4.tcp_max_tw_buckets",
+	"net.netfilter.nf_conntrack_tcp_timeout_fin_wait",
+	"net.netfilter.nf_conntrack_tcp_timeout_time_wait",
+	"net.netfilter.nf_conntrack_tcp_timeout_close_wait",
+	"net.netfilter.nf_conntrack_tcp_timeout_established",
+	"net.ipv4.tcp_tw_reuse",
+	"net.ipv4.tcp_timestamps",
+}
+
+var sysctlDisplayNames = []string{
+	"端口范围(最小)",
+	"端口范围(最大)",
+	"连接跟踪最大",
+	"TIME_WAIT桶数",
+	"FIN_WAIT超时",
+	"TIME_WAIT超时",
+	"CLOSE_WAIT超时",
+	"ESTABLISHED超时",
+	"tcp_tw_reuse",
+	"tcp_timestamps",
+}
+
+func (w *Writer) createBaselineCheckSheet(f *excelize.File, result *model.InspectionResult) error {
+	_, err := f.NewSheet(sheetBaselineCheck)
+	if err != nil {
+		return err
+	}
+
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	headers := []string{
+		"巡检时间", "主机名", "IP地址", "操作系统", "内核版本", "运行时间",
+		"密码过期", "密码策略", "文件句柄", "公网访问",
+	}
+	headers = append(headers, sysctlDisplayNames...)
+
+	colWidths := []float64{
+		20, 20, 15, 25, 30, 15,
+		30, 40, 15, 10,
+		12, 12, 14, 14, 12, 12, 12, 12, 12, 12,
+	}
+
+	for i, width := range colWidths {
+		col := columnName(i + 1)
+		f.SetColWidth(sheetBaselineCheck, col, col, width)
+	}
+
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetBaselineCheck, cell, header)
+		f.SetCellStyle(sheetBaselineCheck, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetBaselineCheck, 1, 25)
+
+	f.SetPanes(sheetBaselineCheck, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	inspectionTimeStr := result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+
+	for i, host := range result.Hosts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		f.SetCellValue(sheetBaselineCheck, "A"+rowStr, inspectionTimeStr)
+		f.SetCellValue(sheetBaselineCheck, "B"+rowStr, host.Hostname)
+		f.SetCellValue(sheetBaselineCheck, "C"+rowStr, host.IP)
+		f.SetCellValue(sheetBaselineCheck, "D"+rowStr, fmt.Sprintf("%s %s", host.OS, host.OSVersion))
+		f.SetCellValue(sheetBaselineCheck, "E"+rowStr, host.KernelVersion)
+		w.setMetricCell(f, sheetBaselineCheck, "F"+rowStr, host.Metrics["uptime"], 0, 0, 0)
+
+		w.setExpandedMetricCell(f, sheetBaselineCheck, "G"+rowStr, "password_expiry", "user", host.Metrics)
+		w.setExpandedMetricCell(f, sheetBaselineCheck, "H"+rowStr, "password_policy", "param", host.Metrics)
+		w.setFileHandleCell(f, sheetBaselineCheck, "I"+rowStr, host.Metrics["open_files"], host.Metrics["max_files"], warningStyle, criticalStyle)
+		w.setPublicNetworkCell(f, sheetBaselineCheck, "J"+rowStr, host.Metrics["public_network"], normalStyle, criticalStyle)
+
+		for j, paramName := range sysctlParamNames {
+			col := columnName(11 + j)
+			metricName := fmt.Sprintf("sysctl_params:%s", paramName)
+			w.setSysctlCell(f, sheetBaselineCheck, col+rowStr, host.Metrics[metricName])
+		}
+	}
+
+	return nil
+}
+
+func (w *Writer) setFileHandleCell(f *excelize.File, sheet, cell string, openFiles, maxFiles *model.MetricValue, warningStyle, criticalStyle int) {
+	if openFiles == nil || openFiles.IsNA || maxFiles == nil || maxFiles.IsNA {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+	usage := fmt.Sprintf("%.0f / %.0f", openFiles.RawValue, maxFiles.RawValue)
+	f.SetCellValue(sheet, cell, usage)
+
+	if maxFiles.RawValue > 0 {
+		usagePercent := (openFiles.RawValue / maxFiles.RawValue) * 100
+		if usagePercent >= 90 {
+			f.SetCellStyle(sheet, cell, cell, criticalStyle)
+		} else if usagePercent >= 70 {
+			f.SetCellStyle(sheet, cell, cell, warningStyle)
+		}
+	}
+}
+
+func (w *Writer) setPublicNetworkCell(f *excelize.File, sheet, cell string, metric *model.MetricValue, normalStyle, criticalStyle int) {
+	if metric == nil || metric.IsNA {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+	if metric.RawValue == 1 {
+		f.SetCellValue(sheet, cell, "成功")
+		f.SetCellStyle(sheet, cell, cell, criticalStyle)
+	} else {
+		f.SetCellValue(sheet, cell, "失败")
+		f.SetCellStyle(sheet, cell, cell, normalStyle)
+	}
+}
+
+func (w *Writer) setSysctlCell(f *excelize.File, sheet, cell string, metric *model.MetricValue) {
+	if metric == nil || metric.IsNA {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+	f.SetCellValue(sheet, cell, fmt.Sprintf("%.0f", metric.RawValue))
+}
+
+func (w *Writer) createUnifiedAlertsSheet(f *excelize.File, unifiedAlerts []*model.UnifiedAlert) error {
+	_, err := f.NewSheet(sheetAlerts)
+	if err != nil {
+		return err
+	}
+
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return err
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return err
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return err
+	}
+
+	headers := []string{"来源类型", "实例标识", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
+
+	colWidths := []float64{12, 25, 10, 18, 15, 12, 12, 45}
+	for i, width := range colWidths {
+		col := columnName(i + 1)
+		f.SetColWidth(sheetAlerts, col, col, width)
+	}
+
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", columnName(i+1))
+		f.SetCellValue(sheetAlerts, cell, header)
+		f.SetCellStyle(sheetAlerts, cell, cell, headerStyle)
+	}
+	f.SetRowHeight(sheetAlerts, 1, 25)
+
+	f.SetPanes(sheetAlerts, &excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	})
+
+	sort.Slice(unifiedAlerts, func(i, j int) bool {
+		if unifiedAlerts[i].Level != unifiedAlerts[j].Level {
+			return alertLevelPriority(unifiedAlerts[i].Level) > alertLevelPriority(unifiedAlerts[j].Level)
+		}
+		if unifiedAlerts[i].SourceType != unifiedAlerts[j].SourceType {
+			return unifiedAlerts[i].SourceType < unifiedAlerts[j].SourceType
+		}
+		return unifiedAlerts[i].Identifier < unifiedAlerts[j].Identifier
+	})
+
+	for i, alert := range unifiedAlerts {
+		row := i + 2
+		rowStr := fmt.Sprintf("%d", row)
+
+		f.SetCellValue(sheetAlerts, "A"+rowStr, string(alert.SourceType))
+		f.SetCellValue(sheetAlerts, "B"+rowStr, alert.Identifier)
+		f.SetCellValue(sheetAlerts, "C"+rowStr, alertLevelText(alert.Level))
+		f.SetCellValue(sheetAlerts, "D"+rowStr, alert.MetricDisplayName)
+		f.SetCellValue(sheetAlerts, "E"+rowStr, alert.FormattedValue)
+		f.SetCellValue(sheetAlerts, "F"+rowStr, formatThreshold(alert.WarningThreshold, alert.MetricName))
+		f.SetCellValue(sheetAlerts, "G"+rowStr, formatThreshold(alert.CriticalThreshold, alert.MetricName))
+		f.SetCellValue(sheetAlerts, "H"+rowStr, alert.Message)
+
+		var style int
+		if alert.Level == model.AlertLevelCritical {
+			style = criticalStyle
+		} else if alert.Level == model.AlertLevelWarning {
+			style = warningStyle
+		}
+		if style > 0 {
+			f.SetCellStyle(sheetAlerts, "C"+rowStr, "C"+rowStr, style)
+		}
+
+		sourceStyle := w.getSourceTypeStyle(f, alert.SourceType)
+		if sourceStyle > 0 {
+			f.SetCellStyle(sheetAlerts, "A"+rowStr, "A"+rowStr, sourceStyle)
+		}
+	}
+
+	return nil
+}
+
+func (w *Writer) getSourceTypeStyle(f *excelize.File, sourceType model.AlertSourceType) int {
+	var bgColor string
+	switch sourceType {
+	case model.AlertSourceHost:
+		bgColor = "D6E3F8"
+	case model.AlertSourceMySQL:
+		bgColor = "D5E8D4"
+	case model.AlertSourceRedis:
+		bgColor = "F8D7DA"
+	case model.AlertSourceNginx:
+		bgColor = "D4EDDA"
+	case model.AlertSourceTomcat:
+		bgColor = "FFE8CC"
+	default:
+		return 0
+	}
+
+	style, err := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{
+			Type:    "pattern",
+			Color:   []string{bgColor},
+			Pattern: 1,
+		},
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+		},
+	})
+	if err != nil {
+		return 0
+	}
+	return style
+}
+
+func (w *Writer) collectUnifiedAlerts(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults) []*model.UnifiedAlert {
+	var alerts []*model.UnifiedAlert
+
+	if hostResult != nil {
+		for _, alert := range hostResult.Alerts {
+			if u := model.NewUnifiedAlertFromHostAlert(alert); u != nil {
+				alerts = append(alerts, u)
+			}
+		}
+	}
+
+	if mysqlResult != nil {
+		for _, alert := range mysqlResult.Alerts {
+			if u := model.NewUnifiedAlertFromMySQLAlert(alert); u != nil {
+				alerts = append(alerts, u)
+			}
+		}
+	}
+
+	if redisResult != nil {
+		for _, alert := range redisResult.Alerts {
+			if u := model.NewUnifiedAlertFromRedisAlert(alert); u != nil {
+				alerts = append(alerts, u)
+			}
+		}
+	}
+
+	if nginxResult != nil {
+		for _, alert := range nginxResult.Alerts {
+			if u := w.convertNginxAlert(alert); u != nil {
+				alerts = append(alerts, u)
+			}
+		}
+	}
+
+	if tomcatResult != nil {
+		for _, alert := range tomcatResult.Alerts {
+			if u := w.convertTomcatAlert(alert); u != nil {
+				alerts = append(alerts, u)
+			}
+		}
+	}
+
+	return alerts
+}
+
+func (w *Writer) convertNginxAlert(alert *model.NginxAlert) *model.UnifiedAlert {
+	if alert == nil {
+		return nil
+	}
+	return &model.UnifiedAlert{
+		SourceType:        model.AlertSourceNginx,
+		Identifier:        alert.Identifier,
+		Level:             alert.Level,
+		MetricName:        alert.MetricName,
+		MetricDisplayName: alert.MetricDisplayName,
+		CurrentValue:      alert.CurrentValue,
+		FormattedValue:    alert.FormattedValue,
+		WarningThreshold:  alert.WarningThreshold,
+		CriticalThreshold: alert.CriticalThreshold,
+		Message:           alert.Message,
+	}
+}
+
+func (w *Writer) convertTomcatAlert(alert *model.TomcatAlert) *model.UnifiedAlert {
+	if alert == nil {
+		return nil
+	}
+	return &model.UnifiedAlert{
+		SourceType:        model.AlertSourceTomcat,
+		Identifier:        alert.Identifier,
+		Level:             alert.Level,
+		MetricName:        alert.MetricName,
+		MetricDisplayName: alert.MetricDisplayName,
+		CurrentValue:      alert.CurrentValue,
+		FormattedValue:    alert.FormattedValue,
+		WarningThreshold:  alert.WarningThreshold,
+		CriticalThreshold: alert.CriticalThreshold,
+		Message:           alert.Message,
+	}
+}
+
 // Helper functions
 
 func (w *Writer) createHeaderStyle(f *excelize.File) (int, error) {
@@ -513,7 +863,6 @@ func (w *Writer) setMetricCell(f *excelize.File, sheet, cell string, metric *mod
 
 	f.SetCellValue(sheet, cell, metric.FormattedValue)
 
-	// Apply style based on metric status
 	var style int
 	switch metric.Status {
 	case model.MetricStatusCritical:
@@ -521,14 +870,18 @@ func (w *Writer) setMetricCell(f *excelize.File, sheet, cell string, metric *mod
 	case model.MetricStatusWarning:
 		style = warningStyle
 	case model.MetricStatusNormal:
-		// Only apply normal style if styles are provided
-		if normalStyle > 0 && warningStyle > 0 && criticalStyle > 0 {
-			// Don't apply normal style to avoid visual clutter
-		}
 	}
 	if style > 0 {
 		f.SetCellStyle(sheet, cell, cell, style)
 	}
+}
+
+func (w *Writer) setMemoryFreeCell(f *excelize.File, sheet, cell string, metric *model.MetricValue) {
+	if metric == nil || metric.IsNA {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+	f.SetCellValue(sheet, cell, metric.FormattedValue)
 }
 
 func (w *Writer) collectDiskPaths(hosts []*model.HostResult) []string {
@@ -548,6 +901,49 @@ func (w *Writer) collectDiskPaths(hosts []*model.HostResult) []string {
 	}
 	sort.Strings(paths)
 	return paths
+}
+
+func (w *Writer) setSecurityMetricCell(f *excelize.File, sheet, cell string, metric *model.MetricValue, _ map[string]*model.MetricValue) {
+	if metric == nil || metric.IsNA {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+	if metric.RawValue == 1 {
+		f.SetCellValue(sheet, cell, "成功")
+	} else {
+		f.SetCellValue(sheet, cell, "失败")
+	}
+}
+
+func (w *Writer) setExpandedMetricCell(f *excelize.File, sheet, cell, metricPrefix, labelName string, metrics map[string]*model.MetricValue) {
+	var parts []string
+	for name, mv := range metrics {
+		if strings.HasPrefix(name, metricPrefix+":") && mv != nil && !mv.IsNA {
+			labelValue := strings.TrimPrefix(name, metricPrefix+":")
+			switch metricPrefix {
+			case "password_expiry":
+				if mv.RawValue == -1 {
+					parts = append(parts, fmt.Sprintf("%s:永不过期", labelValue))
+				} else if mv.RawValue == -2 {
+					parts = append(parts, fmt.Sprintf("%s:无法获取", labelValue))
+				} else {
+					parts = append(parts, fmt.Sprintf("%s:%.0f天", labelValue, mv.RawValue))
+				}
+			case "password_policy":
+				parts = append(parts, fmt.Sprintf("%s=%.0f", labelValue, mv.RawValue))
+			case "sysctl_params":
+				parts = append(parts, fmt.Sprintf("%s=%.0f", labelValue, mv.RawValue))
+			default:
+				parts = append(parts, fmt.Sprintf("%s:%.2f", labelValue, mv.RawValue))
+			}
+		}
+	}
+	if len(parts) == 0 {
+		f.SetCellValue(sheet, cell, "N/A")
+		return
+	}
+	sort.Strings(parts)
+	f.SetCellValue(sheet, cell, strings.Join(parts, ", "))
 }
 
 func (w *Writer) getStatusStyle(status model.HostStatus, normalStyle, warningStyle, criticalStyle int) int {
@@ -700,6 +1096,14 @@ func (w *Writer) getMySQLSyncStatus(r *model.MySQLInspectionResult) string {
 	return "异常"
 }
 
+func (w *Writer) formatBinlogExpireDays(seconds int) string {
+	if seconds <= 0 {
+		return "N/A"
+	}
+	days := seconds / 86400
+	return fmt.Sprintf("%d", days)
+}
+
 // formatMySQLThreshold formats a MySQL alert threshold value based on metric type.
 func formatMySQLThreshold(value float64, metricName string) string {
 	switch metricName {
@@ -727,35 +1131,23 @@ func (w *Writer) WriteMySQLInspection(result *model.MySQLInspectionResults, outp
 		return fmt.Errorf("MySQL inspection result is nil")
 	}
 
-	// Ensure output path has .xlsx extension
 	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
 		outputPath = outputPath + ".xlsx"
 	}
 
-	// Create new Excel file
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Create MySQL sheet
 	if err := w.createMySQLSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create MySQL sheet: %w", err)
 	}
 
-	// Create MySQL alerts sheet
-	if err := w.createMySQLAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
-	}
-
-	// Remove default Sheet1
 	if err := f.DeleteSheet(defaultSheet); err != nil {
-		// Ignore error if sheet doesn't exist
 	}
 
-	// Set active sheet to MySQL
 	idx, _ := f.GetSheetIndex(sheetMySQL)
 	f.SetActiveSheet(idx)
 
-	// Save the file
 	if err := f.SaveAs(outputPath); err != nil {
 		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
@@ -794,23 +1186,14 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 
 	headers := []string{
 		"巡检时间", "IP地址", "端口", "数据库版本", "Server ID",
-		"集群模式", "同步状态", "最大连接数", "当前连接数", "Binlog状态", "非root用户", "整体状态",
+		"集群模式", "同步状态", "最大连接数", "当前连接数",
+		"慢查询日志", "Binlog状态", "Binlog保留(天)", "非root用户", "整体状态",
 	}
 
-	// Set column widths
 	colWidths := map[string]float64{
-		"A": 20, // 巡检时间
-		"B": 15, // IP地址
-		"C": 8,  // 端口
-		"D": 12, // 数据库版本
-		"E": 12, // Server ID
-		"F": 12, // 集群模式
-		"G": 10, // 同步状态
-		"H": 12, // 最大连接数
-		"I": 12, // 当前连接数
-		"J": 12, // Binlog状态
-		"K": 12, // 非root用户
-		"L": 10, // 整体状态
+		"A": 20, "B": 15, "C": 8, "D": 12, "E": 12,
+		"F": 12, "G": 10, "H": 12, "I": 12,
+		"J": 10, "K": 10, "L": 14, "M": 12, "N": 10,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetMySQL, col, col, width)
@@ -836,36 +1219,25 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 
 	// Write MySQL instance data
 	for i, r := range result.Results {
-		row := i + 2 // Start from row 2
+		row := i + 2
 		rowStr := fmt.Sprintf("%d", row)
 
-		// A: 巡检时间
 		f.SetCellValue(sheetMySQL, "A"+rowStr, result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
-		// B: IP地址
 		f.SetCellValue(sheetMySQL, "B"+rowStr, r.Instance.IP)
-		// C: 端口
 		f.SetCellValue(sheetMySQL, "C"+rowStr, r.Instance.Port)
-		// D: 数据库版本
 		f.SetCellValue(sheetMySQL, "D"+rowStr, r.Instance.Version)
-		// E: Server ID
 		f.SetCellValue(sheetMySQL, "E"+rowStr, r.Instance.ServerID)
-		// F: 集群模式
 		f.SetCellValue(sheetMySQL, "F"+rowStr, mysqlClusterModeText(r.Instance.ClusterMode))
-		// G: 同步状态
 		f.SetCellValue(sheetMySQL, "G"+rowStr, w.getMySQLSyncStatus(r))
-		// H: 最大连接数
 		f.SetCellValue(sheetMySQL, "H"+rowStr, r.MaxConnections)
-		// I: 当前连接数
 		f.SetCellValue(sheetMySQL, "I"+rowStr, r.CurrentConnections)
-		// J: Binlog状态
-		f.SetCellValue(sheetMySQL, "J"+rowStr, boolToText(r.BinlogEnabled))
-		// K: 非root用户
-		f.SetCellValue(sheetMySQL, "K"+rowStr, r.NonRootUser)
-		// L: 整体状态
-		f.SetCellValue(sheetMySQL, "L"+rowStr, mysqlStatusText(r.Status))
+		f.SetCellValue(sheetMySQL, "J"+rowStr, boolToText(r.SlowQueryLogEnabled))
+		f.SetCellValue(sheetMySQL, "K"+rowStr, boolToText(r.BinlogEnabled))
+		f.SetCellValue(sheetMySQL, "L"+rowStr, w.formatBinlogExpireDays(r.BinlogExpireSeconds))
+		f.SetCellValue(sheetMySQL, "M"+rowStr, r.NonRootUser)
+		f.SetCellValue(sheetMySQL, "N"+rowStr, mysqlStatusText(r.Status))
 
-		// Apply conditional format to status column
-		statusCell := "L" + rowStr
+		statusCell := "N" + rowStr
 		switch r.Status {
 		case model.MySQLStatusCritical:
 			f.SetCellStyle(sheetMySQL, statusCell, statusCell, criticalStyle)
@@ -879,96 +1251,6 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 	return nil
 }
 
-// createMySQLAlertsSheet creates the MySQL alerts summary worksheet.
-func (w *Writer) createMySQLAlertsSheet(f *excelize.File, result *model.MySQLInspectionResults) error {
-	// Create sheet
-	_, err := f.NewSheet(sheetMySQLAlerts)
-	if err != nil {
-		return err
-	}
-
-	// Create styles
-	headerStyle, err := w.createHeaderStyle(f)
-	if err != nil {
-		return err
-	}
-
-	warningStyle, err := w.createWarningStyle(f)
-	if err != nil {
-		return err
-	}
-
-	criticalStyle, err := w.createCriticalStyle(f)
-	if err != nil {
-		return err
-	}
-
-	// Define headers
-	headers := []string{"实例地址", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
-
-	// Set column widths
-	colWidths := []float64{20, 12, 15, 15, 12, 12, 40}
-	for i, width := range colWidths {
-		col := columnName(i + 1)
-		f.SetColWidth(sheetMySQLAlerts, col, col, width)
-	}
-
-	// Write headers
-	for i, header := range headers {
-		cell := fmt.Sprintf("%s1", columnName(i+1))
-		f.SetCellValue(sheetMySQLAlerts, cell, header)
-		f.SetCellStyle(sheetMySQLAlerts, cell, cell, headerStyle)
-	}
-	f.SetRowHeight(sheetMySQLAlerts, 1, 25)
-
-	// Freeze header row
-	f.SetPanes(sheetMySQLAlerts, &excelize.Panes{
-		Freeze:      true,
-		Split:       false,
-		XSplit:      0,
-		YSplit:      1,
-		TopLeftCell: "A2",
-		ActivePane:  "bottomLeft",
-	})
-
-	// Sort alerts by level (critical first) then by address
-	alerts := make([]*model.MySQLAlert, len(result.Alerts))
-	copy(alerts, result.Alerts)
-	sort.Slice(alerts, func(i, j int) bool {
-		if alerts[i].Level != alerts[j].Level {
-			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
-		}
-		return alerts[i].Address < alerts[j].Address
-	})
-
-	// Write alert data
-	for i, alert := range alerts {
-		row := i + 2
-		rowStr := fmt.Sprintf("%d", row)
-
-		f.SetCellValue(sheetMySQLAlerts, "A"+rowStr, alert.Address)
-		f.SetCellValue(sheetMySQLAlerts, "B"+rowStr, alertLevelText(alert.Level))
-		f.SetCellValue(sheetMySQLAlerts, "C"+rowStr, alert.MetricDisplayName)
-		f.SetCellValue(sheetMySQLAlerts, "D"+rowStr, alert.FormattedValue)
-		f.SetCellValue(sheetMySQLAlerts, "E"+rowStr, formatMySQLThreshold(alert.WarningThreshold, alert.MetricName))
-		f.SetCellValue(sheetMySQLAlerts, "F"+rowStr, formatMySQLThreshold(alert.CriticalThreshold, alert.MetricName))
-		f.SetCellValue(sheetMySQLAlerts, "G"+rowStr, alert.Message)
-
-		// Apply style based on alert level
-		var style int
-		if alert.Level == model.AlertLevelCritical {
-			style = criticalStyle
-		} else if alert.Level == model.AlertLevelWarning {
-			style = warningStyle
-		}
-		if style > 0 {
-			f.SetCellStyle(sheetMySQLAlerts, "B"+rowStr, "B"+rowStr, style)
-		}
-	}
-
-	return nil
-}
-
 // AppendMySQLInspection appends MySQL inspection data to an existing Excel file.
 // This method opens an existing file and adds MySQL-specific worksheets.
 func (w *Writer) AppendMySQLInspection(result *model.MySQLInspectionResults, existingPath string) error {
@@ -976,29 +1258,20 @@ func (w *Writer) AppendMySQLInspection(result *model.MySQLInspectionResults, exi
 		return fmt.Errorf("MySQL inspection result is nil")
 	}
 
-	// Ensure path has .xlsx extension
 	if !strings.HasSuffix(strings.ToLower(existingPath), ".xlsx") {
 		existingPath = existingPath + ".xlsx"
 	}
 
-	// Open existing Excel file
 	f, err := excelize.OpenFile(existingPath)
 	if err != nil {
 		return fmt.Errorf("failed to open existing file: %w", err)
 	}
 	defer f.Close()
 
-	// Add MySQL inspection worksheet (reuse existing method)
 	if err := w.createMySQLSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create MySQL sheet: %w", err)
 	}
 
-	// Add MySQL alerts worksheet (reuse existing method)
-	if err := w.createMySQLAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
-	}
-
-	// Save the file
 	if err := f.Save(); err != nil {
 		return fmt.Errorf("failed to save file: %w", err)
 	}
@@ -1093,15 +1366,14 @@ func (w *Writer) getMasterLinkStatusText(r *model.RedisInspectionResult) string 
 	return redisBoolText(r.MasterLinkStatus)
 }
 
-// getMasterPortText returns master port text (N/A for master nodes).
-func (w *Writer) getMasterPortText(r *model.RedisInspectionResult) string {
+func (w *Writer) getMasterHostText(r *model.RedisInspectionResult) string {
 	if r.Instance == nil || r.Instance.Role.IsMaster() {
 		return "N/A"
 	}
-	if r.MasterPort == 0 {
+	if r.MasterHost == "" {
 		return "N/A"
 	}
-	return fmt.Sprintf("%d", r.MasterPort)
+	return r.MasterHost
 }
 
 // getReplicationLagText returns replication lag text (N/A for master nodes).
@@ -1122,35 +1394,23 @@ func (w *Writer) WriteRedisInspection(result *model.RedisInspectionResults, outp
 		return fmt.Errorf("Redis inspection result is nil")
 	}
 
-	// Ensure output path has .xlsx extension
 	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
 		outputPath = outputPath + ".xlsx"
 	}
 
-	// Create new Excel file
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Create Redis sheet
 	if err := w.createRedisSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create Redis sheet: %w", err)
 	}
 
-	// Create Redis alerts sheet
-	if err := w.createRedisAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
-	}
-
-	// Remove default Sheet1
 	if err := f.DeleteSheet(defaultSheet); err != nil {
-		// Ignore error if sheet doesn't exist
 	}
 
-	// Set active sheet to Redis
 	idx, _ := f.GetSheetIndex(sheetRedis)
 	f.SetActiveSheet(idx)
 
-	// Save the file
 	if err := f.SaveAs(outputPath); err != nil {
 		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
@@ -1187,29 +1447,16 @@ func (w *Writer) createRedisSheet(f *excelize.File, result *model.RedisInspectio
 		return err
 	}
 
-	// Define headers
 	headers := []string{
 		"巡检时间", "IP地址", "端口", "应用类型", "Redis版本",
-		"是否普通用户启动", "连接状态", "集群模式", "主从链接状态",
-		"节点角色", "Master端口", "复制延迟", "最大连接数", "整体状态",
+		"普通用户启动", "连接状态", "集群模式", "主从链接状态",
+		"节点角色", "Master节点IP", "复制延迟", "最大连接数", "整体状态",
 	}
 
-	// Set column widths
 	colWidths := map[string]float64{
-		"A": 18, // 巡检时间
-		"B": 15, // IP地址
-		"C": 8,  // 端口
-		"D": 8,  // 应用类型
-		"E": 12, // Redis版本
-		"F": 15, // 是否普通用户启动
-		"G": 10, // 连接状态
-		"H": 10, // 集群模式
-		"I": 12, // 主从链接状态
-		"J": 10, // 节点角色
-		"K": 10, // Master端口
-		"L": 12, // 复制延迟
-		"M": 10, // 最大连接数
-		"N": 10, // 整体状态
+		"A": 18, "B": 15, "C": 8, "D": 8, "E": 12,
+		"F": 12, "G": 10, "H": 10, "I": 12,
+		"J": 10, "K": 15, "L": 12, "M": 10, "N": 10,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetRedis, col, col, width)
@@ -1235,51 +1482,34 @@ func (w *Writer) createRedisSheet(f *excelize.File, result *model.RedisInspectio
 
 	// Write Redis instance data
 	for i, r := range result.Results {
-		row := i + 2 // Start from row 2
+		row := i + 2
 		rowStr := fmt.Sprintf("%d", row)
 
-		// A: 巡检时间
 		f.SetCellValue(sheetRedis, "A"+rowStr, result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
-		// B: IP地址
 		if r.Instance != nil {
 			f.SetCellValue(sheetRedis, "B"+rowStr, r.Instance.IP)
-		}
-		// C: 端口
-		if r.Instance != nil {
 			f.SetCellValue(sheetRedis, "C"+rowStr, r.Instance.Port)
 		}
-		// D: 应用类型
 		f.SetCellValue(sheetRedis, "D"+rowStr, "Redis")
-		// E: Redis版本
 		if r.Instance != nil && r.Instance.Version != "" {
 			f.SetCellValue(sheetRedis, "E"+rowStr, r.Instance.Version)
 		} else {
 			f.SetCellValue(sheetRedis, "E"+rowStr, "N/A")
 		}
-		// F: 是否普通用户启动
 		f.SetCellValue(sheetRedis, "F"+rowStr, r.NonRootUser)
-		// G: 连接状态
 		f.SetCellValue(sheetRedis, "G"+rowStr, redisBoolText(r.ConnectionStatus))
-		// H: 集群模式
 		f.SetCellValue(sheetRedis, "H"+rowStr, redisBoolText(r.ClusterEnabled))
-		// I: 主从链接状态
 		f.SetCellValue(sheetRedis, "I"+rowStr, w.getMasterLinkStatusText(r))
-		// J: 节点角色
 		if r.Instance != nil {
 			f.SetCellValue(sheetRedis, "J"+rowStr, redisRoleText(r.Instance.Role))
 		} else {
 			f.SetCellValue(sheetRedis, "J"+rowStr, "未知")
 		}
-		// K: Master端口
-		f.SetCellValue(sheetRedis, "K"+rowStr, w.getMasterPortText(r))
-		// L: 复制延迟
+		f.SetCellValue(sheetRedis, "K"+rowStr, w.getMasterHostText(r))
 		f.SetCellValue(sheetRedis, "L"+rowStr, w.getReplicationLagText(r))
-		// M: 最大连接数
 		f.SetCellValue(sheetRedis, "M"+rowStr, r.MaxClients)
-		// N: 整体状态
 		f.SetCellValue(sheetRedis, "N"+rowStr, redisStatusText(r.Status))
 
-		// Apply conditional format to status column
 		statusCell := "N" + rowStr
 		switch r.Status {
 		case model.RedisStatusCritical:
@@ -1294,96 +1524,6 @@ func (w *Writer) createRedisSheet(f *excelize.File, result *model.RedisInspectio
 	return nil
 }
 
-// createRedisAlertsSheet creates the Redis alerts summary worksheet.
-func (w *Writer) createRedisAlertsSheet(f *excelize.File, result *model.RedisInspectionResults) error {
-	// Create sheet
-	_, err := f.NewSheet(sheetRedisAlerts)
-	if err != nil {
-		return err
-	}
-
-	// Create styles
-	headerStyle, err := w.createHeaderStyle(f)
-	if err != nil {
-		return err
-	}
-
-	warningStyle, err := w.createWarningStyle(f)
-	if err != nil {
-		return err
-	}
-
-	criticalStyle, err := w.createCriticalStyle(f)
-	if err != nil {
-		return err
-	}
-
-	// Define headers
-	headers := []string{"实例地址", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
-
-	// Set column widths
-	colWidths := []float64{20, 12, 15, 15, 12, 12, 40}
-	for i, width := range colWidths {
-		col := columnName(i + 1)
-		f.SetColWidth(sheetRedisAlerts, col, col, width)
-	}
-
-	// Write headers
-	for i, header := range headers {
-		cell := fmt.Sprintf("%s1", columnName(i+1))
-		f.SetCellValue(sheetRedisAlerts, cell, header)
-		f.SetCellStyle(sheetRedisAlerts, cell, cell, headerStyle)
-	}
-	f.SetRowHeight(sheetRedisAlerts, 1, 25)
-
-	// Freeze header row
-	f.SetPanes(sheetRedisAlerts, &excelize.Panes{
-		Freeze:      true,
-		Split:       false,
-		XSplit:      0,
-		YSplit:      1,
-		TopLeftCell: "A2",
-		ActivePane:  "bottomLeft",
-	})
-
-	// Sort alerts by level (critical first) then by address
-	alerts := make([]*model.RedisAlert, len(result.Alerts))
-	copy(alerts, result.Alerts)
-	sort.Slice(alerts, func(i, j int) bool {
-		if alerts[i].Level != alerts[j].Level {
-			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
-		}
-		return alerts[i].Address < alerts[j].Address
-	})
-
-	// Write alert data
-	for i, alert := range alerts {
-		row := i + 2
-		rowStr := fmt.Sprintf("%d", row)
-
-		f.SetCellValue(sheetRedisAlerts, "A"+rowStr, alert.Address)
-		f.SetCellValue(sheetRedisAlerts, "B"+rowStr, alertLevelText(alert.Level))
-		f.SetCellValue(sheetRedisAlerts, "C"+rowStr, alert.MetricDisplayName)
-		f.SetCellValue(sheetRedisAlerts, "D"+rowStr, alert.FormattedValue)
-		f.SetCellValue(sheetRedisAlerts, "E"+rowStr, formatRedisThreshold(alert.WarningThreshold, alert.MetricName))
-		f.SetCellValue(sheetRedisAlerts, "F"+rowStr, formatRedisThreshold(alert.CriticalThreshold, alert.MetricName))
-		f.SetCellValue(sheetRedisAlerts, "G"+rowStr, alert.Message)
-
-		// Apply style based on alert level
-		var style int
-		if alert.Level == model.AlertLevelCritical {
-			style = criticalStyle
-		} else if alert.Level == model.AlertLevelWarning {
-			style = warningStyle
-		}
-		if style > 0 {
-			f.SetCellStyle(sheetRedisAlerts, "B"+rowStr, "B"+rowStr, style)
-		}
-	}
-
-	return nil
-}
-
 // AppendRedisInspection appends Redis inspection data to an existing Excel file.
 // This method opens an existing file and adds Redis-specific worksheets.
 // If multiple clusters are detected, it creates separate sheets for each cluster.
@@ -1392,41 +1532,28 @@ func (w *Writer) AppendRedisInspection(result *model.RedisInspectionResults, exi
 		return fmt.Errorf("Redis inspection result is nil")
 	}
 
-	// Ensure path has .xlsx extension
 	if !strings.HasSuffix(strings.ToLower(existingPath), ".xlsx") {
 		existingPath = existingPath + ".xlsx"
 	}
 
-	// Open existing Excel file
 	f, err := excelize.OpenFile(existingPath)
 	if err != nil {
 		return fmt.Errorf("failed to open existing file: %w", err)
 	}
 	defer f.Close()
 
-	// Check if multiple clusters exist
 	if result.HasMultipleClusters() {
-		// Create separate sheet for each cluster
 		for _, cluster := range result.Clusters {
 			if err := w.createRedisClusterSheet(f, cluster, result.InspectionTime); err != nil {
 				return fmt.Errorf("failed to create Redis cluster sheet for %s: %w", cluster.ID, err)
 			}
 		}
-		// Create a combined alerts sheet for all clusters
-		if err := w.createRedisAlertsSheet(f, result); err != nil {
-			return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
-		}
 	} else {
-		// Single cluster: use original flat display
 		if err := w.createRedisSheet(f, result); err != nil {
 			return fmt.Errorf("failed to create Redis sheet: %w", err)
 		}
-		if err := w.createRedisAlertsSheet(f, result); err != nil {
-			return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
-		}
 	}
 
-	// Save the file
 	if err := f.Save(); err != nil {
 		return fmt.Errorf("failed to save file: %w", err)
 	}
@@ -1471,18 +1598,16 @@ func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisC
 		return err
 	}
 
-	// Define headers (same as createRedisSheet)
 	headers := []string{
 		"巡检时间", "IP地址", "端口", "应用类型", "Redis版本",
-		"是否普通用户启动", "连接状态", "集群模式", "主从链接状态",
-		"节点角色", "Master端口", "复制延迟", "最大连接数", "整体状态",
+		"普通用户启动", "连接状态", "集群模式", "主从链接状态",
+		"节点角色", "Master节点IP", "复制延迟", "最大连接数", "整体状态",
 	}
 
-	// Set column widths
 	colWidths := map[string]float64{
 		"A": 18, "B": 15, "C": 8, "D": 8, "E": 12,
-		"F": 15, "G": 10, "H": 10, "I": 12,
-		"J": 10, "K": 10, "L": 12, "M": 10, "N": 10,
+		"F": 12, "G": 10, "H": 10, "I": 12,
+		"J": 10, "K": 15, "L": 12, "M": 10, "N": 10,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetName, col, col, width)
@@ -1511,48 +1636,31 @@ func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisC
 		row := i + 2
 		rowStr := fmt.Sprintf("%d", row)
 
-		// A: 巡检时间
 		f.SetCellValue(sheetName, "A"+rowStr, inspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
-		// B: IP地址
 		if r.Instance != nil {
 			f.SetCellValue(sheetName, "B"+rowStr, r.Instance.IP)
-		}
-		// C: 端口
-		if r.Instance != nil {
 			f.SetCellValue(sheetName, "C"+rowStr, r.Instance.Port)
 		}
-		// D: 应用类型
 		f.SetCellValue(sheetName, "D"+rowStr, "Redis")
-		// E: Redis版本
 		if r.Instance != nil && r.Instance.Version != "" {
 			f.SetCellValue(sheetName, "E"+rowStr, r.Instance.Version)
 		} else {
 			f.SetCellValue(sheetName, "E"+rowStr, "N/A")
 		}
-		// F: 是否普通用户启动
 		f.SetCellValue(sheetName, "F"+rowStr, r.NonRootUser)
-		// G: 连接状态
 		f.SetCellValue(sheetName, "G"+rowStr, redisBoolText(r.ConnectionStatus))
-		// H: 集群模式
 		f.SetCellValue(sheetName, "H"+rowStr, redisBoolText(r.ClusterEnabled))
-		// I: 主从链接状态
 		f.SetCellValue(sheetName, "I"+rowStr, w.getMasterLinkStatusText(r))
-		// J: 节点角色
 		if r.Instance != nil {
 			f.SetCellValue(sheetName, "J"+rowStr, redisRoleText(r.Instance.Role))
 		} else {
 			f.SetCellValue(sheetName, "J"+rowStr, "未知")
 		}
-		// K: Master端口
-		f.SetCellValue(sheetName, "K"+rowStr, w.getMasterPortText(r))
-		// L: 复制延迟
+		f.SetCellValue(sheetName, "K"+rowStr, w.getMasterHostText(r))
 		f.SetCellValue(sheetName, "L"+rowStr, w.getReplicationLagText(r))
-		// M: 最大连接数
 		f.SetCellValue(sheetName, "M"+rowStr, r.MaxClients)
-		// N: 整体状态
 		f.SetCellValue(sheetName, "N"+rowStr, redisStatusText(r.Status))
 
-		// Apply conditional format to status column
 		statusCell := "N" + rowStr
 		switch r.Status {
 		case model.RedisStatusCritical:
@@ -1569,79 +1677,63 @@ func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisC
 
 // WriteCombined generates an Excel report combining Host, MySQL, Redis, Nginx, and Tomcat inspection results.
 func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string) error {
-	// At least one result must be present
 	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
 		return fmt.Errorf("all inspection results are nil")
 	}
 
-	// Ensure output path has .xlsx extension
 	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
 		outputPath = outputPath + ".xlsx"
 	}
 
-	// Create new Excel file
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Create Host sheets if available
 	if hostResult != nil {
 		if err := w.createSummarySheet(f, hostResult); err != nil {
 			return fmt.Errorf("failed to create summary sheet: %w", err)
 		}
+		if err := w.createBaselineCheckSheet(f, hostResult); err != nil {
+			return fmt.Errorf("failed to create baseline check sheet: %w", err)
+		}
 		if err := w.createDetailSheet(f, hostResult); err != nil {
 			return fmt.Errorf("failed to create detail sheet: %w", err)
 		}
-		if err := w.createAlertsSheet(f, hostResult); err != nil {
-			return fmt.Errorf("failed to create alerts sheet: %w", err)
-		}
 	}
 
-	// Create MySQL sheets if available
 	if mysqlResult != nil {
 		if err := w.createMySQLSheet(f, mysqlResult); err != nil {
 			return fmt.Errorf("failed to create MySQL sheet: %w", err)
 		}
-		if err := w.createMySQLAlertsSheet(f, mysqlResult); err != nil {
-			return fmt.Errorf("failed to create MySQL alerts sheet: %w", err)
-		}
 	}
 
-	// Create Redis sheets if available
 	if redisResult != nil {
 		if err := w.createRedisSheet(f, redisResult); err != nil {
 			return fmt.Errorf("failed to create Redis sheet: %w", err)
 		}
-		if err := w.createRedisAlertsSheet(f, redisResult); err != nil {
-			return fmt.Errorf("failed to create Redis alerts sheet: %w", err)
-		}
 	}
 
-	// Create Nginx sheets if available
 	if nginxResult != nil {
 		if err := w.createNginxSheet(f, nginxResult); err != nil {
 			return fmt.Errorf("failed to create Nginx sheet: %w", err)
 		}
-		if err := w.createNginxAlertsSheet(f, nginxResult); err != nil {
-			return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
-		}
 	}
 
-	// Create Tomcat sheets if available
 	if tomcatResult != nil {
 		if err := w.createTomcatSheet(f, tomcatResult); err != nil {
 			return fmt.Errorf("failed to create Tomcat sheet: %w", err)
 		}
-		if err := w.createTomcatAlertsSheet(f, tomcatResult); err != nil {
-			return fmt.Errorf("failed to create Tomcat alerts sheet: %w", err)
+	}
+
+	unifiedAlerts := w.collectUnifiedAlerts(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult)
+	if len(unifiedAlerts) > 0 {
+		if err := w.createUnifiedAlertsSheet(f, unifiedAlerts); err != nil {
+			return fmt.Errorf("failed to create unified alerts sheet: %w", err)
 		}
 	}
 
-	// Remove default Sheet1
 	if err := f.DeleteSheet(defaultSheet); err != nil {
-		// Ignore error if sheet doesn't exist
 	}
 
-	// Set active sheet to summary (or first available sheet)
 	activeSheet := sheetSummary
 	if hostResult == nil {
 		if mysqlResult != nil {
@@ -1657,7 +1749,6 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 	idx, _ := f.GetSheetIndex(activeSheet)
 	f.SetActiveSheet(idx)
 
-	// Save the file
 	if err := f.SaveAs(outputPath); err != nil {
 		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
@@ -1694,44 +1785,24 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 		return err
 	}
 
-	// Define headers
 	headers := []string{
-		"巡检时间", "主机标识符", "主机名", "IP地址", "应用类型", "端口/容器", "版本", "安装路径",
-		"错误日志路径", "访问日志路径", "运行状态", "活跃连接数", "连接使用率", "Worker进程数", "Worker连接数",
-		"4xx错误页", "5xx错误页", "最近错误时间", "非root用户", "整体状态",
+		"巡检时间", "IP地址", "端口", "版本", "运行状态",
+		"非root用户", "活跃连接数", "Worker进程数", "Worker连接数",
+		"5xx错误页", "整体状态",
 	}
 
-	// Set column widths
 	colWidths := map[string]float64{
-		"A": 20, // 巡检时间
-		"B": 18, // 主机标识符
-		"C": 15, // 主机名
-		"D": 15, // IP地址
-		"E": 10, // 应用类型
-		"F": 12, // 端口/容器
-		"G": 15, // 版本
-		"H": 25, // 安装路径
-		"I": 30, // 错误日志路径
-		"J": 30, // 访问日志路径
-		"K": 10, // 运行状态
-		"L": 12, // 活跃连接数
-		"M": 12, // 连接使用率
-		"N": 12, // Worker进程数
-		"O": 15, // Worker连接数
-		"P": 12, // 4xx错误页
-		"Q": 12, // 5xx错误页
-		"R": 20, // 最近错误时间
-		"S": 12, // 非root用户
-		"T": 10, // 整体状态
+		"A": 20, "B": 15, "C": 8, "D": 15, "E": 10,
+		"F": 12, "G": 12, "H": 12, "I": 12,
+		"J": 10, "K": 10,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetNginx, col, col, width)
 	}
 
-	// Write headers
 	sheetName := sheetNginx
 	for i, header := range headers {
-		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		cell := fmt.Sprintf("%s1", columnName(i+1))
 		f.SetCellValue(sheetName, cell, header)
 		f.SetCellStyle(sheetName, cell, cell, headerStyle)
 	}
@@ -1750,104 +1821,33 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 		row := i + 2
 		rowStr := fmt.Sprintf("%d", row)
 
-		// A: 巡检时间
 		f.SetCellValue(sheetName, "A"+rowStr, result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"))
-		// B: 主机标识符
 		if r.Instance != nil {
-			f.SetCellValue(sheetName, "B"+rowStr, r.Instance.Identifier)
+			f.SetCellValue(sheetName, "B"+rowStr, r.Instance.IP)
+			f.SetCellValue(sheetName, "C"+rowStr, r.Instance.Port)
+			f.SetCellValue(sheetName, "D"+rowStr, r.Instance.Version)
 		}
-		// C: 主机名
-		if r.Instance != nil {
-			f.SetCellValue(sheetName, "C"+rowStr, r.Instance.Hostname)
-		}
-		// D: IP地址
-		if r.Instance != nil {
-			f.SetCellValue(sheetName, "D"+rowStr, r.Instance.IP)
-		}
-		// E: 应用类型
-		if r.Instance != nil {
-			f.SetCellValue(sheetName, "E"+rowStr, r.Instance.ApplicationType)
-		}
-		// F: 端口/容器
-		if r.Instance != nil {
-			if r.Instance.Container != "" {
-				f.SetCellValue(sheetName, "F"+rowStr, r.Instance.Container)
-			} else {
-				f.SetCellValue(sheetName, "F"+rowStr, fmt.Sprintf(":%d", r.Instance.Port))
-			}
-		}
-		// G: 版本
-		if r.Instance != nil {
-			f.SetCellValue(sheetName, "G"+rowStr, r.Instance.Version)
-		}
-		// H: 安装路径
-		if r.Instance != nil {
-			f.SetCellValue(sheetName, "H"+rowStr, r.Instance.InstallPath)
-		}
-		// I: 错误日志路径
-		if r.Instance != nil {
-			f.SetCellValue(sheetName, "I"+rowStr, r.Instance.ErrorLogPath)
-		}
-		// J: 访问日志路径
-		if r.Instance != nil {
-			f.SetCellValue(sheetName, "J"+rowStr, r.Instance.AccessLogPath)
-		}
-		// K: 运行状态
 		if r.Up {
-			f.SetCellValue(sheetName, "K"+rowStr, "运行")
+			f.SetCellValue(sheetName, "E"+rowStr, "运行")
 		} else {
-			f.SetCellValue(sheetName, "K"+rowStr, "停止")
+			f.SetCellValue(sheetName, "E"+rowStr, "停止")
 		}
-		// L: 活跃连接数
-		f.SetCellValue(sheetName, "L"+rowStr, r.ActiveConnections)
-		// M: 连接使用率
-		if r.ConnectionUsagePercent >= 0 {
-			f.SetCellValue(sheetName, "M"+rowStr, fmt.Sprintf("%.1f%%", r.ConnectionUsagePercent))
-			// Apply conditional format
-			usageCell := "M" + rowStr
-			if r.ConnectionUsagePercent > 90 {
-				f.SetCellStyle(sheetName, usageCell, usageCell, criticalStyle)
-			} else if r.ConnectionUsagePercent > 70 {
-				f.SetCellStyle(sheetName, usageCell, usageCell, warningStyle)
-			} else {
-				f.SetCellStyle(sheetName, usageCell, usageCell, normalStyle)
-			}
-		} else {
-			f.SetCellValue(sheetName, "M"+rowStr, "N/A")
-		}
-		// N: Worker进程数
-		f.SetCellValue(sheetName, "N"+rowStr, r.WorkerProcesses)
-		// O: Worker连接数
-		f.SetCellValue(sheetName, "O"+rowStr, r.WorkerConnections)
-		// P: 4xx错误页
-		if r.ErrorPage4xxConfigured {
-			f.SetCellValue(sheetName, "P"+rowStr, "已配置")
-		} else {
-			f.SetCellValue(sheetName, "P"+rowStr, "未配置")
-		}
-		// Q: 5xx错误页
-		if r.ErrorPage5xxConfigured {
-			f.SetCellValue(sheetName, "Q"+rowStr, "已配置")
-		} else {
-			f.SetCellValue(sheetName, "Q"+rowStr, "未配置")
-		}
-		// R: 最近错误时间
-		if r.LastErrorTimestamp > 0 {
-			f.SetCellValue(sheetName, "R"+rowStr, time.Unix(r.LastErrorTimestamp, 0).In(w.timezone).Format("2006-01-02 15:04:05"))
-		} else {
-			f.SetCellValue(sheetName, "R"+rowStr, "无错误")
-		}
-		// S: 非root用户
 		if r.NonRootUser {
-			f.SetCellValue(sheetName, "S"+rowStr, "是")
+			f.SetCellValue(sheetName, "F"+rowStr, "是")
 		} else {
-			f.SetCellValue(sheetName, "S"+rowStr, "否")
+			f.SetCellValue(sheetName, "F"+rowStr, "否")
 		}
-		// T: 整体状态
-		f.SetCellValue(sheetName, "T"+rowStr, nginxStatusText(r.Status))
+		f.SetCellValue(sheetName, "G"+rowStr, r.ActiveConnections)
+		f.SetCellValue(sheetName, "H"+rowStr, r.WorkerProcesses)
+		f.SetCellValue(sheetName, "I"+rowStr, r.WorkerConnections)
+		if r.ErrorPage5xxConfigured {
+			f.SetCellValue(sheetName, "J"+rowStr, "已配置")
+		} else {
+			f.SetCellValue(sheetName, "J"+rowStr, "未配置")
+		}
+		f.SetCellValue(sheetName, "K"+rowStr, nginxStatusText(r.Status))
 
-		// Apply conditional format to status column
-		statusCell := "T" + rowStr
+		statusCell := "K" + rowStr
 		switch r.Status {
 		case model.NginxStatusCritical:
 			f.SetCellStyle(sheetName, statusCell, statusCell, criticalStyle)
@@ -1855,99 +1855,6 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 			f.SetCellStyle(sheetName, statusCell, statusCell, warningStyle)
 		case model.NginxStatusNormal:
 			f.SetCellStyle(sheetName, statusCell, statusCell, normalStyle)
-		}
-	}
-
-	return nil
-}
-
-// createNginxAlertsSheet creates the Nginx alerts sheet.
-func (w *Writer) createNginxAlertsSheet(f *excelize.File, result *model.NginxInspectionResults) error {
-	// Create sheet
-	_, err := f.NewSheet(sheetNginxAlerts)
-	if err != nil {
-		return err
-	}
-
-	// Create styles
-	headerStyle, err := w.createHeaderStyle(f)
-	if err != nil {
-		return err
-	}
-
-	warningStyle, err := w.createWarningStyle(f)
-	if err != nil {
-		return err
-	}
-
-	criticalStyle, err := w.createCriticalStyle(f)
-	if err != nil {
-		return err
-	}
-
-	// Define headers
-	headers := []string{
-		"主机标识符", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息",
-	}
-
-	// Set column widths
-	colWidths := map[string]float64{
-		"A": 18, // 主机标识符
-		"B": 10, // 告警级别
-		"C": 20, // 指标名称
-		"D": 15, // 当前值
-		"E": 12, // 警告阈值
-		"F": 12, // 严重阈值
-		"G": 50, // 告警消息
-	}
-	for col, width := range colWidths {
-		f.SetColWidth(sheetNginxAlerts, col, col, width)
-	}
-
-	// Write headers
-	sheetName := sheetNginxAlerts
-	for i, header := range headers {
-		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue(sheetName, cell, header)
-		f.SetCellStyle(sheetName, cell, cell, headerStyle)
-	}
-
-	// Freeze header row
-	f.SetPanes(sheetName, &excelize.Panes{
-		Freeze:      true,
-		XSplit:      0,
-		YSplit:      1,
-		TopLeftCell: "A2",
-		ActivePane:  "bottomLeft",
-	})
-
-	// Write alert data
-	for i, alert := range result.Alerts {
-		row := i + 2
-		rowStr := fmt.Sprintf("%d", row)
-
-		// A: 主机标识符
-		f.SetCellValue(sheetName, "A"+rowStr, alert.Identifier)
-		// B: 告警级别
-		f.SetCellValue(sheetName, "B"+rowStr, alert.Level)
-		// C: 指标名称
-		f.SetCellValue(sheetName, "C"+rowStr, alert.MetricDisplayName)
-		// D: 当前值
-		f.SetCellValue(sheetName, "D"+rowStr, alert.FormattedValue)
-		// E: 警告阈值
-		f.SetCellValue(sheetName, "E"+rowStr, formatNginxThreshold(alert.WarningThreshold))
-		// F: 严重阈值
-		f.SetCellValue(sheetName, "F"+rowStr, formatNginxThreshold(alert.CriticalThreshold))
-		// G: 告警消息
-		f.SetCellValue(sheetName, "G"+rowStr, alert.Message)
-
-		// Apply conditional format to alert level column
-		levelCell := "B" + rowStr
-		switch alert.Level {
-		case model.AlertLevelCritical:
-			f.SetCellStyle(sheetName, levelCell, levelCell, criticalStyle)
-		case model.AlertLevelWarning:
-			f.SetCellStyle(sheetName, levelCell, levelCell, warningStyle)
 		}
 	}
 
@@ -2035,35 +1942,23 @@ func (w *Writer) WriteNginxInspection(result *model.NginxInspectionResults, outp
 		return fmt.Errorf("Nginx inspection result is nil")
 	}
 
-	// Ensure output path has .xlsx extension
 	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
 		outputPath = outputPath + ".xlsx"
 	}
 
-	// Create new Excel file
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Create Nginx sheet
 	if err := w.createNginxSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create Nginx sheet: %w", err)
 	}
 
-	// Create Nginx alerts sheet
-	if err := w.createNginxAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
-	}
-
-	// Remove default Sheet1
 	if err := f.DeleteSheet(defaultSheet); err != nil {
-		// Ignore error if sheet doesn't exist
 	}
 
-	// Set active sheet to Nginx
 	idx, _ := f.GetSheetIndex(sheetNginx)
 	f.SetActiveSheet(idx)
 
-	// Save the file
 	if err := f.SaveAs(outputPath); err != nil {
 		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
@@ -2077,24 +1972,16 @@ func (w *Writer) AppendNginxInspection(result *model.NginxInspectionResults, exi
 		return fmt.Errorf("Nginx inspection result is nil")
 	}
 
-	// Open existing Excel file
 	f, err := excelize.OpenFile(existingPath)
 	if err != nil {
 		return fmt.Errorf("failed to open existing Excel file: %w", err)
 	}
 	defer f.Close()
 
-	// Create Nginx sheet
 	if err := w.createNginxSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create Nginx sheet: %w", err)
 	}
 
-	// Create Nginx alerts sheet
-	if err := w.createNginxAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create Nginx alerts sheet: %w", err)
-	}
-
-	// Save the file
 	if err := f.Save(); err != nil {
 		return fmt.Errorf("failed to save Excel file: %w", err)
 	}
@@ -2201,89 +2088,6 @@ func (w *Writer) createTomcatSheet(f *excelize.File, result *model.TomcatInspect
 	return nil
 }
 
-// createTomcatAlertsSheet creates the Tomcat alerts worksheet.
-func (w *Writer) createTomcatAlertsSheet(f *excelize.File, result *model.TomcatInspectionResults) error {
-	if result == nil || len(result.Alerts) == 0 {
-		return nil
-	}
-
-	// Create sheet
-	_, err := f.NewSheet(sheetTomcatAlerts)
-	if err != nil {
-		return err
-	}
-
-	headerStyle, err := w.createHeaderStyle(f)
-	if err != nil {
-		return err
-	}
-
-	warningStyle, err := w.createWarningStyle(f)
-	if err != nil {
-		return err
-	}
-
-	criticalStyle, err := w.createCriticalStyle(f)
-	if err != nil {
-		return err
-	}
-
-	headers := []string{
-		"实例标识", "告警级别", "指标名称", "当前值",
-		"警告阈值", "严重阈值", "告警消息",
-	}
-
-	// Set column widths
-	colWidths := map[string]float64{
-		"A": 25, "B": 12, "C": 20, "D": 15, "E": 15, "F": 15, "G": 40,
-	}
-	for col, width := range colWidths {
-		f.SetColWidth(sheetTomcatAlerts, col, col, width)
-	}
-
-	// Write headers
-	for i, header := range headers {
-		cell := fmt.Sprintf("%s1", columnName(i+1))
-		f.SetCellValue(sheetTomcatAlerts, cell, header)
-		f.SetCellStyle(sheetTomcatAlerts, cell, cell, headerStyle)
-	}
-
-	f.SetPanes(sheetTomcatAlerts, &excelize.Panes{Freeze: true, YSplit: 1})
-
-	// Sort alerts: critical first, then by identifier
-	alerts := make([]*model.TomcatAlert, len(result.Alerts))
-	copy(alerts, result.Alerts)
-	sort.Slice(alerts, func(i, j int) bool {
-		if alerts[i].Level != alerts[j].Level {
-			return alertLevelPriority(alerts[i].Level) > alertLevelPriority(alerts[j].Level)
-		}
-		return alerts[i].Identifier < alerts[j].Identifier
-	})
-
-	// Write alert rows
-	for i, alert := range alerts {
-		row := i + 2
-		f.SetCellValue(sheetTomcatAlerts, "A"+fmt.Sprint(row), alert.Identifier)
-		f.SetCellValue(sheetTomcatAlerts, "B"+fmt.Sprint(row), alertLevelText(alert.Level))
-		f.SetCellValue(sheetTomcatAlerts, "C"+fmt.Sprint(row), alert.MetricDisplayName)
-		f.SetCellValue(sheetTomcatAlerts, "D"+fmt.Sprint(row), alert.FormattedValue)
-		f.SetCellValue(sheetTomcatAlerts, "E"+fmt.Sprint(row), formatTomcatThreshold(alert.WarningThreshold, alert.MetricName))
-		f.SetCellValue(sheetTomcatAlerts, "F"+fmt.Sprint(row), formatTomcatThreshold(alert.CriticalThreshold, alert.MetricName))
-		f.SetCellValue(sheetTomcatAlerts, "G"+fmt.Sprint(row), alert.Message)
-
-		// Color code the level column
-		levelCell := "B" + fmt.Sprint(row)
-		switch alert.Level {
-		case model.AlertLevelCritical:
-			f.SetCellStyle(sheetTomcatAlerts, levelCell, levelCell, criticalStyle)
-		case model.AlertLevelWarning:
-			f.SetCellStyle(sheetTomcatAlerts, levelCell, levelCell, warningStyle)
-		}
-	}
-
-	return nil
-}
-
 // WriteTomcatInspection generates a standalone Excel report for Tomcat inspection.
 func (w *Writer) WriteTomcatInspection(result *model.TomcatInspectionResults, outputPath string) error {
 	if result == nil {
@@ -2301,16 +2105,9 @@ func (w *Writer) WriteTomcatInspection(result *model.TomcatInspectionResults, ou
 		return fmt.Errorf("failed to create Tomcat sheet: %w", err)
 	}
 
-	if err := w.createTomcatAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create Tomcat alerts sheet: %w", err)
-	}
-
-	// Remove default Sheet1
 	if err := f.DeleteSheet(defaultSheet); err != nil {
-		// Ignore error
 	}
 
-	// Set active sheet to Tomcat
 	idx, _ := f.GetSheetIndex(sheetTomcat)
 	f.SetActiveSheet(idx)
 
@@ -2331,10 +2128,6 @@ func (w *Writer) AppendTomcatInspection(result *model.TomcatInspectionResults, e
 
 	if err := w.createTomcatSheet(f, result); err != nil {
 		return fmt.Errorf("failed to create Tomcat sheet: %w", err)
-	}
-
-	if err := w.createTomcatAlertsSheet(f, result); err != nil {
-		return fmt.Errorf("failed to create Tomcat alerts sheet: %w", err)
 	}
 
 	return f.Save()

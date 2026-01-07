@@ -45,6 +45,7 @@ type HostResult struct {
 	CPUCores      int        `json:"cpu_cores"`      // CPU 核心数
 	CPUModel      string     `json:"cpu_model"`      // CPU 型号
 	MemoryTotal   int64      `json:"memory_total"`   // 内存总量（bytes）
+	BootTime      string     `json:"boot_time"`      // 启动时间
 	Status        HostStatus `json:"status"`         // 整体状态
 
 	// 指标数据

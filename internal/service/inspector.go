@@ -174,6 +174,12 @@ func (i *Inspector) buildInspectionResult(
 			hostResult.Alerts = hostEval.Alerts
 			// Set status from evaluation result
 			hostResult.Status = hostEval.Status
+			// Calculate BootTime from uptime metric
+			if uptimeMetric, ok := hostResult.Metrics["uptime"]; ok && !uptimeMetric.IsNA {
+				uptimeSeconds := uptimeMetric.RawValue
+				bootTime := result.InspectionTime.Add(-time.Duration(uptimeSeconds) * time.Second)
+				hostResult.BootTime = bootTime.Format("2006-01-02 15:04:05")
+			}
 		}
 
 		result.AddHost(hostResult)

@@ -267,6 +267,9 @@ func (c *RedisCollector) setPendingMetrics(
 
 // collectMetricConcurrent collects a single metric for all instances (concurrent-safe).
 // This method is called concurrently by multiple goroutines, protected by mutex.
+//
+// If the metric has label_extract, it delegates to collectLabelExtractMetric.
+// Otherwise, it directly queries and stores the metric value.
 func (c *RedisCollector) collectMetricConcurrent(
 	ctx context.Context,
 	metric *model.RedisMetricDefinition,
@@ -274,6 +277,10 @@ func (c *RedisCollector) collectMetricConcurrent(
 	resultsMap map[string]*model.RedisInspectionResult,
 	mu *sync.Mutex,
 ) error {
+	if metric.HasLabelExtract() {
+		return c.collectLabelExtractMetric(ctx, metric, instances, resultsMap, mu)
+	}
+
 	c.logger.Debug().
 		Str("metric", metric.Name).
 		Str("query", metric.Query).
@@ -331,6 +338,78 @@ func (c *RedisCollector) collectMetricConcurrent(
 		Int("results", len(results)).
 		Int("matched", matchedCount).
 		Msg("Redis metric collected (concurrent)")
+
+	return nil
+}
+
+func (c *RedisCollector) collectLabelExtractMetric(
+	ctx context.Context,
+	metric *model.RedisMetricDefinition,
+	instances []*model.RedisInstance,
+	resultsMap map[string]*model.RedisInspectionResult,
+	mu *sync.Mutex,
+) error {
+	c.logger.Debug().
+		Str("metric", metric.Name).
+		Str("label_extract", metric.LabelExtract).
+		Msg("collecting label extract metric")
+
+	vmFilter := c.instanceFilter.ToVMHostFilter()
+	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	if err != nil {
+		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
+	}
+
+	addressMap := make(map[string]*model.RedisInstance, len(instances))
+	for _, instance := range instances {
+		addressMap[instance.Address] = instance
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	matchedCount := 0
+	for _, result := range results {
+		address := c.extractAddress(result.Labels)
+		if address == "" {
+			continue
+		}
+
+		if !c.matchesAddressPatterns(address) {
+			continue
+		}
+
+		if _, exists := addressMap[address]; !exists {
+			continue
+		}
+
+		extractedValue := result.Labels[metric.LabelExtract]
+		if extractedValue == "" {
+			c.logger.Warn().
+				Str("metric", metric.Name).
+				Str("address", address).
+				Str("label", metric.LabelExtract).
+				Msg("label value not found")
+			continue
+		}
+
+		if inspResult, ok := resultsMap[address]; ok {
+			mv := &model.RedisMetricValue{
+				Name:        metric.Name,
+				RawValue:    result.Value,
+				StringValue: extractedValue,
+				Timestamp:   time.Now().Unix(),
+				Labels:      result.Labels,
+			}
+			inspResult.SetMetric(mv)
+			matchedCount++
+		}
+	}
+
+	c.logger.Debug().
+		Str("metric", metric.Name).
+		Int("matched", matchedCount).
+		Msg("label extract metric collected")
 
 	return nil
 }

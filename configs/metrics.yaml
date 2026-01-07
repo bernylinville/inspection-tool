@@ -159,63 +159,62 @@ metrics:
     note: "僵尸状态(Z)的进程数，应保持为0"
 
   # ---------------------------------------------------------------------------
-  # 待定巡检项 - 预留接口
+  # NTP 时间同步
   # ---------------------------------------------------------------------------
-  # 以下指标当前监控数据不包含，在报告中显示 "N/A"
-  # 后续可通过扩展 Categraf 插件或其他方式实现
-
-  - name: ntp_check
-    display_name: "NTP 检查"
-    query: ""             # 空查询，显示 N/A
-    unit: ""
+  - name: ntp_offset
+    display_name: "NTP 时间偏差"
+    query: 'chrony_system_time'
+    unit: "ms"
     category: system
-    status: pending       # 标记为待实现
-    note: "时间同步状态检查，需额外检测"
+    format: ntp_offset
+    note: "系统时钟与 NTP 源的偏差，stratum=0 表示未同步"
+
+  # ---------------------------------------------------------------------------
+  # 安全检查指标（由 collect_host_security.sh.j2 采集）
+  # ---------------------------------------------------------------------------
 
   - name: public_network
     display_name: "公网访问检查"
-    query: ""
+    query: 'host_public_network_access'
     unit: ""
-    category: system
-    status: pending
-    note: "检查服务器是否可访问公网，需额外检测"
+    category: security
+    format: boolean
+    note: "检查服务器是否可访问公网 (1=可访问, 0=不可访问)"
 
   - name: password_expiry
     display_name: "密码过期天数"
-    query: ""
+    query: 'host_password_expiry_days'
     unit: "天"
-    category: system
-    status: pending
-    note: "系统用户密码过期天数，监控数据不包含"
+    category: security
+    expand_by_label: user
+    note: "系统用户密码过期天数 (-1=永不过期, -2=无法获取)"
 
   - name: password_policy
     display_name: "密码策略"
-    query: ""
+    query: 'host_password_policy'
     unit: ""
-    category: system
-    status: pending
-    note: "系统密码策略配置，监控数据不包含"
+    category: security
+    expand_by_label: param
+    note: "密码策略参数值 (PASS_MAX_DAYS, PASS_MIN_DAYS, PASS_MIN_LEN, PASS_WARN_AGE)"
 
   - name: open_files
     display_name: "打开文件句柄数"
-    query: ""
+    query: 'host_open_files'
     unit: "个"
     category: system
-    status: pending
-    note: "当前打开的文件句柄数，需额外采集"
+    note: "当前打开的文件句柄数，来自 /proc/sys/fs/file-nr"
 
   - name: max_files
     display_name: "句柄数最大值"
-    query: ""
+    query: 'host_max_files'
     unit: "个"
     category: system
-    status: pending
-    note: "系统文件句柄数上限，需额外采集"
+    note: "系统文件句柄数上限，来自 /proc/sys/fs/file-max"
 
-  - name: system_params
+  - name: sysctl_params
     display_name: "系统参数检查"
-    query: ""
+    query: 'host_sysctl'
     unit: ""
     category: system
-    status: pending
-    note: "内核参数等系统配置检查，需额外采集"
+    expand_by_label: param
+    note: "sysctl 内核参数值 (9个关键网络参数)"

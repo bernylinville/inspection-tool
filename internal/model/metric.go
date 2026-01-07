@@ -26,10 +26,11 @@ const (
 type MetricFormat string
 
 const (
-	MetricFormatPercent  MetricFormat = "percent"  // 百分比（如 75.5%）
-	MetricFormatSize     MetricFormat = "size"     // 字节大小（如 16.0 GB）
-	MetricFormatDuration MetricFormat = "duration" // 时间时长（如 3天2小时）
-	MetricFormatNumber   MetricFormat = "number"   // 普通数值
+	MetricFormatPercent   MetricFormat = "percent"    // 百分比（如 75.5%）
+	MetricFormatSize      MetricFormat = "size"       // 字节大小（如 16.0 GB）
+	MetricFormatDuration  MetricFormat = "duration"   // 时间时长（如 3天2小时）
+	MetricFormatNumber    MetricFormat = "number"     // 普通数值
+	MetricFormatNTPOffset MetricFormat = "ntp_offset" // NTP 偏差（秒转毫秒显示，如 +15.3ms）
 )
 
 // AggregateType represents how to aggregate multiple values (e.g., across disk mounts).
