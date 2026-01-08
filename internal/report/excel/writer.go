@@ -129,7 +129,7 @@ func (w *Writer) createSummarySheet(f *excelize.File, result *model.InspectionRe
 	// Create sheet
 	idx, err := f.NewSheet(sheetSummary)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetSummary, err)
 	}
 	f.SetActiveSheet(idx)
 
@@ -151,7 +151,7 @@ func (w *Writer) createSummarySheet(f *excelize.File, result *model.InspectionRe
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetSummary, err)
 	}
 
 	// Create title style
@@ -166,7 +166,7 @@ func (w *Writer) createSummarySheet(f *excelize.File, result *model.InspectionRe
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("create title style for %s: %w", sheetSummary, err)
 	}
 
 	// Create value style
@@ -180,7 +180,7 @@ func (w *Writer) createSummarySheet(f *excelize.File, result *model.InspectionRe
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("create value style for %s: %w", sheetSummary, err)
 	}
 
 	// Set column widths
@@ -235,28 +235,28 @@ func (w *Writer) createDetailSheet(f *excelize.File, result *model.InspectionRes
 	// Create sheet
 	_, err := f.NewSheet(sheetDetail)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetDetail, err)
 	}
 
 	// Create styles
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetDetail, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetDetail, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetDetail, err)
 	}
 
 	normalStyle, err := w.createNormalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create normal style for %s: %w", sheetDetail, err)
 	}
 
 	headers := []string{
@@ -342,23 +342,23 @@ func (w *Writer) createAlertsSheet(f *excelize.File, result *model.InspectionRes
 	// Create sheet
 	_, err := f.NewSheet(sheetAlerts)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetAlerts, err)
 	}
 
 	// Create styles
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetAlerts, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetAlerts, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetAlerts, err)
 	}
 
 	// Define headers
@@ -456,27 +456,27 @@ var sysctlDisplayNames = []string{
 func (w *Writer) createBaselineCheckSheet(f *excelize.File, result *model.InspectionResult) error {
 	_, err := f.NewSheet(sheetBaselineCheck)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetBaselineCheck, err)
 	}
 
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetBaselineCheck, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetBaselineCheck, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetBaselineCheck, err)
 	}
 
 	normalStyle, err := w.createNormalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create normal style for %s: %w", sheetBaselineCheck, err)
 	}
 
 	headers := []string{
@@ -583,22 +583,22 @@ func (w *Writer) setSysctlCell(f *excelize.File, sheet, cell string, metric *mod
 func (w *Writer) createUnifiedAlertsSheet(f *excelize.File, unifiedAlerts []*model.UnifiedAlert) error {
 	_, err := f.NewSheet(sheetAlerts)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetAlerts, err)
 	}
 
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetAlerts, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetAlerts, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetAlerts, err)
 	}
 
 	headers := []string{"来源类型", "实例标识", "告警级别", "指标名称", "当前值", "警告阈值", "严重阈值", "告警消息"}
@@ -1160,28 +1160,28 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 	// Create sheet
 	_, err := f.NewSheet(sheetMySQL)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetMySQL, err)
 	}
 
 	// Create styles
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetMySQL, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetMySQL, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetMySQL, err)
 	}
 
 	normalStyle, err := w.createNormalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create normal style for %s: %w", sheetMySQL, err)
 	}
 
 	headers := []string{
@@ -1423,28 +1423,28 @@ func (w *Writer) createRedisSheet(f *excelize.File, result *model.RedisInspectio
 	// Create sheet
 	_, err := f.NewSheet(sheetRedis)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetRedis, err)
 	}
 
 	// Create styles
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetRedis, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetRedis, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetRedis, err)
 	}
 
 	normalStyle, err := w.createNormalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create normal style for %s: %w", sheetRedis, err)
 	}
 
 	headers := []string{
@@ -1574,28 +1574,28 @@ func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisC
 	// Create sheet
 	_, err := f.NewSheet(sheetName)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetName, err)
 	}
 
 	// Create styles
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetName, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetName, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetName, err)
 	}
 
 	normalStyle, err := w.createNormalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create normal style for %s: %w", sheetName, err)
 	}
 
 	headers := []string{
@@ -1761,28 +1761,28 @@ func (w *Writer) createNginxSheet(f *excelize.File, result *model.NginxInspectio
 	// Create sheet
 	_, err := f.NewSheet(sheetNginx)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetNginx, err)
 	}
 
 	// Create styles
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetNginx, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetNginx, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetNginx, err)
 	}
 
 	normalStyle, err := w.createNormalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create normal style for %s: %w", sheetNginx, err)
 	}
 
 	headers := []string{
@@ -1998,28 +1998,28 @@ func (w *Writer) createTomcatSheet(f *excelize.File, result *model.TomcatInspect
 	// Create sheet
 	_, err := f.NewSheet(sheetTomcat)
 	if err != nil {
-		return err
+		return fmt.Errorf("create sheet %s: %w", sheetTomcat, err)
 	}
 
 	// Create styles
 	headerStyle, err := w.createHeaderStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create header style for %s: %w", sheetTomcat, err)
 	}
 
 	warningStyle, err := w.createWarningStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create warning style for %s: %w", sheetTomcat, err)
 	}
 
 	criticalStyle, err := w.createCriticalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create critical style for %s: %w", sheetTomcat, err)
 	}
 
 	normalStyle, err := w.createNormalStyle(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("create normal style for %s: %w", sheetTomcat, err)
 	}
 
 	// Define headers (15 columns)
