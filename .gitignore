@@ -6,3 +6,7 @@ inspect
 .DS_Store
 *.out
 .serena/
+# categraf/*
+reports/*
+.sisyphus/
+config.yaml

@@ -142,6 +142,22 @@ mysql_metrics:
     category: security
     note: "检查 MySQL 是否由非 root 用户启动，1=是，0=否。通过 collect_mysql_security.sh.j2 脚本采集"
 
+  # ---------------------------------------------------------------------------
+  # 远程连接权限检查（安全相关）
+  # ---------------------------------------------------------------------------
+  - name: remote_users_count
+    display_name: "远程连接用户数"
+    query: "mysql_remote_users_count"
+    category: security
+    note: "mysql.user 表中 host='%' 的用户数量，>0 表示存在可从任意主机连接的用户，需关注安全风险"
+
+  - name: remote_user_info
+    display_name: "远程连接用户"
+    query: "mysql_remote_user_info"
+    category: security
+    label_extract: user
+    note: "远程连接用户名（host='%'），从 user 标签提取。通过 collect_mysql_security.sh.j2 脚本采集"
+
   - name: slave_running
     display_name: "Slave 是否启动"
     query: ""

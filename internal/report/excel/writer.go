@@ -1187,13 +1187,13 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 	headers := []string{
 		"巡检时间", "IP地址", "端口", "数据库版本", "Server ID",
 		"集群模式", "同步状态", "最大连接数", "当前连接数",
-		"慢查询日志", "Binlog状态", "Binlog保留(天)", "非root用户", "整体状态",
+		"慢查询日志", "Binlog状态", "Binlog保留(天)", "非root用户", "远程连接用户", "整体状态",
 	}
 
 	colWidths := map[string]float64{
 		"A": 20, "B": 15, "C": 8, "D": 12, "E": 12,
 		"F": 12, "G": 10, "H": 12, "I": 12,
-		"J": 10, "K": 10, "L": 14, "M": 12, "N": 10,
+		"J": 10, "K": 10, "L": 14, "M": 12, "N": 20, "O": 10,
 	}
 	for col, width := range colWidths {
 		f.SetColWidth(sheetMySQL, col, col, width)
@@ -1235,9 +1235,22 @@ func (w *Writer) createMySQLSheet(f *excelize.File, result *model.MySQLInspectio
 		f.SetCellValue(sheetMySQL, "K"+rowStr, boolToText(r.BinlogEnabled))
 		f.SetCellValue(sheetMySQL, "L"+rowStr, w.formatBinlogExpireDays(r.BinlogExpireSeconds))
 		f.SetCellValue(sheetMySQL, "M"+rowStr, r.NonRootUser)
-		f.SetCellValue(sheetMySQL, "N"+rowStr, mysqlStatusText(r.Status))
 
-		statusCell := "N" + rowStr
+		// 远程连接用户列
+		if r.RemoteUsersCount > 0 && len(r.RemoteUsers) > 0 {
+			f.SetCellValue(sheetMySQL, "N"+rowStr, strings.Join(r.RemoteUsers, ", "))
+			// 有远程用户时显示警告色
+			f.SetCellStyle(sheetMySQL, "N"+rowStr, "N"+rowStr, warningStyle)
+		} else if r.RemoteUsersCount > 0 {
+			f.SetCellValue(sheetMySQL, "N"+rowStr, fmt.Sprintf("%d 个用户", r.RemoteUsersCount))
+			f.SetCellStyle(sheetMySQL, "N"+rowStr, "N"+rowStr, warningStyle)
+		} else {
+			f.SetCellValue(sheetMySQL, "N"+rowStr, "无")
+		}
+
+		f.SetCellValue(sheetMySQL, "O"+rowStr, mysqlStatusText(r.Status))
+
+		statusCell := "O" + rowStr
 		switch r.Status {
 		case model.MySQLStatusCritical:
 			f.SetCellStyle(sheetMySQL, statusCell, statusCell, criticalStyle)

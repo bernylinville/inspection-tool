@@ -274,6 +274,10 @@ type MySQLInspectionResult struct {
 	// 待实现项 (MVP 阶段显示 N/A)
 	NonRootUser string `json:"non_root_user"`
 
+	// 远程连接权限检查
+	RemoteUsersCount int      `json:"remote_users_count"` // mysql.user 表中 host='%' 的用户数量
+	RemoteUsers      []string `json:"remote_users"`       // 远程连接用户列表（host='%'）
+
 	// 运行时间
 	Uptime int64 `json:"uptime"` // 秒
 

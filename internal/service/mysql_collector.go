@@ -652,6 +652,28 @@ func (c *MySQLCollector) populateResultFields(result *model.MySQLInspectionResul
 		}
 	}
 
+	// remote_users_count → RemoteUsersCount
+	if mv := result.GetMetric("remote_users_count"); mv != nil && !mv.IsNA {
+		result.RemoteUsersCount = int(mv.RawValue)
+	}
+
+	// remote_user_info → RemoteUsers (collect user names from StringValue)
+	// Note: Each remote_user_info metric represents one user with host='%'
+	// The user name is extracted from the 'user' label via label_extract
+	if mv := result.GetMetric("remote_user_info"); mv != nil && !mv.IsNA && mv.StringValue != "" {
+		// Add the user to the list if not already present
+		userExists := false
+		for _, u := range result.RemoteUsers {
+			if u == mv.StringValue {
+				userExists = true
+				break
+			}
+		}
+		if !userExists {
+			result.RemoteUsers = append(result.RemoteUsers, mv.StringValue)
+		}
+	}
+
 	// Set collected timestamp
 	result.CollectedAt = time.Now()
 }
