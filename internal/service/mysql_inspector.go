@@ -15,8 +15,8 @@ import (
 // MySQLInspector orchestrates the complete MySQL inspection workflow, coordinating
 // instance discovery, data collection, threshold evaluation, and result aggregation.
 type MySQLInspector struct {
-	collector *MySQLCollector
-	evaluator *MySQLEvaluator
+	collector MySQLInstanceCollector
+	evaluator MySQLInstanceEvaluator
 	config    *config.Config
 	timezone  *time.Location
 	version   string
@@ -40,8 +40,8 @@ type MySQLInspectorOption func(*MySQLInspector)
 //   - error: Timezone loading error or validation failure
 func NewMySQLInspector(
 	cfg *config.Config,
-	collector *MySQLCollector,
-	evaluator *MySQLEvaluator,
+	collector MySQLInstanceCollector,
+	evaluator MySQLInstanceEvaluator,
 	logger zerolog.Logger,
 	opts ...MySQLInspectorOption,
 ) (*MySQLInspector, error) {

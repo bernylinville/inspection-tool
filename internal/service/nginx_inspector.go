@@ -15,8 +15,8 @@ import (
 // NginxInspector orchestrates the complete Nginx inspection workflow, coordinating
 // instance discovery, data collection, threshold evaluation, and result aggregation.
 type NginxInspector struct {
-	collector *NginxCollector
-	evaluator *NginxEvaluator
+	collector NginxInstanceCollector
+	evaluator NginxInstanceEvaluator
 	config    *config.Config
 	timezone  *time.Location
 	version   string
@@ -40,8 +40,8 @@ type NginxInspectorOption func(*NginxInspector)
 //   - error: Timezone loading error or validation failure
 func NewNginxInspector(
 	cfg *config.Config,
-	collector *NginxCollector,
-	evaluator *NginxEvaluator,
+	collector NginxInstanceCollector,
+	evaluator NginxInstanceEvaluator,
 	logger zerolog.Logger,
 	opts ...NginxInspectorOption,
 ) (*NginxInspector, error) {

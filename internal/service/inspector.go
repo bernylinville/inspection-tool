@@ -17,8 +17,8 @@ const defaultTimezone = "Asia/Shanghai"
 // Inspector orchestrates the complete inspection workflow, coordinating
 // data collection, threshold evaluation, and result aggregation.
 type Inspector struct {
-	collector *Collector
-	evaluator *Evaluator
+	collector HostCollector
+	evaluator HostEvaluator
 	config    *config.Config
 	timezone  *time.Location
 	version   string
@@ -31,8 +31,8 @@ type InspectorOption func(*Inspector)
 // NewInspector creates a new Inspector with the given dependencies.
 func NewInspector(
 	cfg *config.Config,
-	collector *Collector,
-	evaluator *Evaluator,
+	collector HostCollector,
+	evaluator HostEvaluator,
 	logger zerolog.Logger,
 	opts ...InspectorOption,
 ) (*Inspector, error) {

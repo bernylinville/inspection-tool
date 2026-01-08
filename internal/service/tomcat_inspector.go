@@ -15,8 +15,8 @@ import (
 // TomcatInspector orchestrates the complete Tomcat inspection workflow, coordinating
 // instance discovery, data collection, threshold evaluation, and result aggregation.
 type TomcatInspector struct {
-	collector *TomcatCollector
-	evaluator *TomcatEvaluator
+	collector TomcatInstanceCollector
+	evaluator TomcatInstanceEvaluator
 	config    *config.Config
 	timezone  *time.Location
 	version   string
@@ -40,8 +40,8 @@ type TomcatInspectorOption func(*TomcatInspector)
 //   - error: Timezone loading error or validation failure
 func NewTomcatInspector(
 	cfg *config.Config,
-	collector *TomcatCollector,
-	evaluator *TomcatEvaluator,
+	collector TomcatInstanceCollector,
+	evaluator TomcatInstanceEvaluator,
 	logger zerolog.Logger,
 	opts ...TomcatInspectorOption,
 ) (*TomcatInspector, error) {

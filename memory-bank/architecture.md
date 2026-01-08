@@ -810,21 +810,44 @@ type ReportWriter interface {
     Format() string  // 返回格式名称：excel, html, pdf
 }
 
-// 数据采集器（已实现）
-type Collector struct {
-    // CollectAll 执行完整数据采集流程
+// Host 数据采集器接口
+type HostCollector interface {
     CollectAll(ctx context.Context) (*CollectionResult, error)
-    // CollectHostMetas 采集主机元信息
-    CollectHostMetas(ctx context.Context) ([]*model.HostMeta, error)
-    // CollectMetrics 采集指标数据
-    CollectMetrics(ctx context.Context, hosts []*model.HostMeta, metrics []*model.MetricDefinition) (map[string]*model.HostMetrics, error)
 }
 
-// 阈值评估器接口（待实现）
-type Evaluator interface {
-    Evaluate(metrics *HostMetrics, thresholds []Threshold) []Alert
+// Host 阈值评估器接口
+type HostEvaluator interface {
+    EvaluateAll(hostMetrics map[string]*model.HostMetrics) *EvaluationResult
 }
+
+// 实例发现器接口（泛型）
+type InstanceDiscoverer[T any] interface {
+    DiscoverInstances(ctx context.Context) ([]*T, error)
+}
+
+// 指标定义提供者接口（泛型）
+type MetricDefinitionProvider[M any] interface {
+    GetMetrics() []*M
+}
+
+// MySQL 采集器接口
+type MySQLInstanceCollector interface {
+    InstanceDiscoverer[model.MySQLInstance]
+    MetricDefinitionProvider[model.MySQLMetricDefinition]
+    CollectMetrics(ctx, instances, metrics) (map[string]*MySQLInspectionResult, error)
+}
+
+// MySQL 评估器接口
+type MySQLInstanceEvaluator interface {
+    EvaluateAll(results map[string]*MySQLInspectionResult) []*MySQLEvaluationResult
+}
+
+// Redis/Nginx/Tomcat 接口类似...
 ```
+
+**接口实现文件**:
+- `internal/service/interfaces.go` - 接口定义 + 编译时检查
+- `internal/service/interfaces_mock.go` - Mock 实现用于测试
 
 ---
 
@@ -861,3 +884,4 @@ type Evaluator interface {
 | 2025-12-15 | **MySQL 功能步骤 3**：扩展配置结构体（MySQLInspectionConfig、MySQLFilter、MySQLThresholds） |
 | 2025-12-15 | **MySQL 功能步骤 4**：创建 MySQL 指标定义文件（configs/mysql-metrics.yaml，16 个指标） |
 | 2025-12-15 | **MySQL 功能步骤 5**：创建 MySQL 采集器接口（mysql_collector.go、MySQLMetricDefinition），阶段二开始 |
+| 2026-01-08 | **接口化重构**：添加 interfaces.go（10 个接口定义）、interfaces_mock.go（Mock 实现），重构 5 个 Inspector 接受接口类型 |

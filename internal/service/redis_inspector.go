@@ -15,8 +15,8 @@ import (
 // RedisInspector orchestrates the complete Redis inspection workflow, coordinating
 // instance discovery, data collection, threshold evaluation, and result aggregation.
 type RedisInspector struct {
-	collector *RedisCollector
-	evaluator *RedisEvaluator
+	collector RedisInstanceCollector
+	evaluator RedisInstanceEvaluator
 	config    *config.Config
 	timezone  *time.Location
 	version   string
@@ -40,8 +40,8 @@ type RedisInspectorOption func(*RedisInspector)
 //   - error: Timezone loading error or validation failure
 func NewRedisInspector(
 	cfg *config.Config,
-	collector *RedisCollector,
-	evaluator *RedisEvaluator,
+	collector RedisInstanceCollector,
+	evaluator RedisInstanceEvaluator,
 	logger zerolog.Logger,
 	opts ...RedisInspectorOption,
 ) (*RedisInspector, error) {
