@@ -13,6 +13,7 @@ import (
 	"inspection-tool/internal/client/vm"
 	"inspection-tool/internal/config"
 	"inspection-tool/internal/model"
+	"inspection-tool/internal/util"
 )
 
 // setupVMTestServer 创建 Mock VictoriaMetrics 服务器
@@ -413,9 +414,9 @@ func TestMatchAddressPattern_Wildcard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchAddressPattern(tt.address, tt.pattern)
+			result := util.MatchPattern(tt.address, tt.pattern)
 			if result != tt.expected {
-				t.Errorf("matchAddressPattern(%q, %q) = %v, want %v",
+				t.Errorf("util.MatchPattern(%q, %q) = %v, want %v",
 					tt.address, tt.pattern, result, tt.expected)
 			}
 		})
@@ -441,9 +442,9 @@ func TestMatchAddressPattern_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchAddressPattern(tt.address, tt.pattern)
+			result := util.MatchPattern(tt.address, tt.pattern)
 			if result != tt.expected {
-				t.Errorf("matchAddressPattern(%q, %q) = %v, want %v",
+				t.Errorf("util.MatchPattern(%q, %q) = %v, want %v",
 					tt.address, tt.pattern, result, tt.expected)
 			}
 		})
@@ -452,12 +453,6 @@ func TestMatchAddressPattern_EdgeCases(t *testing.T) {
 
 // TestExtractAddress_Priority 测试标签优先级
 func TestExtractAddress_Priority(t *testing.T) {
-	cfg := &config.MySQLInspectionConfig{
-		Enabled:     true,
-		ClusterMode: "mgr",
-	}
-	collector := createTestMySQLCollector("http://dummy", cfg)
-
 	tests := []struct {
 		name     string
 		labels   map[string]string
@@ -515,7 +510,7 @@ func TestExtractAddress_Priority(t *testing.T) {
 		{
 			name: "empty address value",
 			labels: map[string]string{
-				"address": "",
+				"address":  "",
 				"instance": "172.18.182.92:3306",
 			},
 			expected: "172.18.182.92:3306",
@@ -524,9 +519,9 @@ func TestExtractAddress_Priority(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := collector.extractAddress(tt.labels)
+			result := util.ExtractAddress(tt.labels)
 			if result != tt.expected {
-				t.Errorf("extractAddress(%v) = %q, want %q", tt.labels, result, tt.expected)
+				t.Errorf("util.ExtractAddress(%v) = %q, want %q", tt.labels, result, tt.expected)
 			}
 		})
 	}

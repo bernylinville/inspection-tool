@@ -13,6 +13,7 @@ import (
 	"inspection-tool/internal/client/vm"
 	"inspection-tool/internal/config"
 	"inspection-tool/internal/model"
+	"inspection-tool/internal/util"
 )
 
 // setupRedisVMTestServer creates a mock VictoriaMetrics server for testing.
@@ -606,10 +607,6 @@ func TestRedisCollector_extractRole(t *testing.T) {
 
 // TestRedisCollector_extractAddress tests extractAddress method.
 func TestRedisCollector_extractAddress(t *testing.T) {
-	collector := &RedisCollector{
-		logger: zerolog.Nop(),
-	}
-
 	tests := []struct {
 		name     string
 		labels   map[string]string
@@ -649,7 +646,7 @@ func TestRedisCollector_extractAddress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := collector.extractAddress(tt.labels)
+			result := util.ExtractAddress(tt.labels)
 			if result != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, result)
 			}

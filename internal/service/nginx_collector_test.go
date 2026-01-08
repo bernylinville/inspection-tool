@@ -13,6 +13,7 @@ import (
 	"inspection-tool/internal/client/vm"
 	"inspection-tool/internal/config"
 	"inspection-tool/internal/model"
+	"inspection-tool/internal/util"
 )
 
 // =============================================================================
@@ -474,9 +475,9 @@ func TestMatchHostnamePattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchHostnamePattern(tt.hostname, tt.pattern)
+			result := util.MatchPattern(tt.hostname, tt.pattern)
 			if result != tt.expected {
-				t.Errorf("matchHostnamePattern(%q, %q) = %v, want %v",
+				t.Errorf("util.MatchPattern(%q, %q) = %v, want %v",
 					tt.hostname, tt.pattern, result, tt.expected)
 			}
 		})
@@ -501,9 +502,9 @@ func TestMatchHostnamePattern_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := matchHostnamePattern(tt.hostname, tt.pattern)
+			result := util.MatchPattern(tt.hostname, tt.pattern)
 			if result != tt.expected {
-				t.Errorf("matchHostnamePattern(%q, %q) = %v, want %v",
+				t.Errorf("util.MatchPattern(%q, %q) = %v, want %v",
 					tt.hostname, tt.pattern, result, tt.expected)
 			}
 		})

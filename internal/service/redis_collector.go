@@ -13,6 +13,7 @@ import (
 	"inspection-tool/internal/client/vm"
 	"inspection-tool/internal/config"
 	"inspection-tool/internal/model"
+	"inspection-tool/internal/util"
 )
 
 // RedisCollector is the data collection service for Redis instances.
@@ -141,7 +142,7 @@ func (c *RedisCollector) DiscoverInstances(ctx context.Context) ([]*model.RedisI
 
 	for _, result := range results {
 		// 3.1 Extract address
-		address := c.extractAddress(result.Labels)
+		address := util.ExtractAddress(result.Labels)
 		if address == "" {
 			c.logger.Warn().Interface("labels", result.Labels).Msg("missing address label")
 			continue
@@ -181,21 +182,6 @@ func (c *RedisCollector) DiscoverInstances(ctx context.Context) ([]*model.RedisI
 	return instances, nil
 }
 
-// extractAddress extracts Redis instance address from metric labels.
-// Tries the following labels in order: "address", "instance", "server".
-// Returns empty string if no address label is found.
-func (c *RedisCollector) extractAddress(labels map[string]string) string {
-	addressLabels := []string{"address", "instance", "server"}
-
-	for _, label := range addressLabels {
-		if addr, ok := labels[label]; ok && addr != "" {
-			return addr
-		}
-	}
-
-	return ""
-}
-
 // extractRole extracts Redis role from metric labels.
 // Uses "replica_role" label to determine master/slave role.
 // Returns RedisRoleUnknown if the label is missing or has unexpected value.
@@ -225,13 +211,7 @@ func (c *RedisCollector) matchesAddressPatterns(address string) bool {
 		return true
 	}
 
-	for _, pattern := range c.instanceFilter.AddressPatterns {
-		if matchAddressPattern(address, pattern) {
-			return true
-		}
-	}
-
-	return false
+	return util.MatchAnyPattern(address, c.instanceFilter.AddressPatterns)
 }
 
 // =============================================================================
@@ -305,7 +285,7 @@ func (c *RedisCollector) collectMetricConcurrent(
 
 	matchedCount := 0
 	for _, result := range results {
-		address := c.extractAddress(result.Labels)
+		address := util.ExtractAddress(result.Labels)
 		if address == "" {
 			continue
 		}
@@ -370,7 +350,7 @@ func (c *RedisCollector) collectLabelExtractMetric(
 
 	matchedCount := 0
 	for _, result := range results {
-		address := c.extractAddress(result.Labels)
+		address := util.ExtractAddress(result.Labels)
 		if address == "" {
 			continue
 		}

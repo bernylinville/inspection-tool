@@ -4,7 +4,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 	"inspection-tool/internal/client/vm"
 	"inspection-tool/internal/config"
 	"inspection-tool/internal/model"
+	"inspection-tool/internal/util"
 )
 
 // =============================================================================
@@ -367,13 +367,7 @@ func (c *TomcatCollector) matchesHostnamePatterns(hostname string) bool {
 		return true
 	}
 
-	for _, pattern := range c.instanceFilter.HostnamePatterns {
-		if matchPattern(hostname, pattern) {
-			return true
-		}
-	}
-
-	return false
+	return util.MatchAnyPattern(hostname, c.instanceFilter.HostnamePatterns)
 }
 
 // matchesContainerPatterns checks if a container name matches any configured patterns.
@@ -383,39 +377,7 @@ func (c *TomcatCollector) matchesContainerPatterns(container string) bool {
 		return true
 	}
 
-	for _, pattern := range c.instanceFilter.ContainerPatterns {
-		if matchPattern(container, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// matchPattern checks if a value matches a pattern with wildcard support.
-// Supports wildcard '*' which matches any sequence of characters.
-func matchPattern(value, pattern string) bool {
-	// Exact match optimization
-	if value == pattern {
-		return true
-	}
-
-	// No wildcard
-	if !strings.Contains(pattern, "*") {
-		return false
-	}
-
-	// Convert to regex
-	regexPattern := regexp.QuoteMeta(pattern)
-	regexPattern = strings.ReplaceAll(regexPattern, "\\*", ".*")
-	regexPattern = "^" + regexPattern + "$"
-
-	re, err := regexp.Compile(regexPattern)
-	if err != nil {
-		return false
-	}
-
-	return re.MatchString(value)
+	return util.MatchAnyPattern(container, c.instanceFilter.ContainerPatterns)
 }
 
 // =============================================================================

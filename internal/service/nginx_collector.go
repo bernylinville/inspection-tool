@@ -4,7 +4,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 	"inspection-tool/internal/client/vm"
 	"inspection-tool/internal/config"
 	"inspection-tool/internal/model"
+	"inspection-tool/internal/util"
 )
 
 // NginxCollector is the data collection service for Nginx/OpenResty instances.
@@ -304,43 +304,7 @@ func (c *NginxCollector) matchesHostnamePatterns(hostname string) bool {
 		return true
 	}
 
-	for _, pattern := range c.instanceFilter.HostnamePatterns {
-		if matchHostnamePattern(hostname, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// matchHostnamePattern checks if a hostname matches a pattern with wildcard support.
-// Supports wildcard '*' which matches any sequence of characters.
-// Examples:
-//   - "GX-NM-*" matches "GX-NM-MNS-NGX-01"
-//   - "*-NGX-*" matches "GX-NM-MNS-NGX-01"
-//   - "*" matches all hostnames
-func matchHostnamePattern(hostname, pattern string) bool {
-	// Exact match optimization
-	if hostname == pattern {
-		return true
-	}
-
-	// No wildcard
-	if !strings.Contains(pattern, "*") {
-		return false
-	}
-
-	// Convert to regex
-	regexPattern := regexp.QuoteMeta(pattern)
-	regexPattern = strings.ReplaceAll(regexPattern, "\\*", ".*")
-	regexPattern = "^" + regexPattern + "$"
-
-	re, err := regexp.Compile(regexPattern)
-	if err != nil {
-		return false
-	}
-
-	return re.MatchString(hostname)
+	return util.MatchAnyPattern(hostname, c.instanceFilter.HostnamePatterns)
 }
 
 // =============================================================================
