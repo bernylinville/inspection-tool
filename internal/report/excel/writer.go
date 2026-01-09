@@ -2145,3 +2145,165 @@ func (w *Writer) AppendTomcatInspection(result *model.TomcatInspectionResults, e
 
 	return f.Save()
 }
+
+const sheetElasticsearch = "Elasticsearch巡检"
+
+func (w *Writer) WriteElasticsearchInspection(result *model.ElasticsearchInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("elasticsearch inspection result is nil")
+	}
+
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".xlsx") {
+		outputPath = outputPath + ".xlsx"
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	if err := w.createElasticsearchSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Elasticsearch sheet: %w", err)
+	}
+
+	if err := f.DeleteSheet(defaultSheet); err != nil {
+	}
+
+	idx, _ := f.GetSheetIndex(sheetElasticsearch)
+	f.SetActiveSheet(idx)
+
+	return f.SaveAs(outputPath)
+}
+
+func (w *Writer) AppendElasticsearchInspection(result *model.ElasticsearchInspectionResults, existingPath string) error {
+	if result == nil {
+		return fmt.Errorf("elasticsearch inspection result is nil")
+	}
+
+	f, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		return fmt.Errorf("failed to open existing file: %w", err)
+	}
+	defer f.Close()
+
+	if err := w.createElasticsearchSheet(f, result); err != nil {
+		return fmt.Errorf("failed to create Elasticsearch sheet: %w", err)
+	}
+
+	return f.Save()
+}
+
+func (w *Writer) createElasticsearchSheet(f *excelize.File, result *model.ElasticsearchInspectionResults) error {
+	_, err := f.NewSheet(sheetElasticsearch)
+	if err != nil {
+		return fmt.Errorf("create sheet %s: %w", sheetElasticsearch, err)
+	}
+
+	headerStyle, err := w.createHeaderStyle(f)
+	if err != nil {
+		return fmt.Errorf("create header style for %s: %w", sheetElasticsearch, err)
+	}
+
+	warningStyle, err := w.createWarningStyle(f)
+	if err != nil {
+		return fmt.Errorf("create warning style for %s: %w", sheetElasticsearch, err)
+	}
+
+	criticalStyle, err := w.createCriticalStyle(f)
+	if err != nil {
+		return fmt.Errorf("create critical style for %s: %w", sheetElasticsearch, err)
+	}
+
+	normalStyle, err := w.createNormalStyle(f)
+	if err != nil {
+		return fmt.Errorf("create normal style for %s: %w", sheetElasticsearch, err)
+	}
+
+	headers := []string{
+		"巡检时间", "节点IP", "端口", "集群名称", "节点角色",
+		"堆内存使用率", "CPU使用率", "磁盘使用率", "文件句柄使用率",
+		"熔断器触发", "线程池拒绝", "GC耗时(秒)", "运行时间(天)", "整体状态",
+	}
+
+	colWidths := map[string]float64{
+		"A": 20, "B": 15, "C": 8, "D": 15, "E": 12,
+		"F": 14, "G": 12, "H": 12, "I": 14,
+		"J": 12, "K": 12, "L": 12, "M": 12, "N": 10,
+	}
+	for col, width := range colWidths {
+		f.SetColWidth(sheetElasticsearch, col, col, width)
+	}
+
+	for i, header := range headers {
+		cell := fmt.Sprintf("%c1", 'A'+i)
+		f.SetCellValue(sheetElasticsearch, cell, header)
+		f.SetCellStyle(sheetElasticsearch, cell, cell, headerStyle)
+	}
+
+	row := 2
+	inspectionTime := result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+
+	for _, r := range result.Results {
+		if r == nil || r.Instance == nil {
+			continue
+		}
+
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("A%d", row), inspectionTime)
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("B%d", row), r.Instance.IP)
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("C%d", row), r.Instance.Port)
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("D%d", row), r.Instance.ClusterName)
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("E%d", row), string(r.Instance.Role))
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("F%d", row), fmt.Sprintf("%.1f%%", r.HeapMemoryPercent))
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("G%d", row), fmt.Sprintf("%.1f%%", r.CPUPercent))
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("H%d", row), fmt.Sprintf("%.1f%%", r.DiskUsagePercent))
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("I%d", row), fmt.Sprintf("%.1f%%", r.FileHandleUsagePercent))
+
+		cbTripped := "否"
+		if r.CircuitBreakerTripped {
+			cbTripped = "是"
+		}
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("J%d", row), cbTripped)
+
+		tpRejected := "否"
+		if r.ThreadPoolRejected {
+			tpRejected = "是"
+		}
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("K%d", row), tpRejected)
+
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("L%d", row), fmt.Sprintf("%.2f", r.GCDurationSeconds))
+		uptimeDays := r.Uptime / 86400
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("M%d", row), fmt.Sprintf("%d", uptimeDays))
+		f.SetCellValue(sheetElasticsearch, fmt.Sprintf("N%d", row), w.formatESStatus(r.Status))
+
+		var rowStyle int
+		switch r.Status {
+		case model.ElasticsearchStatusCritical:
+			rowStyle = criticalStyle
+		case model.ElasticsearchStatusWarning:
+			rowStyle = warningStyle
+		case model.ElasticsearchStatusNormal:
+			rowStyle = normalStyle
+		}
+
+		if rowStyle != 0 {
+			f.SetCellStyle(sheetElasticsearch, fmt.Sprintf("N%d", row), fmt.Sprintf("N%d", row), rowStyle)
+		}
+
+		row++
+	}
+
+	return nil
+}
+
+func (w *Writer) formatESStatus(status model.ElasticsearchInstanceStatus) string {
+	switch status {
+	case model.ElasticsearchStatusNormal:
+		return "正常"
+	case model.ElasticsearchStatusWarning:
+		return "警告"
+	case model.ElasticsearchStatusCritical:
+		return "严重"
+	case model.ElasticsearchStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}

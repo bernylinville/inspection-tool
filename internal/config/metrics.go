@@ -274,3 +274,48 @@ func CountActiveTomcatMetrics(metrics []*model.TomcatMetricDefinition) int {
 	}
 	return count
 }
+
+func LoadElasticsearchMetrics(metricsPath string) ([]*model.ElasticsearchMetricDefinition, error) {
+	if metricsPath == "" {
+		return nil, fmt.Errorf("Elasticsearch metrics file path is required")
+	}
+
+	if _, err := os.Stat(metricsPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("Elasticsearch metrics file not found: %s", metricsPath)
+	}
+
+	data, err := os.ReadFile(metricsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Elasticsearch metrics file: %w", err)
+	}
+
+	var cfg model.ElasticsearchMetricsConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse Elasticsearch metrics file: %w", err)
+	}
+
+	if len(cfg.Metrics) == 0 {
+		return nil, fmt.Errorf("no Elasticsearch metrics defined in file: %s", metricsPath)
+	}
+
+	for i, m := range cfg.Metrics {
+		if m.Name == "" {
+			return nil, fmt.Errorf("Elasticsearch metric at index %d has no name", i)
+		}
+		if m.DisplayName == "" {
+			return nil, fmt.Errorf("Elasticsearch metric %q has no display_name", m.Name)
+		}
+	}
+
+	return cfg.Metrics, nil
+}
+
+func CountActiveElasticsearchMetrics(metrics []*model.ElasticsearchMetricDefinition) int {
+	count := 0
+	for _, m := range metrics {
+		if !m.IsPending() {
+			count++
+		}
+	}
+	return count
+}

@@ -57,6 +57,20 @@ func newValidConfig() *Config {
 				MGRMemberCountExpected:  3,
 			},
 		},
+		Elasticsearch: ElasticsearchInspectionConfig{
+			Enabled: false,
+			Thresholds: ElasticsearchThresholds{
+				HeapMemoryUsageWarning:  85,
+				HeapMemoryUsageCritical: 95,
+				CPUUsageWarning:         80,
+				CPUUsageCritical:        90,
+				DiskUsageWarning:        80,
+				DiskUsageCritical:       90,
+				FileHandleUsageWarning:  80,
+				FileHandleUsageCritical: 90,
+				ExpectedNodeCount:       3,
+			},
+		},
 	}
 }
 
@@ -517,8 +531,8 @@ func TestValidate_MySQLEnabled_ValidClusterModes(t *testing.T) {
 func TestValidate_MySQLMultipleErrors(t *testing.T) {
 	cfg := newValidConfig()
 	cfg.MySQL.Enabled = true
-	cfg.MySQL.ClusterMode = ""                            // Error 1: missing cluster_mode
-	cfg.MySQL.Thresholds.ConnectionUsageWarning = 90      // Error 2: warning >= critical
+	cfg.MySQL.ClusterMode = ""                       // Error 1: missing cluster_mode
+	cfg.MySQL.Thresholds.ConnectionUsageWarning = 90 // Error 2: warning >= critical
 	cfg.MySQL.Thresholds.ConnectionUsageCritical = 70
 
 	err := Validate(cfg)

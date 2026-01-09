@@ -155,6 +155,25 @@ type TomcatInstanceEvaluator interface {
 }
 
 // =============================================================================
+// Elasticsearch Inspection Interfaces
+// =============================================================================
+
+type ElasticsearchInstanceCollector interface {
+	InstanceDiscoverer[model.ElasticsearchInstance]
+	MetricDefinitionProvider[model.ElasticsearchMetricDefinition]
+
+	CollectMetrics(
+		ctx context.Context,
+		instances []*model.ElasticsearchInstance,
+		metrics []*model.ElasticsearchMetricDefinition,
+	) (map[string]*model.ElasticsearchInspectionResult, error)
+}
+
+type ElasticsearchInstanceEvaluator interface {
+	EvaluateAll(results map[string]*model.ElasticsearchInspectionResult) []*ElasticsearchEvaluationResult
+}
+
+// =============================================================================
 // Compile-Time Interface Satisfaction Checks
 // =============================================================================
 
@@ -180,3 +199,7 @@ var _ NginxInstanceEvaluator = (*NginxEvaluator)(nil)
 // Tomcat inspection
 var _ TomcatInstanceCollector = (*TomcatCollector)(nil)
 var _ TomcatInstanceEvaluator = (*TomcatEvaluator)(nil)
+
+// Elasticsearch inspection
+var _ ElasticsearchInstanceCollector = (*ElasticsearchCollector)(nil)
+var _ ElasticsearchInstanceEvaluator = (*ElasticsearchEvaluator)(nil)

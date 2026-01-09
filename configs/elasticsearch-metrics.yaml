@@ -1,0 +1,135 @@
+# =============================================================================
+# Elasticsearch 数据库巡检工具 - 指标定义文件
+# =============================================================================
+#
+# 本文件定义了所有 Elasticsearch 巡检指标的 PromQL 查询表达式和元数据。
+# 基于 Categraf 采集的 Elasticsearch 监控数据，支持 Elasticsearch 8.x 集群模式（3节点）。
+#
+# 指标字段说明:
+#   name:           指标唯一标识（用于代码引用）
+#   display_name:   中文显示名称（用于报告展示）
+#   query:          PromQL 查询表达式
+#   category:       分类（cluster, node, resource, stability）
+#   label_extract:  从指标标签提取值（可选，如 version, cluster_name）
+#   format:         格式化类型（可选：size, duration, percent）
+#   status:         状态（pending=待实现）
+#   note:           备注说明
+#
+# =============================================================================
+
+elasticsearch_metrics:
+  # ---------------------------------------------------------------------------
+  # 集群健康状态
+  # ---------------------------------------------------------------------------
+  - name: cluster_health_red
+    display_name: "集群状态（红色索引）"
+    query: 'count(elasticsearch_cluster_health_indices_status{color="red"}) or vector(0)'
+    category: cluster
+    note: "红色索引数量 > 0 表示集群存在红色状态的索引"
+
+  - name: cluster_health_yellow
+    display_name: "集群状态（黄色索引）"
+    query: 'count(elasticsearch_cluster_health_indices_status{color="yellow"}) or vector(0)'
+    category: cluster
+    note: "黄色索引数量 > 0 表示集群存在黄色状态的索引"
+
+  - name: unassigned_shards
+    display_name: "未分配分片数"
+    query: 'sum(elasticsearch_cluster_health_unassigned_shards) or vector(0)'
+    category: cluster
+    note: "未分配的分片数总和"
+
+  - name: active_shards
+    display_name: "活跃分片数"
+    query: 'sum(elasticsearch_cluster_health_active_shards) or vector(0)'
+    category: cluster
+    note: "活跃分片总数"
+
+  - name: node_count
+    display_name: "节点数"
+    query: 'count(elasticsearch_up == 1) or vector(0)'
+    category: cluster
+    note: "Elasticsearch 在线节点总数"
+
+  # ---------------------------------------------------------------------------
+  # 节点状态
+  # ---------------------------------------------------------------------------
+  - name: node_up
+    display_name: "节点存活状态"
+    query: "elasticsearch_up"
+    category: node
+    note: "1=节点在线，0=节点离线"
+
+  - name: node_roles
+    display_name: "节点角色"
+    query: 'elasticsearch_nodes_roles{role="master"}'
+    category: node
+    label_extract: role
+    note: "节点角色（master/data/ingest）"
+
+  - name: cluster_name
+    display_name: "集群名称"
+    query: "elasticsearch_up"
+    category: node
+    label_extract: cluster
+    note: "从 elasticsearch_up 标签提取集群名称"
+
+  # ---------------------------------------------------------------------------
+  # 资源使用情况
+  # ---------------------------------------------------------------------------
+  - name: heap_memory_percent
+    display_name: "JVM 堆内存使用率"
+    query: "elasticsearch_jvm_mem_heap_used_percent"
+    category: resource
+    format: percent
+    note: "JVM Heap 内存使用率（百分比）"
+
+  - name: cpu_percent
+    display_name: "系统 CPU 使用率"
+    query: "elasticsearch_os_cpu_percent"
+    category: resource
+    format: percent
+    note: "系统 CPU 使用率"
+
+  - name: disk_usage_percent
+    display_name: "磁盘使用率"
+    query: "(1 - elasticsearch_filesystem_data_available_bytes / elasticsearch_filesystem_data_size_in_bytes) * 100"
+    category: resource
+    format: percent
+    note: "数据盘使用率 = (1 - available / total) * 100"
+
+  - name: file_handle_usage_percent
+    display_name: "文件句柄使用率"
+    query: "elasticsearch_process_open_files_descriptors / elasticsearch_process_max_files_descriptors * 100"
+    category: resource
+    format: percent
+    note: "文件句柄使用率 = open / max * 100"
+
+  # ---------------------------------------------------------------------------
+  # 稳定性指标
+  # ---------------------------------------------------------------------------
+  - name: circuit_breaker_tripped
+    display_name: "熔断器触发次数"
+    query: "sum(elasticsearch_breakers_tripped) by (name, host)"
+    category: stability
+    note: "熔断器触发总次数（累计值）"
+
+  - name: thread_pool_rejected
+    display_name: "线程池拒绝次数"
+    query: "sum(elasticsearch_thread_pool_rejected_count) by (name, host)"
+    category: stability
+    note: "线程池拒绝总次数（累计值）"
+
+  - name: gc_collection_seconds
+    display_name: "GC 耗时（秒）"
+    query: "sum(elasticsearch_jvm_gc_collection_seconds_sum) by (name, host)"
+    category: stability
+    format: duration
+    note: "GC 总耗时（累计值，秒）"
+
+  - name: uptime_seconds
+    display_name: "运行时间"
+    query: "elasticsearch_jvm_uptime_seconds"
+    category: node
+    format: duration
+    note: "节点运行时间（秒）"

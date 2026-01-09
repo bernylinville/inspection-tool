@@ -114,4 +114,16 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("nginx.thresholds.connection_usage_critical", 90.0)
 	v.SetDefault("nginx.thresholds.last_error_warning_minutes", 60)
 	v.SetDefault("nginx.thresholds.last_error_critical_minutes", 10)
+
+	// Elasticsearch inspection defaults
+	v.SetDefault("elasticsearch.enabled", false)
+	v.SetDefault("elasticsearch.thresholds.heap_memory_usage_warning", 85.0)
+	v.SetDefault("elasticsearch.thresholds.heap_memory_usage_critical", 95.0)
+	v.SetDefault("elasticsearch.thresholds.cpu_usage_warning", 80.0)
+	v.SetDefault("elasticsearch.thresholds.cpu_usage_critical", 90.0)
+	v.SetDefault("elasticsearch.thresholds.disk_usage_warning", 80.0)
+	v.SetDefault("elasticsearch.thresholds.disk_usage_critical", 90.0)
+	v.SetDefault("elasticsearch.thresholds.file_handle_usage_warning", 80.0)
+	v.SetDefault("elasticsearch.thresholds.file_handle_usage_critical", 90.0)
+	v.SetDefault("elasticsearch.thresholds.expected_node_count", 3)
 }

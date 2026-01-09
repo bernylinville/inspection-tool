@@ -838,21 +838,27 @@ type CombinedTemplateData struct {
 	NginxInstances    []*NginxInstanceData
 	NginxAlerts       []*NginxAlertData
 	// Tomcat data
-	HasTomcat           bool
-	TomcatSummary       *model.TomcatInspectionSummary
-	TomcatAlertSummary  *model.TomcatAlertSummary
-	TomcatInstances     []*TomcatInstanceData
-	TomcatAlerts        []*TomcatAlertData
-	UnifiedAlerts       []*UnifiedAlertData
-	UnifiedAlertSummary *UnifiedAlertSummary
-	Version             string
-	GeneratedAt         string
+	HasTomcat          bool
+	TomcatSummary      *model.TomcatInspectionSummary
+	TomcatAlertSummary *model.TomcatAlertSummary
+	TomcatInstances    []*TomcatInstanceData
+	TomcatAlerts       []*TomcatAlertData
+	// Elasticsearch data
+	HasElasticsearch          bool
+	ElasticsearchSummary      *model.ElasticsearchInspectionSummary
+	ElasticsearchAlertSummary *model.ElasticsearchAlertSummary
+	ElasticsearchInstances    []*ElasticsearchInstanceData
+	ElasticsearchAlerts       []*ElasticsearchAlertData
+	UnifiedAlerts             []*UnifiedAlertData
+	UnifiedAlertSummary       *UnifiedAlertSummary
+	Version                   string
+	GeneratedAt               string
 }
 
-// WriteCombined generates an HTML report combining Host, MySQL, Redis, Nginx, and Tomcat inspection results.
-func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string) error {
+// WriteCombined generates an HTML report combining Host, MySQL, Redis, Nginx, Tomcat, and Elasticsearch inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults, outputPath string) error {
 	// At least one result must be present
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
 		return fmt.Errorf("all inspection results are nil")
 	}
 
@@ -868,7 +874,7 @@ func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *
 	}
 
 	// Prepare combined template data
-	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult)
+	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, esResult)
 
 	// Create output file
 	file, err := os.Create(outputPath)
@@ -904,7 +910,7 @@ func (w *Writer) loadCombinedTemplate() (*template.Template, error) {
 }
 
 // prepareCombinedTemplateData prepares data for the combined template.
-func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults) *CombinedTemplateData {
+func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults) *CombinedTemplateData {
 	data := &CombinedTemplateData{
 		Title:       "系统巡检报告",
 		GeneratedAt: time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
@@ -931,6 +937,10 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 		data.InspectionTime = tomcatResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
 		data.Duration = formatDuration(tomcatResult.Duration)
 		data.Version = tomcatResult.Version
+	} else if esResult != nil {
+		data.InspectionTime = esResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(esResult.Duration)
+		data.Version = esResult.Version
 	}
 
 	// Fill Host data if available
@@ -1039,7 +1049,24 @@ func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult,
 		data.TomcatAlerts = w.convertTomcatAlerts(tomcatResult.Alerts)
 	}
 
-	data.UnifiedAlerts, data.UnifiedAlertSummary = w.collectUnifiedAlerts(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult)
+	// Fill Elasticsearch data if available
+	if esResult != nil {
+		data.HasElasticsearch = true
+		data.ElasticsearchSummary = esResult.Summary
+		data.ElasticsearchAlertSummary = esResult.AlertSummary
+
+		// Convert Elasticsearch instances
+		esInstances := make([]*ElasticsearchInstanceData, 0, len(esResult.Results))
+		for _, r := range esResult.Results {
+			esInstances = append(esInstances, w.convertElasticsearchInstanceData(r))
+		}
+		data.ElasticsearchInstances = esInstances
+
+		// Convert Elasticsearch alerts
+		data.ElasticsearchAlerts = w.convertElasticsearchAlerts(esResult.Alerts)
+	}
+
+	data.UnifiedAlerts, data.UnifiedAlertSummary = w.collectUnifiedAlerts(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, esResult)
 
 	return data
 }
@@ -2020,7 +2047,7 @@ type UnifiedAlertSummary struct {
 	CriticalCount int
 }
 
-func (w *Writer) collectUnifiedAlerts(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults) ([]*UnifiedAlertData, *UnifiedAlertSummary) {
+func (w *Writer) collectUnifiedAlerts(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults) ([]*UnifiedAlertData, *UnifiedAlertSummary) {
 	var alerts []*UnifiedAlertData
 	summary := &UnifiedAlertSummary{}
 
@@ -2154,6 +2181,32 @@ func (w *Writer) collectUnifiedAlerts(hostResult *model.InspectionResult, mysqlR
 		}
 	}
 
+	if esResult != nil {
+		for _, alert := range esResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Elasticsearch",
+					SourceTypeClass:   "source-elasticsearch",
+					Identifier:        alert.Address,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
 	sort.Slice(alerts, func(i, j int) bool {
 		pi := alertLevelPriorityFromClass(alerts[i].LevelClass)
 		pj := alertLevelPriorityFromClass(alerts[j].LevelClass)
@@ -2178,4 +2231,207 @@ func alertLevelPriorityFromClass(levelClass string) int {
 	default:
 		return 0
 	}
+}
+
+type ElasticsearchInstanceData struct {
+	Address                string
+	IP                     string
+	Port                   int
+	ClusterName            string
+	Role                   string
+	HeapMemoryPercent      string
+	CPUPercent             string
+	DiskUsagePercent       string
+	FileHandleUsagePercent string
+	CircuitBreakerTripped  string
+	ThreadPoolRejected     string
+	GCDurationSeconds      string
+	UptimeDays             string
+	Status                 string
+	StatusClass            string
+	AlertCount             int
+}
+
+type ElasticsearchAlertData struct {
+	Address           string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+type ElasticsearchTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.ElasticsearchInspectionSummary
+	AlertSummary   *model.ElasticsearchAlertSummary
+	Instances      []*ElasticsearchInstanceData
+	Alerts         []*ElasticsearchAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+func esStatusText(status model.ElasticsearchInstanceStatus) string {
+	switch status {
+	case model.ElasticsearchStatusNormal:
+		return "正常"
+	case model.ElasticsearchStatusWarning:
+		return "警告"
+	case model.ElasticsearchStatusCritical:
+		return "严重"
+	case model.ElasticsearchStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+func esStatusClass(status model.ElasticsearchInstanceStatus) string {
+	switch status {
+	case model.ElasticsearchStatusNormal:
+		return "status-normal"
+	case model.ElasticsearchStatusWarning:
+		return "status-warning"
+	case model.ElasticsearchStatusCritical:
+		return "status-critical"
+	case model.ElasticsearchStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+func esBoolToText(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
+}
+
+func (w *Writer) convertElasticsearchInstanceData(r *model.ElasticsearchInspectionResult) *ElasticsearchInstanceData {
+	uptimeDays := r.Uptime / 86400
+	return &ElasticsearchInstanceData{
+		Address:                r.Instance.Address,
+		IP:                     r.Instance.IP,
+		Port:                   r.Instance.Port,
+		ClusterName:            r.Instance.ClusterName,
+		Role:                   string(r.Instance.Role),
+		HeapMemoryPercent:      fmt.Sprintf("%.1f%%", r.HeapMemoryPercent),
+		CPUPercent:             fmt.Sprintf("%.1f%%", r.CPUPercent),
+		DiskUsagePercent:       fmt.Sprintf("%.1f%%", r.DiskUsagePercent),
+		FileHandleUsagePercent: fmt.Sprintf("%.1f%%", r.FileHandleUsagePercent),
+		CircuitBreakerTripped:  esBoolToText(r.CircuitBreakerTripped),
+		ThreadPoolRejected:     esBoolToText(r.ThreadPoolRejected),
+		GCDurationSeconds:      fmt.Sprintf("%.2f", r.GCDurationSeconds),
+		UptimeDays:             fmt.Sprintf("%d", uptimeDays),
+		Status:                 esStatusText(r.Status),
+		StatusClass:            esStatusClass(r.Status),
+		AlertCount:             len(r.Alerts),
+	}
+}
+
+func formatESThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "heap_memory_percent", "cpu_percent", "disk_usage_percent", "file_handle_usage_percent":
+		return fmt.Sprintf("%.1f%%", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+func (w *Writer) convertElasticsearchAlerts(alerts []*model.ElasticsearchAlert) []*ElasticsearchAlertData {
+	sortedAlerts := make([]*model.ElasticsearchAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Address < sortedAlerts[j].Address
+	})
+
+	result := make([]*ElasticsearchAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &ElasticsearchAlertData{
+			Address:           alert.Address,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatESThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatESThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+func (w *Writer) prepareElasticsearchTemplateData(result *model.ElasticsearchInspectionResults) *ElasticsearchTemplateData {
+	instances := make([]*ElasticsearchInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertElasticsearchInstanceData(r))
+	}
+
+	alerts := w.convertElasticsearchAlerts(result.Alerts)
+
+	return &ElasticsearchTemplateData{
+		Title:          "Elasticsearch 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Instances:      instances,
+		Alerts:         alerts,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+func (w *Writer) WriteElasticsearchInspection(result *model.ElasticsearchInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("elasticsearch inspection result is nil")
+	}
+
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	tmpl, err := w.loadElasticsearchTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Elasticsearch template: %w", err)
+	}
+
+	data := w.prepareElasticsearchTemplateData(result)
+
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return nil
+}
+
+func (w *Writer) loadElasticsearchTemplate() (*template.Template, error) {
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    func(s model.ElasticsearchInstanceStatus) string { return esStatusClass(s) },
+		"alertClass":     func(l model.AlertLevel) string { return alertLevelClass(l) },
+	}
+
+	tmpl, err := template.New("elasticsearch.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/elasticsearch.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded elasticsearch template: %w", err)
+	}
+	return tmpl, nil
 }

@@ -10,3 +10,4 @@ inspect
 reports/*
 .sisyphus/
 config.yaml
+.venv/

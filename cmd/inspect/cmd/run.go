@@ -24,21 +24,24 @@ import (
 
 // Command flags
 var (
-	outputDir        string   // Output directory for reports
-	formats          []string // Output formats (excel, html)
-	metricsPath      string   // Path to metrics definition file
-	mysqlMetricsPath string   // Path to MySQL metrics definition file
-	mysqlOnly        bool     // Run MySQL inspection only
-	skipMySQL        bool     // Skip MySQL inspection
-	redisMetricsPath string   // Path to Redis metrics definition file
-	redisOnly        bool     // Run Redis inspection only
-	skipRedis        bool     // Skip Redis inspection
-	nginxMetricsPath string   // Path to Nginx metrics definition file
-	nginxOnly        bool     // Run Nginx inspection only
-	skipNginx        bool     // Skip Nginx inspection
-	tomcatMetricsPath string  // Path to Tomcat metrics definition file
-	tomcatOnly        bool    // Run Tomcat inspection only
-	skipTomcat        bool    // Skip Tomcat inspection
+	outputDir         string   // Output directory for reports
+	formats           []string // Output formats (excel, html)
+	metricsPath       string   // Path to metrics definition file
+	mysqlMetricsPath  string   // Path to MySQL metrics definition file
+	mysqlOnly         bool     // Run MySQL inspection only
+	skipMySQL         bool     // Skip MySQL inspection
+	redisMetricsPath  string   // Path to Redis metrics definition file
+	redisOnly         bool     // Run Redis inspection only
+	skipRedis         bool     // Skip Redis inspection
+	nginxMetricsPath  string   // Path to Nginx metrics definition file
+	nginxOnly         bool     // Run Nginx inspection only
+	skipNginx         bool     // Skip Nginx inspection
+	tomcatMetricsPath string   // Path to Tomcat metrics definition file
+	tomcatOnly        bool     // Run Tomcat inspection only
+	skipTomcat        bool     // Skip Tomcat inspection
+	esMetricsPath     string   // Path to Elasticsearch metrics definition file
+	esOnly            bool     // Run Elasticsearch inspection only
+	skipES            bool     // Skip Elasticsearch inspection
 )
 
 // runCmd represents the run command.
@@ -121,6 +124,11 @@ func init() {
 	runCmd.Flags().StringVar(&tomcatMetricsPath, "tomcat-metrics", "configs/tomcat-metrics.yaml", "Tomcat 指标定义文件路径")
 	runCmd.Flags().BoolVar(&tomcatOnly, "tomcat-only", false, "仅执行 Tomcat 巡检")
 	runCmd.Flags().BoolVar(&skipTomcat, "skip-tomcat", false, "跳过 Tomcat 巡检")
+
+	// Elasticsearch-specific flags
+	runCmd.Flags().StringVar(&esMetricsPath, "es-metrics", "configs/elasticsearch-metrics.yaml", "Elasticsearch 指标定义文件路径")
+	runCmd.Flags().BoolVar(&esOnly, "es-only", false, "仅执行 Elasticsearch 巡检")
+	runCmd.Flags().BoolVar(&skipES, "skip-es", false, "跳过 Elasticsearch 巡检")
 }
 
 // runInspection executes the complete inspection workflow.
@@ -197,12 +205,35 @@ func runInspection(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Elasticsearch flag validation
+	if esOnly && skipES {
+		fmt.Fprintf(os.Stderr, "❌ --es-only 和 --skip-es 不能同时使用\n")
+		os.Exit(1)
+	}
+	if esOnly && mysqlOnly {
+		fmt.Fprintf(os.Stderr, "❌ --es-only 和 --mysql-only 不能同时使用\n")
+		os.Exit(1)
+	}
+	if esOnly && redisOnly {
+		fmt.Fprintf(os.Stderr, "❌ --es-only 和 --redis-only 不能同时使用\n")
+		os.Exit(1)
+	}
+	if esOnly && nginxOnly {
+		fmt.Fprintf(os.Stderr, "❌ --es-only 和 --nginx-only 不能同时使用\n")
+		os.Exit(1)
+	}
+	if esOnly && tomcatOnly {
+		fmt.Fprintf(os.Stderr, "❌ --es-only 和 --tomcat-only 不能同时使用\n")
+		os.Exit(1)
+	}
+
 	// Determine execution mode
-	runHostInspection := !mysqlOnly && !redisOnly && !nginxOnly && !tomcatOnly
-	runMySQLInspection := !skipMySQL && !redisOnly && !nginxOnly && !tomcatOnly && cfg.MySQL.Enabled
-	runRedisInspection := !skipRedis && !mysqlOnly && !nginxOnly && !tomcatOnly && cfg.Redis.Enabled
-	runNginxInspection := !skipNginx && !mysqlOnly && !redisOnly && !tomcatOnly && cfg.Nginx.Enabled
-	runTomcatInspection := !skipTomcat && !mysqlOnly && !redisOnly && !nginxOnly && cfg.Tomcat.Enabled
+	runHostInspection := !mysqlOnly && !redisOnly && !nginxOnly && !tomcatOnly && !esOnly
+	runMySQLInspection := !skipMySQL && !redisOnly && !nginxOnly && !tomcatOnly && !esOnly && cfg.MySQL.Enabled
+	runRedisInspection := !skipRedis && !mysqlOnly && !nginxOnly && !tomcatOnly && !esOnly && cfg.Redis.Enabled
+	runNginxInspection := !skipNginx && !mysqlOnly && !redisOnly && !tomcatOnly && !esOnly && cfg.Nginx.Enabled
+	runTomcatInspection := !skipTomcat && !mysqlOnly && !redisOnly && !nginxOnly && !esOnly && cfg.Tomcat.Enabled
+	runESInspection := !skipES && !mysqlOnly && !redisOnly && !nginxOnly && !tomcatOnly && cfg.Elasticsearch.Enabled
 
 	// If --mysql-only but MySQL is not enabled
 	if mysqlOnly && !cfg.MySQL.Enabled {
@@ -228,16 +259,23 @@ func runInspection(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if esOnly && !cfg.Elasticsearch.Enabled {
+		fmt.Fprintf(os.Stderr, "❌ Elasticsearch 巡检未启用，请在配置文件中设置 elasticsearch.enabled: true\n")
+		os.Exit(1)
+	}
+
 	logger.Debug().
 		Bool("run_host", runHostInspection).
 		Bool("run_mysql", runMySQLInspection).
 		Bool("run_redis", runRedisInspection).
 		Bool("run_nginx", runNginxInspection).
 		Bool("run_tomcat", runTomcatInspection).
+		Bool("run_es", runESInspection).
 		Bool("mysql_enabled", cfg.MySQL.Enabled).
 		Bool("redis_enabled", cfg.Redis.Enabled).
 		Bool("nginx_enabled", cfg.Nginx.Enabled).
 		Bool("tomcat_enabled", cfg.Tomcat.Enabled).
+		Bool("es_enabled", cfg.Elasticsearch.Enabled).
 		Msg("execution mode determined")
 
 	// Step 3: Load Host metrics definitions (if needed)
@@ -313,6 +351,20 @@ func runInspection(cmd *cobra.Command, args []string) {
 		tomcatActiveCount := config.CountActiveTomcatMetrics(tomcatMetrics)
 		fmt.Printf(" (%d 个活跃指标)\n", tomcatActiveCount)
 		logger.Debug().Int("active_metrics", tomcatActiveCount).Int("total_metrics", len(tomcatMetrics)).Msg("Tomcat metrics loaded")
+	}
+
+	var esMetrics []*model.ElasticsearchMetricDefinition
+	if runESInspection {
+		fmt.Printf("📊 加载 Elasticsearch 指标定义: %s", esMetricsPath)
+		esMetrics, err = config.LoadElasticsearchMetrics(esMetricsPath)
+		if err != nil {
+			logger.Error().Err(err).Str("path", esMetricsPath).Msg("failed to load Elasticsearch metrics")
+			fmt.Fprintf(os.Stderr, "\n❌ 加载 Elasticsearch 指标定义失败: %v\n", err)
+			os.Exit(1)
+		}
+		esActiveCount := config.CountActiveElasticsearchMetrics(esMetrics)
+		fmt.Printf(" (%d 个活跃指标)\n", esActiveCount)
+		logger.Debug().Int("active_metrics", esActiveCount).Int("total_metrics", len(esMetrics)).Msg("Elasticsearch metrics loaded")
 	}
 
 	// Step 4: Determine output settings
@@ -423,6 +475,20 @@ func runInspection(cmd *cobra.Command, args []string) {
 		logger.Debug().Msg("Tomcat services initialized")
 	}
 
+	var esInspector *service.ElasticsearchInspector
+	if runESInspection {
+		esCollector := service.NewElasticsearchCollector(&cfg.Elasticsearch, vmClient, esMetrics, logger)
+		esEvaluator := service.NewElasticsearchEvaluator(&cfg.Elasticsearch.Thresholds, esMetrics, logger)
+		esInspector, err = service.NewElasticsearchInspector(cfg, esCollector, esEvaluator, logger,
+			service.WithElasticsearchVersion(Version))
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to create Elasticsearch inspector")
+			fmt.Fprintf(os.Stderr, "❌ 创建 Elasticsearch 巡检器失败: %v\n", err)
+			os.Exit(1)
+		}
+		logger.Debug().Msg("Elasticsearch services initialized")
+	}
+
 	// Step 8: Execute inspection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -433,6 +499,7 @@ func runInspection(cmd *cobra.Command, args []string) {
 	var redisResult *model.RedisInspectionResults
 	var nginxResult *model.NginxInspectionResults
 	var tomcatResult *model.TomcatInspectionResults
+	var esResult *model.ElasticsearchInspectionResults
 
 	// Execute Host inspection
 	if runHostInspection {
@@ -505,13 +572,27 @@ func runInspection(cmd *cobra.Command, args []string) {
 		if err != nil {
 			logger.Error().Err(err).Msg("Tomcat inspection failed")
 			fmt.Fprintf(os.Stderr, "❌ Tomcat 巡检执行失败: %v\n", err)
-			// Don't exit, continue to generate other reports if available
 			if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil {
 				os.Exit(1)
 			}
 		} else {
 			fmt.Printf("\n📊 Tomcat 巡检完成！\n")
 			printTomcatSummary(tomcatResult)
+		}
+	}
+
+	if runESInspection {
+		fmt.Println("\n⏳ 开始 Elasticsearch 巡检...")
+		esResult, err = esInspector.Inspect(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Elasticsearch inspection failed")
+			fmt.Fprintf(os.Stderr, "❌ Elasticsearch 巡检执行失败: %v\n", err)
+			if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("\n📊 Elasticsearch 巡检完成！\n")
+			printESSummary(esResult)
 		}
 	}
 
@@ -535,6 +616,8 @@ func runInspection(cmd *cobra.Command, args []string) {
 		timezone = nginxInspector.GetTimezone()
 	} else if tomcatInspector != nil {
 		timezone = tomcatInspector.GetTimezone()
+	} else if esInspector != nil {
+		timezone = esInspector.GetTimezone()
 	}
 
 	// Generate filename base
@@ -551,9 +634,9 @@ func runInspection(cmd *cobra.Command, args []string) {
 		var genErr error
 		switch format {
 		case "excel":
-			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, reportPath, timezone, logger)
+			genErr = generateCombinedExcel(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, esResult, reportPath, timezone, logger)
 		case "html":
-			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
+			genErr = generateCombinedHTML(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, esResult, reportPath, timezone, cfg.Report.HTMLTemplate, logger)
 		default:
 			logger.Error().Str("format", format).Msg("unsupported format")
 			fmt.Fprintf(os.Stderr, "   ❌ 不支持的格式: %s\n", format)
@@ -604,6 +687,13 @@ func runInspection(cmd *cobra.Command, args []string) {
 		if tomcatResult.Summary.CriticalInstances > 0 {
 			exitCode = 2
 		} else if tomcatResult.Summary.WarningInstances > 0 && exitCode < 1 {
+			exitCode = 1
+		}
+	}
+	if esResult != nil && esResult.Summary != nil {
+		if esResult.Summary.CriticalInstances > 0 {
+			exitCode = 2
+		} else if esResult.Summary.WarningInstances > 0 && exitCode < 1 {
 			exitCode = 1
 		}
 	}
@@ -788,36 +878,58 @@ func printTomcatSummary(result *model.TomcatInspectionResults) {
 	}
 }
 
-// generateCombinedExcel creates Excel report with Host, MySQL, Redis, Nginx and Tomcat data in same file.
-func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string, timezone *time.Location, logger zerolog.Logger) error {
+func printESSummary(result *model.ElasticsearchInspectionResults) {
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	if result.Summary != nil {
+		fmt.Printf("   Elasticsearch 实例总数: %d\n", result.Summary.TotalInstances)
+		fmt.Printf("   正常实例: %d\n", result.Summary.NormalInstances)
+		fmt.Printf("   警告实例: %d\n", result.Summary.WarningInstances)
+		fmt.Printf("   严重实例: %d\n", result.Summary.CriticalInstances)
+		fmt.Printf("   失败实例: %d\n", result.Summary.FailedInstances)
+	}
+	fmt.Println()
+	if result.AlertSummary != nil {
+		fmt.Printf("   Elasticsearch 告警总数: %d\n", result.AlertSummary.TotalAlerts)
+		fmt.Printf("   警告级别: %d\n", result.AlertSummary.WarningCount)
+		fmt.Printf("   严重级别: %d\n", result.AlertSummary.CriticalCount)
+	}
+}
+
+// generateCombinedExcel creates Excel report with Host, MySQL, Redis, Nginx, Tomcat and Elasticsearch data in same file.
+func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults, outputPath string, timezone *time.Location, logger zerolog.Logger) error {
 	w := excel.NewWriter(timezone)
 
+	// Only Elasticsearch mode
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult == nil && nginxResult == nil && esResult != nil {
+		return w.WriteElasticsearchInspection(esResult, outputPath)
+	}
+
 	// Only Nginx mode
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult == nil && nginxResult != nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult == nil && nginxResult != nil && esResult == nil {
 		return w.WriteNginxInspection(nginxResult, outputPath)
 	}
 
 	// Only Tomcat mode
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult != nil && nginxResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && tomcatResult != nil && nginxResult == nil && esResult == nil {
 		return w.WriteTomcatInspection(tomcatResult, outputPath)
 	}
 
 	// Only Redis mode
-	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil && tomcatResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
 		return w.WriteRedisInspection(redisResult, outputPath)
 	}
 
 	// Only MySQL mode
-	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
+	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
 		return w.WriteMySQLInspection(mysqlResult, outputPath)
 	}
 
 	// Only Host mode
-	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
+	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
 		return w.Write(hostResult, outputPath)
 	}
 
-	// Combined mode: write Host first, then append MySQL and/or Redis
+	// Combined mode: write Host first, then append others
 	if hostResult != nil {
 		if err := w.Write(hostResult, outputPath); err != nil {
 			return fmt.Errorf("failed to write host report: %w", err)
@@ -867,6 +979,17 @@ func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *mode
 			}
 		}
 	}
+	if esResult != nil {
+		if hostResult != nil || mysqlResult != nil || redisResult != nil || nginxResult != nil || tomcatResult != nil {
+			if err := w.AppendElasticsearchInspection(esResult, outputPath); err != nil {
+				return fmt.Errorf("failed to append Elasticsearch report: %w", err)
+			}
+		} else {
+			if err := w.WriteElasticsearchInspection(esResult, outputPath); err != nil {
+				return fmt.Errorf("failed to write Elasticsearch report: %w", err)
+			}
+		}
+	}
 
 	logger.Debug().
 		Bool("has_host", hostResult != nil).
@@ -874,43 +997,49 @@ func generateCombinedExcel(hostResult *model.InspectionResult, mysqlResult *mode
 		Bool("has_redis", redisResult != nil).
 		Bool("has_nginx", nginxResult != nil).
 		Bool("has_tomcat", tomcatResult != nil).
+		Bool("has_es", esResult != nil).
 		Str("path", outputPath).
 		Msg("combined Excel report generated")
 
 	return nil
 }
 
-// generateCombinedHTML creates HTML report with Host, MySQL, Redis, Nginx and Tomcat data.
-func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
+// generateCombinedHTML creates HTML report with Host, MySQL, Redis, Nginx, Tomcat and Elasticsearch data.
+func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults, outputPath string, timezone *time.Location, templatePath string, logger zerolog.Logger) error {
 	w := html.NewWriter(timezone, templatePath)
 
+	// Only Elasticsearch mode
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil && esResult != nil {
+		return w.WriteElasticsearchInspection(esResult, outputPath)
+	}
+
 	// Only Redis mode
-	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil && tomcatResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult != nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
 		return w.WriteRedisInspection(redisResult, outputPath)
 	}
 
 	// Only MySQL mode
-	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
+	if hostResult == nil && mysqlResult != nil && redisResult == nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
 		return w.WriteMySQLInspection(mysqlResult, outputPath)
 	}
 
 	// Only Nginx mode
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult != nil && tomcatResult == nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult != nil && tomcatResult == nil && esResult == nil {
 		return w.WriteNginxInspection(nginxResult, outputPath)
 	}
 
 	// Only Tomcat mode
-	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult != nil {
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult != nil && esResult == nil {
 		return w.WriteTomcatInspection(tomcatResult, outputPath)
 	}
 
 	// Only Host mode
-	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil {
+	if hostResult != nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
 		return w.Write(hostResult, outputPath)
 	}
 
 	// Combined mode
-	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, outputPath); err != nil {
+	if err := w.WriteCombined(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, esResult, outputPath); err != nil {
 		return fmt.Errorf("failed to write combined HTML report: %w", err)
 	}
 
@@ -920,6 +1049,7 @@ func generateCombinedHTML(hostResult *model.InspectionResult, mysqlResult *model
 		Bool("has_redis", redisResult != nil).
 		Bool("has_nginx", nginxResult != nil).
 		Bool("has_tomcat", tomcatResult != nil).
+		Bool("has_es", esResult != nil).
 		Str("path", outputPath).
 		Msg("combined HTML report generated")
 

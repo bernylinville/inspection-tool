@@ -5,16 +5,17 @@ import "time"
 
 // Config is the root configuration structure for the inspection tool.
 type Config struct {
-	Datasources DatasourcesConfig      `mapstructure:"datasources" validate:"required"`
-	Inspection  InspectionConfig       `mapstructure:"inspection"`
-	Thresholds  ThresholdsConfig       `mapstructure:"thresholds"`
-	Report      ReportConfig           `mapstructure:"report"`
-	Logging     LoggingConfig          `mapstructure:"logging"`
-	HTTP        HTTPConfig             `mapstructure:"http"`
-	MySQL       MySQLInspectionConfig  `mapstructure:"mysql"`
-	Redis       RedisInspectionConfig  `mapstructure:"redis"`
-	Nginx       NginxInspectionConfig  `mapstructure:"nginx"`
-	Tomcat      TomcatInspectionConfig `mapstructure:"tomcat"`
+	Datasources   DatasourcesConfig             `mapstructure:"datasources" validate:"required"`
+	Inspection    InspectionConfig              `mapstructure:"inspection"`
+	Thresholds    ThresholdsConfig              `mapstructure:"thresholds"`
+	Report        ReportConfig                  `mapstructure:"report"`
+	Logging       LoggingConfig                 `mapstructure:"logging"`
+	HTTP          HTTPConfig                    `mapstructure:"http"`
+	MySQL         MySQLInspectionConfig         `mapstructure:"mysql"`
+	Redis         RedisInspectionConfig         `mapstructure:"redis"`
+	Nginx         NginxInspectionConfig         `mapstructure:"nginx"`
+	Tomcat        TomcatInspectionConfig        `mapstructure:"tomcat"`
+	Elasticsearch ElasticsearchInspectionConfig `mapstructure:"elasticsearch"`
 }
 
 // DatasourcesConfig contains configurations for data sources.
@@ -203,4 +204,55 @@ type TomcatThresholds struct {
 	// Time since last error in error.log (in minutes).
 	// Default: 10 minutes.
 	LastErrorCriticalMinutes int `mapstructure:"last_error_critical_minutes" validate:"gte=0"`
+}
+
+// =============================================================================
+// Elasticsearch Inspection Configuration
+// =============================================================================
+
+// ElasticsearchInspectionConfig contains configurations for Elasticsearch inspection.
+type ElasticsearchInspectionConfig struct {
+	Enabled        bool                    `mapstructure:"enabled"`
+	InstanceFilter ElasticsearchFilter     `mapstructure:"instance_filter"`
+	Thresholds     ElasticsearchThresholds `mapstructure:"thresholds"`
+}
+
+// ElasticsearchFilter defines Elasticsearch instance filtering criteria.
+type ElasticsearchFilter struct {
+	AddressPatterns []string          `mapstructure:"address_patterns"` // Address matching patterns (e.g., "172.31.88.*")
+	NamePatterns    []string          `mapstructure:"name_patterns"`    // Node name patterns (e.g., "gx-nm-mns-es-*")
+	BusinessGroups  []string          `mapstructure:"business_groups"`  // Business groups (OR relation)
+	Tags            map[string]string `mapstructure:"tags"`             // Tags (AND relation)
+}
+
+// ElasticsearchThresholds contains threshold configurations for Elasticsearch alerts.
+type ElasticsearchThresholds struct {
+	// HeapMemoryUsageWarning is the warning threshold for JVM heap memory usage (%).
+	// Default: 85
+	HeapMemoryUsageWarning float64 `mapstructure:"heap_memory_usage_warning" validate:"gte=0,lte=100"`
+	// HeapMemoryUsageCritical is the critical threshold for JVM heap memory usage (%).
+	// Default: 95
+	HeapMemoryUsageCritical float64 `mapstructure:"heap_memory_usage_critical" validate:"gte=0,lte=100"`
+	// CPUUsageWarning is the warning threshold for CPU usage (%).
+	// Default: 80
+	CPUUsageWarning float64 `mapstructure:"cpu_usage_warning" validate:"gte=0,lte=100"`
+	// CPUUsageCritical is the critical threshold for CPU usage (%).
+	// Default: 90
+	CPUUsageCritical float64 `mapstructure:"cpu_usage_critical" validate:"gte=0,lte=100"`
+	// DiskUsageWarning is the warning threshold for disk usage (%).
+	// Default: 80
+	DiskUsageWarning float64 `mapstructure:"disk_usage_warning" validate:"gte=0,lte=100"`
+	// DiskUsageCritical is the critical threshold for disk usage (%).
+	// Default: 90
+	DiskUsageCritical float64 `mapstructure:"disk_usage_critical" validate:"gte=0,lte=100"`
+	// FileHandleUsageWarning is the warning threshold for file handle usage (%).
+	// Default: 80
+	FileHandleUsageWarning float64 `mapstructure:"file_handle_usage_warning" validate:"gte=0,lte=100"`
+	// FileHandleUsageCritical is the critical threshold for file handle usage (%).
+	// Default: 90
+	FileHandleUsageCritical float64 `mapstructure:"file_handle_usage_critical" validate:"gte=0,lte=100"`
+	// ExpectedNodeCount is the expected number of nodes in the cluster.
+	// Alert when actual node count differs from expected.
+	// Default: 3
+	ExpectedNodeCount int `mapstructure:"expected_node_count" validate:"gte=1"`
 }

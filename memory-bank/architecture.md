@@ -885,3 +885,4 @@ type MySQLInstanceEvaluator interface {
 | 2025-12-15 | **MySQL 功能步骤 4**：创建 MySQL 指标定义文件（configs/mysql-metrics.yaml，16 个指标） |
 | 2025-12-15 | **MySQL 功能步骤 5**：创建 MySQL 采集器接口（mysql_collector.go、MySQLMetricDefinition），阶段二开始 |
 | 2026-01-08 | **接口化重构**：添加 interfaces.go（10 个接口定义）、interfaces_mock.go（Mock 实现），重构 5 个 Inspector 接受接口类型 |
+| 2026-01-09 | **Elasticsearch 巡检功能**：完整实现 ES 巡检（模型、采集器、评估器、编排器、报告、CLI 集成） |
