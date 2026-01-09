@@ -671,7 +671,7 @@ func TestWriter_MySQLSheet_Headers(t *testing.T) {
 	}
 	defer f.Close()
 
-	// Verify all 11 headers
+	// Verify all 15 headers
 	expectedHeaders := []struct {
 		cell   string
 		header string
@@ -689,7 +689,8 @@ func TestWriter_MySQLSheet_Headers(t *testing.T) {
 		{"K1", "Binlog状态"},
 		{"L1", "Binlog保留(天)"},
 		{"M1", "非root用户"},
-		{"N1", "整体状态"},
+		{"N1", "远程连接用户"},
+		{"O1", "整体状态"},
 	}
 
 	for _, eh := range expectedHeaders {
@@ -734,7 +735,8 @@ func TestWriter_MySQLSheet_DataMapping(t *testing.T) {
 		{"K2", "启用"},
 		{"L2", "N/A"},
 		{"M2", "是"},
-		{"N2", "正常"},
+		{"N2", "无"},
+		{"O2", "正常"},
 	}
 
 	for _, tt := range tests {
@@ -763,13 +765,14 @@ func TestWriter_MySQLSheet_ConditionalFormat(t *testing.T) {
 	defer f.Close()
 
 	// Verify status column values and order (normal, warning, critical)
+	// Status column is now O (column 15) due to addition of "远程连接用户" column at N
 	expectedStatuses := []struct {
 		cell   string
 		status string
 	}{
-		{"N2", "正常"},
-		{"N3", "警告"},
-		{"N4", "严重"},
+		{"O2", "正常"},
+		{"O3", "警告"},
+		{"O4", "严重"},
 	}
 
 	for _, es := range expectedStatuses {
