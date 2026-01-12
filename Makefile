@@ -1,86 +1,72 @@
-# 系统巡检工具 - Makefile
-# ===========================
+# 系统巡检工具 - Makefile (Monorepo 版)
 
-# 版本信息（通过 -ldflags 注入到 cmd 包）
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-CMD_PKG := inspection-tool/cmd/inspect/cmd
-LDFLAGS := -X $(CMD_PKG).Version=$(VERSION) -X $(CMD_PKG).BuildTime=$(BUILD_TIME) -X $(CMD_PKG).GitCommit=$(GIT_COMMIT)
 
-# 构建目标
+CLI_PKG := inspection-tool/apps/inspect-cli/cmd
+CLI_LDFLAGS := -X $(CLI_PKG).Version=$(VERSION) -X $(CLI_PKG).BuildTime=$(BUILD_TIME) -X $(CLI_PKG).GitCommit=$(GIT_COMMIT)
+
 BINARY_NAME := inspect
 BUILD_DIR := bin
 COVERAGE_DIR := coverage
 
-# Go 参数
 GO := go
 GOTEST := $(GO) test
 GOBUILD := $(GO) build
 
-.PHONY: all build build-all test lint clean coverage help
+.PHONY: all build build-cli build-all test test-pkg test-cli lint clean coverage help
 
-# 默认目标
 all: build
 
-# 构建本地二进制
-build:
-	@echo "==> 构建本地二进制..."
+build: build-cli
+
+build-cli:
+	@echo "==> 构建 CLI 工具..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/inspect
+	$(GOBUILD) -ldflags "$(CLI_LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) ./apps/inspect-cli
 	@echo "==> 构建完成: $(BUILD_DIR)/$(BINARY_NAME)"
 
-# 交叉编译多平台
 build-all:
 	@echo "==> 交叉编译多平台..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/inspect
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/inspect
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/inspect
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/inspect
-	@echo "==> 交叉编译完成:"
-	@ls -lh $(BUILD_DIR)/
+	GOOS=linux GOARCH=amd64 $(GOBUILD) -ldflags "$(CLI_LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./apps/inspect-cli
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) -ldflags "$(CLI_LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./apps/inspect-cli
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) -ldflags "$(CLI_LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./apps/inspect-cli
+	GOOS=windows GOARCH=amd64 $(GOBUILD) -ldflags "$(CLI_LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./apps/inspect-cli
 
-# 运行测试（带竞态检测）
-test:
-	@echo "==> 运行测试..."
-	$(GOTEST) -v -race ./...
+test: test-pkg test-cli
 
-# 代码检查（需要安装 golangci-lint）
+test-pkg:
+	@echo "==> 测试 pkg/..."
+	$(GOTEST) -v -race ./pkg/...
+
+test-cli:
+	@echo "==> 测试 CLI..."
+	$(GOTEST) -v -race ./apps/inspect-cli/...
+
 lint:
 	@echo "==> 运行代码检查..."
-	golangci-lint run ./...
+	golangci-lint run ./pkg/... ./apps/inspect-cli/...
 
-# 清理构建产物
 clean:
 	@echo "==> 清理构建产物..."
 	rm -rf $(BUILD_DIR)
 	rm -rf $(COVERAGE_DIR)
-	@echo "==> 清理完成"
 
-# 生成测试覆盖率报告
 coverage:
 	@echo "==> 生成测试覆盖率报告..."
 	@mkdir -p $(COVERAGE_DIR)
-	$(GOTEST) -coverprofile=$(COVERAGE_DIR)/coverage.out ./...
+	$(GOTEST) -coverprofile=$(COVERAGE_DIR)/coverage.out ./pkg/... ./apps/inspect-cli/...
 	$(GO) tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
-	@echo "==> 覆盖率摘要:"
-	$(GO) tool cover -func=$(COVERAGE_DIR)/coverage.out | tail -1
-	@echo "==> 报告已生成: $(COVERAGE_DIR)/coverage.html"
 
-# 帮助信息
 help:
-	@echo "系统巡检工具 - 可用目标:"
-	@echo ""
-	@echo "  build      - 构建本地二进制文件"
-	@echo "  build-all  - 交叉编译多平台（linux/darwin/windows）"
-	@echo "  test       - 运行测试（带竞态检测）"
-	@echo "  lint       - 运行代码检查（需要 golangci-lint）"
+	@echo "可用目标:"
+	@echo "  build      - 构建 CLI 工具"
+	@echo "  build-all  - 交叉编译多平台"
+	@echo "  test       - 运行所有测试"
+	@echo "  test-pkg   - 仅测试 pkg/"
+	@echo "  test-cli   - 仅测试 CLI"
+	@echo "  lint       - 运行代码检查"
 	@echo "  clean      - 清理构建产物"
-	@echo "  coverage   - 生成测试覆盖率报告"
-	@echo "  help       - 显示此帮助信息"
-	@echo ""
-	@echo "示例:"
-	@echo "  make build              # 构建本地二进制"
-	@echo "  make test               # 运行所有测试"
-	@echo "  make coverage           # 生成覆盖率报告"
+	@echo "  coverage   - 生成覆盖率报告"

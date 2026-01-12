@@ -1,0 +1,2437 @@
+// Package html provides HTML report generation for the inspection tool.
+// It implements the report.ReportWriter interface to generate .html files
+// with inspection results, including summary, detailed data, and alerts.
+package html
+
+import (
+	"embed"
+	"fmt"
+	"html/template"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"inspection-tool/apps/inspect-cli/internal/model"
+)
+
+//go:embed templates/*.html
+var embeddedTemplates embed.FS
+
+// Writer implements report.ReportWriter for HTML format.
+type Writer struct {
+	timezone     *time.Location
+	templatePath string // User-defined template path (optional)
+}
+
+// TemplateData holds all data passed to the HTML template.
+type TemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.InspectionSummary
+	AlertSummary   *model.AlertSummary
+	Hosts          []*HostData
+	Alerts         []*AlertData
+	DiskPaths      []string
+	Version        string
+	GeneratedAt    string
+}
+
+// HostData represents host data formatted for template rendering.
+type HostData struct {
+	Hostname              string
+	IP                    string
+	Status                string
+	StatusClass           string
+	OS                    string
+	OSVersion             string
+	KernelVersion         string
+	CPUCores              int
+	CPUModel              string
+	MemoryTotal           string
+	Metrics               map[string]*MetricData
+	AlertCount            int
+	BootTime              string
+	PasswordExpiryDisplay string
+	PasswordPolicyDisplay string
+	SysctlParamsDisplay   string
+}
+
+// MetricData represents metric data formatted for template rendering.
+type MetricData struct {
+	Name        string
+	DisplayName string
+	Value       string
+	Status      string
+	StatusClass string
+	IsNA        bool
+	RawValue    float64
+}
+
+// AlertData represents alert data formatted for template rendering.
+type AlertData struct {
+	Hostname          string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// NewWriter creates a new HTML report writer.
+// If timezone is nil, it defaults to Asia/Shanghai.
+// If templatePath is empty, the embedded default template will be used.
+func NewWriter(timezone *time.Location, templatePath string) *Writer {
+	if timezone == nil {
+		timezone, _ = time.LoadLocation("Asia/Shanghai")
+	}
+	return &Writer{
+		timezone:     timezone,
+		templatePath: templatePath,
+	}
+}
+
+// Format returns the format identifier for this writer.
+func (w *Writer) Format() string {
+	return "html"
+}
+
+// Write generates an HTML report from the inspection result.
+func (w *Writer) Write(result *model.InspectionResult, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("inspection result is nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load template
+	tmpl, err := w.loadTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load template: %w", err)
+	}
+
+	// Prepare template data
+	data := w.prepareTemplateData(result)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return nil
+}
+
+// loadTemplate loads the HTML template.
+// It first tries to load a user-defined template, then falls back to the embedded default.
+func (w *Writer) loadTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    statusClass,
+		"alertClass":     alertLevelClass,
+	}
+
+	// Try user-defined template first
+	if w.templatePath != "" {
+		if _, err := os.Stat(w.templatePath); err == nil {
+			tmpl, err := template.New(filepath.Base(w.templatePath)).Funcs(funcMap).ParseFiles(w.templatePath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse user template: %w", err)
+			}
+			return tmpl, nil
+		}
+		// User template not found, fall through to default
+	}
+
+	// Load embedded default template
+	tmpl, err := template.New("default.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/default.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareTemplateData converts InspectionResult to TemplateData for template rendering.
+func (w *Writer) prepareTemplateData(result *model.InspectionResult) *TemplateData {
+	// Collect unique disk paths
+	diskPaths := w.collectDiskPaths(result.Hosts)
+
+	// Convert hosts
+	hosts := make([]*HostData, 0, len(result.Hosts))
+	for _, host := range result.Hosts {
+		hosts = append(hosts, w.convertHostData(host))
+	}
+
+	// Convert and sort alerts (critical first)
+	alerts := w.convertAlerts(result.Alerts)
+
+	return &TemplateData{
+		Title:          "系统巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Hosts:          hosts,
+		Alerts:         alerts,
+		DiskPaths:      diskPaths,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+// convertHostData converts a HostResult to HostData for template rendering.
+func (w *Writer) convertHostData(host *model.HostResult) *HostData {
+	metrics := make(map[string]*MetricData)
+	for name, metric := range host.Metrics {
+		metrics[name] = w.convertMetricData(metric)
+	}
+
+	passwordExpiryDisplay := w.buildPasswordExpiryDisplay(host)
+	passwordPolicyDisplay := w.buildPasswordPolicyDisplay(host)
+	sysctlParamsDisplay := w.buildSysctlParamsDisplay(host)
+
+	return &HostData{
+		Hostname:              host.Hostname,
+		IP:                    host.IP,
+		Status:                statusText(host.Status),
+		StatusClass:           statusClass(host.Status),
+		OS:                    host.OS,
+		OSVersion:             host.OSVersion,
+		KernelVersion:         host.KernelVersion,
+		CPUCores:              host.CPUCores,
+		CPUModel:              host.CPUModel,
+		MemoryTotal:           formatSize(host.MemoryTotal),
+		Metrics:               metrics,
+		AlertCount:            len(host.Alerts),
+		BootTime:              host.BootTime,
+		PasswordExpiryDisplay: passwordExpiryDisplay,
+		PasswordPolicyDisplay: passwordPolicyDisplay,
+		SysctlParamsDisplay:   sysctlParamsDisplay,
+	}
+}
+
+// buildPasswordExpiryDisplay generates a password expiry display string from metrics.
+// Format: "root:永不过期, admin:30天" or "N/A" if no data
+func (w *Writer) buildPasswordExpiryDisplay(host *model.HostResult) string {
+	var parts []string
+	for name, metric := range host.Metrics {
+		if strings.HasPrefix(name, "password_expiry:") && !metric.IsNA {
+			user := strings.TrimPrefix(name, "password_expiry:")
+			var display string
+			if metric.RawValue == 99999 || metric.RawValue < 0 {
+				display = "永不过期"
+			} else {
+				display = fmt.Sprintf("%.0f天", metric.RawValue)
+			}
+			parts = append(parts, fmt.Sprintf("%s:%s", user, display))
+		}
+	}
+	if len(parts) == 0 {
+		return "N/A"
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
+}
+
+// buildPasswordPolicyDisplay generates a password policy display string from metrics.
+func (w *Writer) buildPasswordPolicyDisplay(host *model.HostResult) string {
+	metric := host.GetMetric("password_policy")
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	return metric.FormattedValue
+}
+
+// buildSysctlParamsDisplay generates a sysctl params display string from metrics.
+// Format: "param1=value1, param2=value2" or "N/A" if no data
+func (w *Writer) buildSysctlParamsDisplay(host *model.HostResult) string {
+	sysctlParams := []string{
+		"net.ipv4.tcp_syncookies",
+		"net.ipv4.tcp_max_syn_backlog",
+		"net.core.somaxconn",
+		"net.ipv4.ip_local_port_range",
+		"vm.swappiness",
+		"fs.file-max",
+		"net.ipv4.tcp_tw_reuse",
+		"net.ipv4.tcp_fin_timeout",
+		"net.ipv4.tcp_keepalive_time",
+		"kernel.pid_max",
+	}
+
+	var parts []string
+	for _, param := range sysctlParams {
+		metricName := "sysctl_params:" + param
+		metric := host.GetMetric(metricName)
+		if metric != nil && !metric.IsNA {
+			parts = append(parts, fmt.Sprintf("%s=%.0f", param, metric.RawValue))
+		}
+	}
+	if len(parts) == 0 {
+		return "N/A"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// convertMetricData converts a MetricValue to MetricData for template rendering.
+func (w *Writer) convertMetricData(metric *model.MetricValue) *MetricData {
+	if metric == nil {
+		return &MetricData{
+			Value:       "N/A",
+			IsNA:        true,
+			StatusClass: "",
+			RawValue:    0,
+		}
+	}
+
+	return &MetricData{
+		Name:        metric.Name,
+		Value:       metric.FormattedValue,
+		Status:      string(metric.Status),
+		StatusClass: metricStatusClass(metric.Status),
+		IsNA:        metric.IsNA,
+		RawValue:    metric.RawValue,
+	}
+}
+
+// convertAlerts converts and sorts alerts for template rendering.
+func (w *Writer) convertAlerts(alerts []*model.Alert) []*AlertData {
+	// Make a copy for sorting
+	sortedAlerts := make([]*model.Alert, len(alerts))
+	copy(sortedAlerts, alerts)
+
+	// Sort by level (critical first) then by hostname
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Hostname < sortedAlerts[j].Hostname
+	})
+
+	// Convert to AlertData
+	result := make([]*AlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &AlertData{
+			Hostname:          alert.Hostname,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+// collectDiskPaths collects unique disk paths from all hosts.
+func (w *Writer) collectDiskPaths(hosts []*model.HostResult) []string {
+	pathSet := make(map[string]bool)
+	for _, host := range hosts {
+		for name := range host.Metrics {
+			if strings.HasPrefix(name, "disk_usage:") {
+				path := strings.TrimPrefix(name, "disk_usage:")
+				pathSet[path] = true
+			}
+		}
+	}
+
+	paths := make([]string, 0, len(pathSet))
+	for path := range pathSet {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+// Helper functions
+
+// formatDuration formats a duration in a human-readable format.
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1f秒", d.Seconds())
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%.1f分钟", d.Minutes())
+	}
+	return fmt.Sprintf("%.1f小时", d.Hours())
+}
+
+// formatSize formats bytes to human-readable size.
+func formatSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+		TB = GB * 1024
+	)
+
+	switch {
+	case bytes >= TB:
+		return fmt.Sprintf("%.2f TB", float64(bytes)/TB)
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GB", float64(bytes)/GB)
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MB", float64(bytes)/MB)
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KB", float64(bytes)/KB)
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
+// statusText converts host status to Chinese text.
+func statusText(status model.HostStatus) string {
+	switch status {
+	case model.HostStatusNormal:
+		return "正常"
+	case model.HostStatusWarning:
+		return "警告"
+	case model.HostStatusCritical:
+		return "严重"
+	case model.HostStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// statusClass returns the CSS class for a host status.
+func statusClass(status model.HostStatus) string {
+	switch status {
+	case model.HostStatusNormal:
+		return "status-normal"
+	case model.HostStatusWarning:
+		return "status-warning"
+	case model.HostStatusCritical:
+		return "status-critical"
+	case model.HostStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// metricStatusClass returns the CSS class for a metric status.
+func metricStatusClass(status model.MetricStatus) string {
+	switch status {
+	case model.MetricStatusNormal:
+		return "metric-normal"
+	case model.MetricStatusWarning:
+		return "metric-warning"
+	case model.MetricStatusCritical:
+		return "metric-critical"
+	case model.MetricStatusPending:
+		return "metric-pending"
+	default:
+		return ""
+	}
+}
+
+// alertLevelText converts alert level to Chinese text.
+func alertLevelText(level model.AlertLevel) string {
+	switch level {
+	case model.AlertLevelNormal:
+		return "正常"
+	case model.AlertLevelWarning:
+		return "警告"
+	case model.AlertLevelCritical:
+		return "严重"
+	default:
+		return "未知"
+	}
+}
+
+// alertLevelClass returns the CSS class for an alert level.
+func alertLevelClass(level model.AlertLevel) string {
+	switch level {
+	case model.AlertLevelNormal:
+		return "alert-normal"
+	case model.AlertLevelWarning:
+		return "alert-warning"
+	case model.AlertLevelCritical:
+		return "alert-critical"
+	default:
+		return ""
+	}
+}
+
+// alertLevelPriority returns a numeric priority for sorting (higher = more severe).
+func alertLevelPriority(level model.AlertLevel) int {
+	switch level {
+	case model.AlertLevelCritical:
+		return 2
+	case model.AlertLevelWarning:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// formatThreshold formats a threshold value based on metric type.
+func formatThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "cpu_usage", "memory_usage", "disk_usage_max":
+		return fmt.Sprintf("%.1f%%", value)
+	case "load_per_core":
+		return fmt.Sprintf("%.2f", value)
+	case "processes_zombies":
+		return fmt.Sprintf("%.0f", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// ============================================================================
+// MySQL Report Data Structures
+// ============================================================================
+
+// MySQLTemplateData holds MySQL inspection data for template rendering.
+type MySQLTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.MySQLInspectionSummary
+	AlertSummary   *model.MySQLAlertSummary
+	Instances      []*MySQLInstanceData
+	Alerts         []*MySQLAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+// MySQLInstanceData represents MySQL instance data formatted for template.
+type MySQLInstanceData struct {
+	Address            string
+	IP                 string
+	Port               int
+	Version            string
+	ServerID           string
+	ClusterMode        string
+	SyncStatus         string
+	MaxConnections     int
+	CurrentConnections int
+	BinlogEnabled      string
+	NonRootUser        string
+	Status             string
+	StatusClass        string
+	AlertCount         int
+}
+
+// MySQLAlertData represents MySQL alert data formatted for template.
+type MySQLAlertData struct {
+	Address           string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// ============================================================================
+// MySQL Report Helper Functions
+// ============================================================================
+
+// mysqlStatusText converts MySQL instance status to Chinese text.
+func mysqlStatusText(status model.MySQLInstanceStatus) string {
+	switch status {
+	case model.MySQLStatusNormal:
+		return "正常"
+	case model.MySQLStatusWarning:
+		return "警告"
+	case model.MySQLStatusCritical:
+		return "严重"
+	case model.MySQLStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// mysqlStatusClass returns the CSS class for MySQL instance status.
+func mysqlStatusClass(status model.MySQLInstanceStatus) string {
+	switch status {
+	case model.MySQLStatusNormal:
+		return "status-normal"
+	case model.MySQLStatusWarning:
+		return "status-warning"
+	case model.MySQLStatusCritical:
+		return "status-critical"
+	case model.MySQLStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// mysqlClusterModeText converts MySQL cluster mode to Chinese text.
+func mysqlClusterModeText(mode model.MySQLClusterMode) string {
+	switch mode {
+	case model.ClusterModeMGR:
+		return "MGR"
+	case model.ClusterModeDualMaster:
+		return "双主"
+	case model.ClusterModeMasterSlave:
+		return "主从"
+	default:
+		return "未知"
+	}
+}
+
+// getMySQLSyncStatus returns sync status text based on cluster mode.
+func getMySQLSyncStatus(r *model.MySQLInspectionResult) string {
+	if r.Instance.ClusterMode.IsMGR() {
+		if r.MGRStateOnline {
+			return "在线"
+		}
+		return "离线"
+	}
+	if r.SyncStatus {
+		return "正常"
+	}
+	return "异常"
+}
+
+// boolToText converts boolean to Chinese text (启用/禁用).
+func boolToText(b bool) string {
+	if b {
+		return "启用"
+	}
+	return "禁用"
+}
+
+// formatMySQLThreshold formats a MySQL alert threshold value based on metric type.
+func formatMySQLThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "connection_usage":
+		return fmt.Sprintf("%.1f%%", value)
+	case "mgr_member_count":
+		return fmt.Sprintf("%.0f", value)
+	case "mgr_state_online":
+		if value > 0 {
+			return "在线"
+		}
+		return "离线"
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// ============================================================================
+// MySQL Report Methods
+// ============================================================================
+
+// WriteMySQLInspection generates an HTML report for MySQL inspection results.
+func (w *Writer) WriteMySQLInspection(result *model.MySQLInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("MySQL inspection result is nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load MySQL template
+	tmpl, err := w.loadMySQLTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load MySQL template: %w", err)
+	}
+
+	// Prepare template data
+	data := w.prepareMySQLTemplateData(result)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute MySQL template: %w", err)
+	}
+
+	return nil
+}
+
+// loadMySQLTemplate loads the MySQL HTML template.
+func (w *Writer) loadMySQLTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    statusClass,
+		"alertClass":     alertLevelClass,
+	}
+
+	// Load embedded MySQL template
+	tmpl, err := template.New("mysql.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/mysql.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded MySQL template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareMySQLTemplateData converts MySQLInspectionResults to MySQLTemplateData for template rendering.
+func (w *Writer) prepareMySQLTemplateData(result *model.MySQLInspectionResults) *MySQLTemplateData {
+	// Convert instances
+	instances := make([]*MySQLInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertMySQLInstanceData(r))
+	}
+
+	// Convert and sort alerts (critical first)
+	alerts := w.convertMySQLAlerts(result.Alerts)
+
+	return &MySQLTemplateData{
+		Title:          "MySQL 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Instances:      instances,
+		Alerts:         alerts,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+// convertMySQLInstanceData converts a MySQLInspectionResult to MySQLInstanceData for template rendering.
+func (w *Writer) convertMySQLInstanceData(r *model.MySQLInspectionResult) *MySQLInstanceData {
+	return &MySQLInstanceData{
+		Address:            r.GetAddress(),
+		IP:                 r.Instance.IP,
+		Port:               r.Instance.Port,
+		Version:            r.Instance.Version,
+		ServerID:           r.Instance.ServerID,
+		ClusterMode:        mysqlClusterModeText(r.Instance.ClusterMode),
+		SyncStatus:         getMySQLSyncStatus(r),
+		MaxConnections:     r.MaxConnections,
+		CurrentConnections: r.CurrentConnections,
+		BinlogEnabled:      boolToText(r.BinlogEnabled),
+		NonRootUser:        r.NonRootUser,
+		Status:             mysqlStatusText(r.Status),
+		StatusClass:        mysqlStatusClass(r.Status),
+		AlertCount:         len(r.Alerts),
+	}
+}
+
+// convertMySQLAlerts converts and sorts MySQL alerts for template rendering.
+func (w *Writer) convertMySQLAlerts(alerts []*model.MySQLAlert) []*MySQLAlertData {
+	// Make a copy for sorting
+	sortedAlerts := make([]*model.MySQLAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+
+	// Sort by level (critical first) then by address
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Address < sortedAlerts[j].Address
+	})
+
+	// Convert to MySQLAlertData
+	result := make([]*MySQLAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &MySQLAlertData{
+			Address:           alert.Address,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatMySQLThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatMySQLThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+// ============================================================================
+// Baseline Check Data Structures
+// ============================================================================
+
+// BaselineCheckData represents baseline check data for a single host.
+type BaselineCheckData struct {
+	InspectionTime string
+	Hostname       string
+	IP             string
+	OS             string
+	KernelVersion  string
+	Uptime         string
+	PasswordExpiry string
+	PasswordPolicy string
+	FileHandles    string
+	PublicNetwork  string
+	// Sysctl parameters
+	SysctlTCPSyncookies    string
+	SysctlTCPMaxSynBacklog string
+	SysctlSomaxconn        string
+	SysctlIPLocalPortRange string
+	SysctlSwappiness       string
+	SysctlFileMax          string
+	SysctlTCPTWReuse       string
+	SysctlTCPFinTimeout    string
+	SysctlTCPKeepaliveTime string
+	SysctlPIDMax           string
+}
+
+// ============================================================================
+// Combined Report (Host + MySQL) Data Structures and Methods
+// ============================================================================
+
+// CombinedTemplateData holds both Host and MySQL inspection data for combined template.
+type CombinedTemplateData struct {
+	Title            string
+	InspectionTime   string
+	Duration         string
+	HasHost          bool
+	HostSummary      *model.InspectionSummary
+	HostAlertSummary *model.AlertSummary
+	Hosts            []*HostData
+	HostAlerts       []*AlertData
+	DiskPaths        []string
+	BaselineChecks   []*BaselineCheckData
+	// MySQL data
+	HasMySQL          bool
+	MySQLSummary      *model.MySQLInspectionSummary
+	MySQLAlertSummary *model.MySQLAlertSummary
+	MySQLInstances    []*MySQLInstanceData
+	MySQLAlerts       []*MySQLAlertData
+	// Redis data
+	HasRedis                 bool
+	HasMultipleRedisClusters bool                // Flag for multi-cluster display
+	RedisClusters            []*RedisClusterData // Cluster data for multi-cluster scenario
+	RedisSummary             *model.RedisInspectionSummary
+	RedisAlertSummary        *model.RedisAlertSummary
+	RedisInstances           []*RedisInstanceData
+	RedisAlerts              []*RedisAlertData
+	// Nginx data
+	HasNginx          bool
+	NginxSummary      *model.NginxInspectionSummary
+	NginxAlertSummary *model.NginxAlertSummary
+	NginxInstances    []*NginxInstanceData
+	NginxAlerts       []*NginxAlertData
+	// Tomcat data
+	HasTomcat          bool
+	TomcatSummary      *model.TomcatInspectionSummary
+	TomcatAlertSummary *model.TomcatAlertSummary
+	TomcatInstances    []*TomcatInstanceData
+	TomcatAlerts       []*TomcatAlertData
+	// Elasticsearch data
+	HasElasticsearch          bool
+	ElasticsearchSummary      *model.ElasticsearchInspectionSummary
+	ElasticsearchAlertSummary *model.ElasticsearchAlertSummary
+	ElasticsearchInstances    []*ElasticsearchInstanceData
+	ElasticsearchAlerts       []*ElasticsearchAlertData
+	UnifiedAlerts             []*UnifiedAlertData
+	UnifiedAlertSummary       *UnifiedAlertSummary
+	Version                   string
+	GeneratedAt               string
+}
+
+// WriteCombined generates an HTML report combining Host, MySQL, Redis, Nginx, Tomcat, and Elasticsearch inspection results.
+func (w *Writer) WriteCombined(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults, outputPath string) error {
+	// At least one result must be present
+	if hostResult == nil && mysqlResult == nil && redisResult == nil && nginxResult == nil && tomcatResult == nil && esResult == nil {
+		return fmt.Errorf("all inspection results are nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load combined template
+	tmpl, err := w.loadCombinedTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load combined template: %w", err)
+	}
+
+	// Prepare combined template data
+	data := w.prepareCombinedTemplateData(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, esResult)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute combined template: %w", err)
+	}
+
+	return nil
+}
+
+// loadCombinedTemplate loads the combined HTML template.
+func (w *Writer) loadCombinedTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    statusClass,
+		"alertClass":     alertLevelClass,
+	}
+
+	// Load embedded combined template
+	tmpl, err := template.New("combined.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/combined.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded combined template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareCombinedTemplateData prepares data for the combined template.
+func (w *Writer) prepareCombinedTemplateData(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults) *CombinedTemplateData {
+	data := &CombinedTemplateData{
+		Title:       "系统巡检报告",
+		GeneratedAt: time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+
+	// Determine inspection time and duration from available results
+	if hostResult != nil {
+		data.InspectionTime = hostResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(hostResult.Duration)
+		data.Version = hostResult.Version
+	} else if mysqlResult != nil {
+		data.InspectionTime = mysqlResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(mysqlResult.Duration)
+		data.Version = mysqlResult.Version
+	} else if redisResult != nil {
+		data.InspectionTime = redisResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(redisResult.Duration)
+		data.Version = redisResult.Version
+	} else if nginxResult != nil {
+		data.InspectionTime = nginxResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(nginxResult.Duration)
+		data.Version = nginxResult.Version
+	} else if tomcatResult != nil {
+		data.InspectionTime = tomcatResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(tomcatResult.Duration)
+		data.Version = tomcatResult.Version
+	} else if esResult != nil {
+		data.InspectionTime = esResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+		data.Duration = formatDuration(esResult.Duration)
+		data.Version = esResult.Version
+	}
+
+	// Fill Host data if available
+	if hostResult != nil {
+		data.HasHost = true
+		data.HostSummary = hostResult.Summary
+		data.HostAlertSummary = hostResult.AlertSummary
+		data.DiskPaths = w.collectDiskPaths(hostResult.Hosts)
+
+		// Convert hosts
+		hosts := make([]*HostData, 0, len(hostResult.Hosts))
+		for _, host := range hostResult.Hosts {
+			hosts = append(hosts, w.convertHostData(host))
+		}
+		data.Hosts = hosts
+
+		// Convert host alerts
+		data.HostAlerts = w.convertAlerts(hostResult.Alerts)
+
+		data.BaselineChecks = w.prepareBaselineChecks(hostResult)
+	}
+
+	// Fill MySQL data if available
+	if mysqlResult != nil {
+		data.HasMySQL = true
+		data.MySQLSummary = mysqlResult.Summary
+		data.MySQLAlertSummary = mysqlResult.AlertSummary
+
+		// Convert MySQL instances
+		instances := make([]*MySQLInstanceData, 0, len(mysqlResult.Results))
+		for _, r := range mysqlResult.Results {
+			instances = append(instances, w.convertMySQLInstanceData(r))
+		}
+		data.MySQLInstances = instances
+
+		// Convert MySQL alerts
+		data.MySQLAlerts = w.convertMySQLAlerts(mysqlResult.Alerts)
+	}
+
+	// Fill Redis data if available
+	if redisResult != nil {
+		data.HasRedis = true
+		data.RedisSummary = redisResult.Summary
+		data.RedisAlertSummary = redisResult.AlertSummary
+
+		// Check for multiple clusters
+		if redisResult.HasMultipleClusters() {
+			data.HasMultipleRedisClusters = true
+			// Convert clusters
+			redisClusters := make([]*RedisClusterData, 0, len(redisResult.Clusters))
+			for _, cluster := range redisResult.Clusters {
+				redisClusters = append(redisClusters, w.convertRedisClusterData(cluster))
+			}
+			data.RedisClusters = redisClusters
+		} else {
+			// Single cluster: use flat display
+			redisInstances := make([]*RedisInstanceData, 0, len(redisResult.Results))
+			for _, r := range redisResult.Results {
+				redisInstances = append(redisInstances, w.convertRedisInstanceData(r))
+			}
+			data.RedisInstances = redisInstances
+		}
+
+		// Convert Redis alerts (always needed for combined alerts section)
+		data.RedisAlerts = w.convertRedisAlerts(redisResult.Alerts)
+	}
+
+	// Fill Nginx data if available
+	if nginxResult != nil {
+		data.HasNginx = true
+		data.NginxSummary = nginxResult.Summary
+		data.NginxAlertSummary = nginxResult.AlertSummary
+
+		// If no other result provided inspection time, use Nginx's
+		if data.InspectionTime == "" {
+			data.InspectionTime = nginxResult.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+			data.Duration = formatDuration(nginxResult.Duration)
+			data.Version = nginxResult.Version
+		}
+
+		// Convert Nginx instances
+		nginxInstances := make([]*NginxInstanceData, 0, len(nginxResult.Results))
+		for _, r := range nginxResult.Results {
+			nginxInstances = append(nginxInstances, w.convertNginxInstanceData(r))
+		}
+		data.NginxInstances = nginxInstances
+
+		// Convert Nginx alerts
+		data.NginxAlerts = w.convertNginxAlerts(nginxResult.Alerts)
+	}
+
+	// Fill Tomcat data if available
+	if tomcatResult != nil {
+		data.HasTomcat = true
+		data.TomcatSummary = tomcatResult.Summary
+		data.TomcatAlertSummary = tomcatResult.AlertSummary
+
+		// Convert Tomcat instances
+		tomcatInstances := make([]*TomcatInstanceData, 0, len(tomcatResult.Results))
+		for _, r := range tomcatResult.Results {
+			tomcatInstances = append(tomcatInstances, w.convertTomcatInstanceData(r))
+		}
+		data.TomcatInstances = tomcatInstances
+
+		// Convert Tomcat alerts
+		data.TomcatAlerts = w.convertTomcatAlerts(tomcatResult.Alerts)
+	}
+
+	// Fill Elasticsearch data if available
+	if esResult != nil {
+		data.HasElasticsearch = true
+		data.ElasticsearchSummary = esResult.Summary
+		data.ElasticsearchAlertSummary = esResult.AlertSummary
+
+		// Convert Elasticsearch instances
+		esInstances := make([]*ElasticsearchInstanceData, 0, len(esResult.Results))
+		for _, r := range esResult.Results {
+			esInstances = append(esInstances, w.convertElasticsearchInstanceData(r))
+		}
+		data.ElasticsearchInstances = esInstances
+
+		// Convert Elasticsearch alerts
+		data.ElasticsearchAlerts = w.convertElasticsearchAlerts(esResult.Alerts)
+	}
+
+	data.UnifiedAlerts, data.UnifiedAlertSummary = w.collectUnifiedAlerts(hostResult, mysqlResult, redisResult, nginxResult, tomcatResult, esResult)
+
+	return data
+}
+
+func (w *Writer) prepareBaselineChecks(result *model.InspectionResult) []*BaselineCheckData {
+	if result == nil || len(result.Hosts) == 0 {
+		return nil
+	}
+
+	inspectionTimeStr := result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05")
+	checks := make([]*BaselineCheckData, 0, len(result.Hosts))
+
+	for _, host := range result.Hosts {
+		check := &BaselineCheckData{
+			InspectionTime: inspectionTimeStr,
+			Hostname:       host.Hostname,
+			IP:             host.IP,
+			OS:             fmt.Sprintf("%s %s", host.OS, host.OSVersion),
+			KernelVersion:  host.KernelVersion,
+			Uptime:         w.getMetricValue(host.Metrics["uptime"]),
+			PasswordExpiry: w.buildPasswordExpiryDisplay(host),
+			PasswordPolicy: w.buildPasswordPolicyDisplay(host),
+			FileHandles:    w.buildFileHandlesDisplay(host),
+			PublicNetwork:  w.buildPublicNetworkDisplay(host),
+		}
+
+		check.SysctlTCPSyncookies = w.getSysctlValue(host, "net.ipv4.tcp_syncookies")
+		check.SysctlTCPMaxSynBacklog = w.getSysctlValue(host, "net.ipv4.tcp_max_syn_backlog")
+		check.SysctlSomaxconn = w.getSysctlValue(host, "net.core.somaxconn")
+		check.SysctlIPLocalPortRange = w.getSysctlValue(host, "net.ipv4.ip_local_port_range")
+		check.SysctlSwappiness = w.getSysctlValue(host, "vm.swappiness")
+		check.SysctlFileMax = w.getSysctlValue(host, "fs.file-max")
+		check.SysctlTCPTWReuse = w.getSysctlValue(host, "net.ipv4.tcp_tw_reuse")
+		check.SysctlTCPFinTimeout = w.getSysctlValue(host, "net.ipv4.tcp_fin_timeout")
+		check.SysctlTCPKeepaliveTime = w.getSysctlValue(host, "net.ipv4.tcp_keepalive_time")
+		check.SysctlPIDMax = w.getSysctlValue(host, "kernel.pid_max")
+
+		checks = append(checks, check)
+	}
+
+	return checks
+}
+
+func (w *Writer) getMetricValue(metric *model.MetricValue) string {
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	return metric.FormattedValue
+}
+
+func (w *Writer) buildFileHandlesDisplay(host *model.HostResult) string {
+	openFiles := host.GetMetric("open_files")
+	maxFiles := host.GetMetric("max_files")
+	if openFiles == nil || openFiles.IsNA || maxFiles == nil || maxFiles.IsNA {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.0f / %.0f", openFiles.RawValue, maxFiles.RawValue)
+}
+
+func (w *Writer) buildPublicNetworkDisplay(host *model.HostResult) string {
+	metric := host.GetMetric("public_network")
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	if metric.RawValue == 1 {
+		return "可访问"
+	}
+	return "不可访问"
+}
+
+func (w *Writer) getSysctlValue(host *model.HostResult, paramName string) string {
+	metricName := "sysctl_params:" + paramName
+	metric := host.GetMetric(metricName)
+	if metric == nil || metric.IsNA {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.0f", metric.RawValue)
+}
+
+// ============================================================================
+// Redis Report Data Structures
+// ============================================================================
+
+// RedisTemplateData holds Redis inspection data for template rendering.
+type RedisTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.RedisInspectionSummary
+	AlertSummary   *model.RedisAlertSummary
+	Instances      []*RedisInstanceData
+	Alerts         []*RedisAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+// ============================================================================
+// Nginx Template Data Structures
+// ============================================================================
+
+// NginxTemplateData holds Nginx inspection data for template rendering.
+type NginxTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.NginxInspectionSummary
+	AlertSummary   *model.NginxAlertSummary
+	Instances      []*NginxInstanceData
+	Alerts         []*NginxAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+// RedisInstanceData represents Redis instance data formatted for template.
+type RedisInstanceData struct {
+	Address          string
+	IP               string
+	Port             int
+	Version          string // N/A for MVP
+	Role             string // "主"/"从"/"未知"
+	ClusterEnabled   string // "启用"/"禁用"
+	NonRootUser      string // "是"/"否"/"N/A"
+	ConnectionStatus string // "正常"/"异常"
+	MaxClients       int
+	ConnectedClients int
+	ConnectionUsage  string // 格式化百分比
+	ConnectedSlaves  int    // 仅主节点显示
+	MasterLinkStatus string // 仅从节点：同步状态
+	MasterPort       string // 仅从节点：Master 端口
+	ReplicationLag   string // 仅从节点：格式化延迟
+	Status           string // "正常"/"警告"/"严重"/"失败"
+	StatusClass      string // CSS class
+	AlertCount       int
+}
+
+// RedisAlertData represents Redis alert data formatted for template.
+type RedisAlertData struct {
+	Address           string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// RedisClusterData represents a Redis cluster (grouped by network segment) for template.
+type RedisClusterData struct {
+	ID           string // Network segment, e.g., "192.18.102"
+	Name         string // Display name, e.g., "Redis 集群 - 192.18.102"
+	Summary      *model.RedisInspectionSummary
+	AlertSummary *model.RedisAlertSummary
+	Instances    []*RedisInstanceData
+	Alerts       []*RedisAlertData
+}
+
+// ============================================================================
+// Redis Report Helper Functions
+// ============================================================================
+
+// redisStatusText converts Redis instance status to Chinese text.
+func redisStatusText(status model.RedisInstanceStatus) string {
+	switch status {
+	case model.RedisStatusNormal:
+		return "正常"
+	case model.RedisStatusWarning:
+		return "警告"
+	case model.RedisStatusCritical:
+		return "严重"
+	case model.RedisStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// redisStatusClass returns the CSS class for Redis instance status.
+func redisStatusClass(status model.RedisInstanceStatus) string {
+	switch status {
+	case model.RedisStatusNormal:
+		return "status-normal"
+	case model.RedisStatusWarning:
+		return "status-warning"
+	case model.RedisStatusCritical:
+		return "status-critical"
+	case model.RedisStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// redisRoleText converts Redis role to Chinese text.
+func redisRoleText(role model.RedisRole) string {
+	switch role {
+	case model.RedisRoleMaster:
+		return "主"
+	case model.RedisRoleSlave:
+		return "从"
+	default:
+		return "未知"
+	}
+}
+
+// redisConnectionStatusText returns connection status text.
+func redisConnectionStatusText(r *model.RedisInspectionResult) string {
+	if r.ConnectionStatus {
+		return "正常"
+	}
+	return "异常"
+}
+
+// formatRedisConnectionUsage formats connection usage percentage.
+func formatRedisConnectionUsage(r *model.RedisInspectionResult) string {
+	if r.MaxClients == 0 {
+		return "N/A"
+	}
+	usage := float64(r.ConnectedClients) / float64(r.MaxClients) * 100
+	return fmt.Sprintf("%.1f%%", usage)
+}
+
+// getRedisLinkStatus returns master link status text (only for slave nodes).
+func getRedisLinkStatus(r *model.RedisInspectionResult) string {
+	if r.Instance.Role != model.RedisRoleSlave {
+		return "N/A"
+	}
+	if r.MasterLinkStatus {
+		return "正常"
+	}
+	return "异常"
+}
+
+// getRedisReplicationLag returns replication lag text (only for slave nodes).
+func getRedisReplicationLag(r *model.RedisInspectionResult) string {
+	if r.Instance.Role != model.RedisRoleSlave {
+		return "N/A"
+	}
+	if r.ReplicationLag == 0 {
+		return "0 B"
+	}
+	return formatSize(r.ReplicationLag)
+}
+
+// getRedisMasterPort returns master port text (only for slave nodes).
+func getRedisMasterPort(r *model.RedisInspectionResult) string {
+	if r.Instance.Role != model.RedisRoleSlave {
+		return "N/A"
+	}
+	if r.MasterPort == 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%d", r.MasterPort)
+}
+
+// formatRedisThreshold formats a Redis alert threshold value based on metric type.
+func formatRedisThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "connection_usage":
+		return fmt.Sprintf("%.1f%%", value)
+	case "replication_lag":
+		return formatSize(int64(value))
+	case "master_link_status":
+		if value > 0 {
+			return "正常"
+		}
+		return "异常"
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// ============================================================================
+// Redis Report Methods
+// ============================================================================
+
+// WriteRedisInspection generates an HTML report for Redis inspection results.
+func (w *Writer) WriteRedisInspection(result *model.RedisInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("Redis inspection result is nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load Redis template
+	tmpl, err := w.loadRedisTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Redis template: %w", err)
+	}
+
+	// Prepare template data
+	data := w.prepareRedisTemplateData(result)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute Redis template: %w", err)
+	}
+
+	return nil
+}
+
+// WriteNginxInspection generates an HTML report for Nginx inspection results.
+func (w *Writer) WriteNginxInspection(result *model.NginxInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("Nginx inspection result is nil")
+	}
+
+	// Ensure output path has .html extension
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	// Load Nginx template
+	tmpl, err := w.loadNginxTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Nginx template: %w", err)
+	}
+
+	// Prepare template data
+	data := w.prepareNginxTemplateData(result)
+
+	// Create output file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	// Execute template
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute Nginx template: %w", err)
+	}
+
+	return nil
+}
+
+// loadRedisTemplate loads the Redis HTML template.
+func (w *Writer) loadRedisTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    statusClass,
+		"alertClass":     alertLevelClass,
+	}
+
+	// Load embedded Redis template
+	tmpl, err := template.New("redis.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/redis.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded Redis template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareRedisTemplateData converts RedisInspectionResults to RedisTemplateData for template rendering.
+func (w *Writer) prepareRedisTemplateData(result *model.RedisInspectionResults) *RedisTemplateData {
+	// Convert instances
+	instances := make([]*RedisInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertRedisInstanceData(r))
+	}
+
+	// Convert and sort alerts (critical first)
+	alerts := w.convertRedisAlerts(result.Alerts)
+
+	return &RedisTemplateData{
+		Title:          "Redis 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Instances:      instances,
+		Alerts:         alerts,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+// convertRedisInstanceData converts a RedisInspectionResult to RedisInstanceData for template rendering.
+func (w *Writer) convertRedisInstanceData(r *model.RedisInspectionResult) *RedisInstanceData {
+	version := r.Instance.Version
+	if version == "" {
+		version = "N/A"
+	}
+
+	nonRootUser := r.NonRootUser
+	if nonRootUser == "" {
+		nonRootUser = "N/A"
+	}
+
+	return &RedisInstanceData{
+		Address:          r.GetAddress(),
+		IP:               r.Instance.IP,
+		Port:             r.Instance.Port,
+		Version:          version,
+		Role:             redisRoleText(r.Instance.Role),
+		ClusterEnabled:   boolToText(r.ClusterEnabled),
+		NonRootUser:      nonRootUser,
+		ConnectionStatus: redisConnectionStatusText(r),
+		MaxClients:       r.MaxClients,
+		ConnectedClients: r.ConnectedClients,
+		ConnectionUsage:  formatRedisConnectionUsage(r),
+		ConnectedSlaves:  r.ConnectedSlaves,
+		MasterLinkStatus: getRedisLinkStatus(r),
+		MasterPort:       getRedisMasterPort(r),
+		ReplicationLag:   getRedisReplicationLag(r),
+		Status:           redisStatusText(r.Status),
+		StatusClass:      redisStatusClass(r.Status),
+		AlertCount:       len(r.Alerts),
+	}
+}
+
+// convertRedisAlerts converts and sorts Redis alerts for template rendering.
+func (w *Writer) convertRedisAlerts(alerts []*model.RedisAlert) []*RedisAlertData {
+	// Make a copy for sorting
+	sortedAlerts := make([]*model.RedisAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+
+	// Sort by level (critical first) then by address
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Address < sortedAlerts[j].Address
+	})
+
+	// Convert to RedisAlertData
+	result := make([]*RedisAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &RedisAlertData{
+			Address:           alert.Address,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatRedisThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatRedisThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+// convertRedisClusterData converts a RedisCluster to RedisClusterData for template rendering.
+func (w *Writer) convertRedisClusterData(cluster *model.RedisCluster) *RedisClusterData {
+	if cluster == nil {
+		return nil
+	}
+
+	// Convert instances
+	instances := make([]*RedisInstanceData, 0, len(cluster.Instances))
+	for _, r := range cluster.Instances {
+		instances = append(instances, w.convertRedisInstanceData(r))
+	}
+
+	// Convert alerts
+	alerts := w.convertRedisAlerts(cluster.Alerts)
+
+	return &RedisClusterData{
+		ID:           cluster.ID,
+		Name:         cluster.Name,
+		Summary:      cluster.Summary,
+		AlertSummary: cluster.AlertSummary,
+		Instances:    instances,
+		Alerts:       alerts,
+	}
+}
+
+// ============================================================================
+// Nginx Report Data Structures
+// ============================================================================
+
+// NginxInstanceData represents Nginx instance data formatted for template.
+type NginxInstanceData struct {
+	Identifier             string
+	Hostname               string
+	IP                     string
+	Port                   int
+	Container              string
+	ApplicationType        string
+	Version                string
+	InstallPath            string
+	ErrorLogPath           string
+	AccessLogPath          string
+	Up                     string // "运行" / "停止"
+	ActiveConnections      int
+	WorkerProcesses        int
+	WorkerConnections      int
+	ConnectionUsagePercent string // 格式化百分比
+	ErrorPage4xx           string // "已配置" / "未配置"
+	ErrorPage5xx           string // "已配置" / "未配置"
+	LastErrorTime          string // 格式化时间
+	NonRootUser            string // "是" / "否"
+	Status                 string // "正常" / "警告" / "严重" / "失败"
+	StatusClass            string // CSS class
+	AlertCount             int
+}
+
+// NginxAlertData represents Nginx alert data formatted for template.
+type NginxAlertData struct {
+	Identifier        string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// ============================================================================
+// Nginx Report Helper Functions
+// ============================================================================
+
+// nginxStatusText converts Nginx instance status to Chinese text.
+func nginxStatusText(status model.NginxInstanceStatus) string {
+	switch status {
+	case model.NginxStatusNormal:
+		return "正常"
+	case model.NginxStatusWarning:
+		return "警告"
+	case model.NginxStatusCritical:
+		return "严重"
+	case model.NginxStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// nginxStatusClass returns the CSS class for Nginx instance status.
+func nginxStatusClass(status model.NginxInstanceStatus) string {
+	switch status {
+	case model.NginxStatusNormal:
+		return "status-normal"
+	case model.NginxStatusWarning:
+		return "status-warning"
+	case model.NginxStatusCritical:
+		return "status-critical"
+	case model.NginxStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// nginxBoolToText converts nginx boolean metric to Chinese text.
+func nginxBoolToText(value bool) string {
+	if value {
+		return "是"
+	}
+	return "否"
+}
+
+// nginxConfiguredText returns configuration status text.
+func nginxConfiguredText(configured bool) string {
+	if configured {
+		return "已配置"
+	}
+	return "未配置"
+}
+
+// nginxUpText returns Nginx running status text.
+func nginxUpText(up bool) string {
+	if up {
+		return "运行"
+	}
+	return "停止"
+}
+
+// formatNginxConnectionUsage formats connection usage percentage.
+func formatNginxConnectionUsage(usagePercent float64) string {
+	if usagePercent < 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%.1f%%", usagePercent)
+}
+
+// formatNginxThreshold formats a Nginx alert threshold value based on metric type.
+func formatNginxThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "connection_usage":
+		return fmt.Sprintf("%.1f%%", value)
+	case "last_error_minutes":
+		return fmt.Sprintf("%.0f分钟", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// ============================================================================
+// Nginx Report Methods
+// ============================================================================
+
+// convertNginxInstanceData converts a NginxInspectionResult to NginxInstanceData for template rendering.
+func (w *Writer) convertNginxInstanceData(r *model.NginxInspectionResult) *NginxInstanceData {
+	if r == nil || r.Instance == nil {
+		return &NginxInstanceData{
+			Status:      "失败",
+			StatusClass: "status-failed",
+		}
+	}
+
+	return &NginxInstanceData{
+		Identifier:             r.GetIdentifier(),
+		Hostname:               r.Instance.Hostname,
+		IP:                     r.Instance.IP,
+		Port:                   r.Instance.Port,
+		Container:              r.Instance.Container,
+		ApplicationType:        r.Instance.ApplicationType,
+		Version:                r.Instance.Version,
+		InstallPath:            r.Instance.InstallPath,
+		ErrorLogPath:           r.Instance.ErrorLogPath,
+		AccessLogPath:          r.Instance.AccessLogPath,
+		Up:                     nginxUpText(r.Up),
+		ActiveConnections:      r.ActiveConnections,
+		WorkerProcesses:        r.WorkerProcesses,
+		WorkerConnections:      r.WorkerConnections,
+		ConnectionUsagePercent: formatNginxConnectionUsage(r.ConnectionUsagePercent),
+		ErrorPage4xx:           nginxConfiguredText(r.ErrorPage4xxConfigured),
+		ErrorPage5xx:           nginxConfiguredText(r.ErrorPage5xxConfigured),
+		LastErrorTime:          r.FormatLastErrorTime(w.timezone),
+		NonRootUser:            nginxBoolToText(r.NonRootUser),
+		Status:                 nginxStatusText(r.Status),
+		StatusClass:            nginxStatusClass(r.Status),
+		AlertCount:             len(r.Alerts),
+	}
+}
+
+// convertNginxAlerts converts and sorts Nginx alerts for template rendering.
+func (w *Writer) convertNginxAlerts(alerts []*model.NginxAlert) []*NginxAlertData {
+	// Make a copy for sorting
+	sortedAlerts := make([]*model.NginxAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+
+	// Sort by level (critical first) then by identifier
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Identifier < sortedAlerts[j].Identifier
+	})
+
+	// Convert to NginxAlertData
+	result := make([]*NginxAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &NginxAlertData{
+			Identifier:        alert.Identifier,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatNginxThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatNginxThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+// loadNginxTemplate loads the Nginx HTML template.
+func (w *Writer) loadNginxTemplate() (*template.Template, error) {
+	// Define template functions
+	funcMap := template.FuncMap{
+		"formatSize":                 formatSize,
+		"formatDuration":             formatDuration,
+		"statusClass":                statusClass,
+		"alertClass":                 alertLevelClass,
+		"nginxStatusText":            nginxStatusText,
+		"nginxBoolToText":            nginxBoolToText,
+		"nginxConfiguredText":        nginxConfiguredText,
+		"nginxUpText":                nginxUpText,
+		"formatNginxConnectionUsage": formatNginxConnectionUsage,
+		"formatNginxThreshold":       formatNginxThreshold,
+	}
+
+	// Load embedded Nginx template
+	tmpl, err := template.New("nginx.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/nginx.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded nginx template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// prepareNginxTemplateData prepares data for the Nginx template.
+func (w *Writer) prepareNginxTemplateData(result *model.NginxInspectionResults) *NginxTemplateData {
+	data := &NginxTemplateData{
+		Title:          "Nginx 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+
+	// Convert instances
+	instances := make([]*NginxInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertNginxInstanceData(r))
+	}
+	data.Instances = instances
+
+	// Convert alerts
+	data.Alerts = w.convertNginxAlerts(result.Alerts)
+
+	return data
+}
+
+// =============================================================================
+// Tomcat Report Data Structures
+// ============================================================================
+
+// TomcatTemplateData holds Tomcat inspection data for template rendering.
+type TomcatTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.TomcatInspectionSummary
+	AlertSummary   *model.TomcatAlertSummary
+	Instances      []*TomcatInstanceData
+	Alerts         []*TomcatAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+// TomcatInstanceData represents Tomcat instance data formatted for template.
+type TomcatInstanceData struct {
+	Identifier             string
+	Hostname               string
+	IP                     string
+	ApplicationType        string
+	Port                   int
+	Container              string
+	Version                string
+	InstallPath            string
+	LogPath                string
+	JVMConfig              string
+	Connections            int
+	UptimeFormatted        string
+	NonRootUser            string
+	LastErrorTimeFormatted string
+	Status                 string
+	StatusClass            string
+	AlertCount             int
+}
+
+// TomcatAlertData represents Tomcat alert data formatted for template.
+type TomcatAlertData struct {
+	Identifier        string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+// =============================================================================
+// Tomcat Report Helper Functions
+// ============================================================================
+
+// tomcatStatusText converts Tomcat instance status to Chinese text.
+func tomcatStatusText(status model.TomcatInstanceStatus) string {
+	switch status {
+	case model.TomcatStatusNormal:
+		return "正常"
+	case model.TomcatStatusWarning:
+		return "警告"
+	case model.TomcatStatusCritical:
+		return "严重"
+	case model.TomcatStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+// tomcatStatusClass returns the CSS class for Tomcat instance status.
+func tomcatStatusClass(status model.TomcatInstanceStatus) string {
+	switch status {
+	case model.TomcatStatusNormal:
+		return "status-normal"
+	case model.TomcatStatusWarning:
+		return "status-warning"
+	case model.TomcatStatusCritical:
+		return "status-critical"
+	case model.TomcatStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+// tomcatBoolToText converts boolean to Chinese text (是/否).
+func tomcatBoolToText(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
+}
+
+// getTomcatPortOrContainer returns container name if container deployment,
+// otherwise returns port number as string.
+func getTomcatPortOrContainer(r *model.TomcatInspectionResult) string {
+	if r.Instance == nil {
+		return ""
+	}
+	if r.Instance.IsContainerDeployment() {
+		return r.Instance.Container
+	}
+	return fmt.Sprintf("%d", r.Instance.Port)
+}
+
+// formatTomcatThreshold formats a Tomcat alert threshold value.
+func formatTomcatThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "last_error_timestamp":
+		return fmt.Sprintf("%.0f分钟", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+// loadTomcatTemplate loads the embedded Tomcat HTML template.
+func (w *Writer) loadTomcatTemplate() (*template.Template, error) {
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    func(s model.TomcatInstanceStatus) string { return tomcatStatusClass(s) },
+		"alertClass":     func(l model.AlertLevel) string { return alertLevelClass(l) },
+	}
+
+	tmpl, err := template.New("tomcat.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/tomcat.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded tomcat template: %w", err)
+	}
+	return tmpl, nil
+}
+
+// convertTomcatInstanceData converts TomcatInspectionResult to TomcatInstanceData.
+func (w *Writer) convertTomcatInstanceData(r *model.TomcatInspectionResult) *TomcatInstanceData {
+	return &TomcatInstanceData{
+		Identifier:             r.Instance.Identifier,
+		Hostname:               r.Instance.Hostname,
+		IP:                     r.Instance.IP,
+		ApplicationType:        r.Instance.ApplicationType,
+		Port:                   r.Instance.Port,
+		Container:              r.Instance.Container,
+		Version:                r.Instance.Version,
+		InstallPath:            r.Instance.InstallPath,
+		LogPath:                r.Instance.LogPath,
+		JVMConfig:              r.Instance.JVMConfig,
+		Connections:            r.Connections,
+		UptimeFormatted:        r.UptimeFormatted,
+		NonRootUser:            tomcatBoolToText(r.NonRootUser),
+		LastErrorTimeFormatted: r.LastErrorTimeFormatted,
+		Status:                 tomcatStatusText(r.Status),
+		StatusClass:            tomcatStatusClass(r.Status),
+		AlertCount:             len(r.Alerts),
+	}
+}
+
+// convertTomcatAlerts converts TomcatAlert slice to TomcatAlertData slice.
+func (w *Writer) convertTomcatAlerts(alerts []*model.TomcatAlert) []*TomcatAlertData {
+	// Sort by level (critical first)
+	sortedAlerts := make([]*model.TomcatAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Identifier < sortedAlerts[j].Identifier
+	})
+
+	result := make([]*TomcatAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &TomcatAlertData{
+			Identifier:        alert.Identifier,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatTomcatThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatTomcatThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+// prepareTomcatTemplateData converts TomcatInspectionResults to TomcatTemplateData.
+func (w *Writer) prepareTomcatTemplateData(result *model.TomcatInspectionResults) *TomcatTemplateData {
+	instances := make([]*TomcatInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertTomcatInstanceData(r))
+	}
+
+	alerts := w.convertTomcatAlerts(result.Alerts)
+
+	return &TomcatTemplateData{
+		Title:          "Tomcat 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Instances:      instances,
+		Alerts:         alerts,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+// WriteTomcatInspection generates an HTML report for Tomcat inspection results.
+func (w *Writer) WriteTomcatInspection(result *model.TomcatInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("tomcat inspection result is nil")
+	}
+
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	tmpl, err := w.loadTomcatTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Tomcat template: %w", err)
+	}
+
+	data := w.prepareTomcatTemplateData(result)
+
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return nil
+}
+
+type UnifiedAlertData struct {
+	SourceType        string
+	SourceTypeClass   string
+	Identifier        string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+type UnifiedAlertSummary struct {
+	TotalAlerts   int
+	WarningCount  int
+	CriticalCount int
+}
+
+func (w *Writer) collectUnifiedAlerts(hostResult *model.InspectionResult, mysqlResult *model.MySQLInspectionResults, redisResult *model.RedisInspectionResults, nginxResult *model.NginxInspectionResults, tomcatResult *model.TomcatInspectionResults, esResult *model.ElasticsearchInspectionResults) ([]*UnifiedAlertData, *UnifiedAlertSummary) {
+	var alerts []*UnifiedAlertData
+	summary := &UnifiedAlertSummary{}
+
+	if hostResult != nil {
+		for _, alert := range hostResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Host",
+					SourceTypeClass:   "source-host",
+					Identifier:        alert.Hostname,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if mysqlResult != nil {
+		for _, alert := range mysqlResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "MySQL",
+					SourceTypeClass:   "source-mysql",
+					Identifier:        alert.Address,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if redisResult != nil {
+		for _, alert := range redisResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Redis",
+					SourceTypeClass:   "source-redis",
+					Identifier:        alert.Address,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if nginxResult != nil {
+		for _, alert := range nginxResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Nginx",
+					SourceTypeClass:   "source-nginx",
+					Identifier:        alert.Identifier,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if tomcatResult != nil {
+		for _, alert := range tomcatResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Tomcat",
+					SourceTypeClass:   "source-tomcat",
+					Identifier:        alert.Identifier,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	if esResult != nil {
+		for _, alert := range esResult.Alerts {
+			if alert != nil {
+				alerts = append(alerts, &UnifiedAlertData{
+					SourceType:        "Elasticsearch",
+					SourceTypeClass:   "source-elasticsearch",
+					Identifier:        alert.Address,
+					MetricName:        alert.MetricName,
+					MetricDisplayName: alert.MetricDisplayName,
+					CurrentValue:      alert.FormattedValue,
+					WarningThreshold:  formatThreshold(alert.WarningThreshold, alert.MetricName),
+					CriticalThreshold: formatThreshold(alert.CriticalThreshold, alert.MetricName),
+					Level:             alertLevelText(alert.Level),
+					LevelClass:        alertLevelClass(alert.Level),
+					Message:           alert.Message,
+				})
+				summary.TotalAlerts++
+				if alert.Level == model.AlertLevelWarning {
+					summary.WarningCount++
+				} else if alert.Level == model.AlertLevelCritical {
+					summary.CriticalCount++
+				}
+			}
+		}
+	}
+
+	sort.Slice(alerts, func(i, j int) bool {
+		pi := alertLevelPriorityFromClass(alerts[i].LevelClass)
+		pj := alertLevelPriorityFromClass(alerts[j].LevelClass)
+		if pi != pj {
+			return pi > pj
+		}
+		if alerts[i].SourceType != alerts[j].SourceType {
+			return alerts[i].SourceType < alerts[j].SourceType
+		}
+		return alerts[i].Identifier < alerts[j].Identifier
+	})
+
+	return alerts, summary
+}
+
+func alertLevelPriorityFromClass(levelClass string) int {
+	switch levelClass {
+	case "status-critical":
+		return 2
+	case "status-warning":
+		return 1
+	default:
+		return 0
+	}
+}
+
+type ElasticsearchInstanceData struct {
+	Address                string
+	IP                     string
+	Port                   int
+	ClusterName            string
+	Role                   string
+	HeapMemoryPercent      string
+	CPUPercent             string
+	DiskUsagePercent       string
+	FileHandleUsagePercent string
+	CircuitBreakerTripped  string
+	ThreadPoolRejected     string
+	GCDurationSeconds      string
+	UptimeDays             string
+	Status                 string
+	StatusClass            string
+	AlertCount             int
+}
+
+type ElasticsearchAlertData struct {
+	Address           string
+	MetricName        string
+	MetricDisplayName string
+	CurrentValue      string
+	WarningThreshold  string
+	CriticalThreshold string
+	Level             string
+	LevelClass        string
+	Message           string
+}
+
+type ElasticsearchTemplateData struct {
+	Title          string
+	InspectionTime string
+	Duration       string
+	Summary        *model.ElasticsearchInspectionSummary
+	AlertSummary   *model.ElasticsearchAlertSummary
+	Instances      []*ElasticsearchInstanceData
+	Alerts         []*ElasticsearchAlertData
+	Version        string
+	GeneratedAt    string
+}
+
+func esStatusText(status model.ElasticsearchInstanceStatus) string {
+	switch status {
+	case model.ElasticsearchStatusNormal:
+		return "正常"
+	case model.ElasticsearchStatusWarning:
+		return "警告"
+	case model.ElasticsearchStatusCritical:
+		return "严重"
+	case model.ElasticsearchStatusFailed:
+		return "失败"
+	default:
+		return "未知"
+	}
+}
+
+func esStatusClass(status model.ElasticsearchInstanceStatus) string {
+	switch status {
+	case model.ElasticsearchStatusNormal:
+		return "status-normal"
+	case model.ElasticsearchStatusWarning:
+		return "status-warning"
+	case model.ElasticsearchStatusCritical:
+		return "status-critical"
+	case model.ElasticsearchStatusFailed:
+		return "status-failed"
+	default:
+		return ""
+	}
+}
+
+func esBoolToText(b bool) string {
+	if b {
+		return "是"
+	}
+	return "否"
+}
+
+func (w *Writer) convertElasticsearchInstanceData(r *model.ElasticsearchInspectionResult) *ElasticsearchInstanceData {
+	uptimeDays := r.Uptime / 86400
+	return &ElasticsearchInstanceData{
+		Address:                r.Instance.Address,
+		IP:                     r.Instance.IP,
+		Port:                   r.Instance.Port,
+		ClusterName:            r.Instance.ClusterName,
+		Role:                   string(r.Instance.Role),
+		HeapMemoryPercent:      fmt.Sprintf("%.1f%%", r.HeapMemoryPercent),
+		CPUPercent:             fmt.Sprintf("%.1f%%", r.CPUPercent),
+		DiskUsagePercent:       fmt.Sprintf("%.1f%%", r.DiskUsagePercent),
+		FileHandleUsagePercent: fmt.Sprintf("%.1f%%", r.FileHandleUsagePercent),
+		CircuitBreakerTripped:  esBoolToText(r.CircuitBreakerTripped),
+		ThreadPoolRejected:     esBoolToText(r.ThreadPoolRejected),
+		GCDurationSeconds:      fmt.Sprintf("%.2f", r.GCDurationSeconds),
+		UptimeDays:             fmt.Sprintf("%d", uptimeDays),
+		Status:                 esStatusText(r.Status),
+		StatusClass:            esStatusClass(r.Status),
+		AlertCount:             len(r.Alerts),
+	}
+}
+
+func formatESThreshold(value float64, metricName string) string {
+	switch metricName {
+	case "heap_memory_percent", "cpu_percent", "disk_usage_percent", "file_handle_usage_percent":
+		return fmt.Sprintf("%.1f%%", value)
+	default:
+		return fmt.Sprintf("%.2f", value)
+	}
+}
+
+func (w *Writer) convertElasticsearchAlerts(alerts []*model.ElasticsearchAlert) []*ElasticsearchAlertData {
+	sortedAlerts := make([]*model.ElasticsearchAlert, len(alerts))
+	copy(sortedAlerts, alerts)
+	sort.Slice(sortedAlerts, func(i, j int) bool {
+		if sortedAlerts[i].Level != sortedAlerts[j].Level {
+			return alertLevelPriority(sortedAlerts[i].Level) > alertLevelPriority(sortedAlerts[j].Level)
+		}
+		return sortedAlerts[i].Address < sortedAlerts[j].Address
+	})
+
+	result := make([]*ElasticsearchAlertData, 0, len(sortedAlerts))
+	for _, alert := range sortedAlerts {
+		result = append(result, &ElasticsearchAlertData{
+			Address:           alert.Address,
+			MetricName:        alert.MetricName,
+			MetricDisplayName: alert.MetricDisplayName,
+			CurrentValue:      alert.FormattedValue,
+			WarningThreshold:  formatESThreshold(alert.WarningThreshold, alert.MetricName),
+			CriticalThreshold: formatESThreshold(alert.CriticalThreshold, alert.MetricName),
+			Level:             alertLevelText(alert.Level),
+			LevelClass:        alertLevelClass(alert.Level),
+			Message:           alert.Message,
+		})
+	}
+	return result
+}
+
+func (w *Writer) prepareElasticsearchTemplateData(result *model.ElasticsearchInspectionResults) *ElasticsearchTemplateData {
+	instances := make([]*ElasticsearchInstanceData, 0, len(result.Results))
+	for _, r := range result.Results {
+		instances = append(instances, w.convertElasticsearchInstanceData(r))
+	}
+
+	alerts := w.convertElasticsearchAlerts(result.Alerts)
+
+	return &ElasticsearchTemplateData{
+		Title:          "Elasticsearch 巡检报告",
+		InspectionTime: result.InspectionTime.In(w.timezone).Format("2006-01-02 15:04:05"),
+		Duration:       formatDuration(result.Duration),
+		Summary:        result.Summary,
+		AlertSummary:   result.AlertSummary,
+		Instances:      instances,
+		Alerts:         alerts,
+		Version:        result.Version,
+		GeneratedAt:    time.Now().In(w.timezone).Format("2006-01-02 15:04:05"),
+	}
+}
+
+func (w *Writer) WriteElasticsearchInspection(result *model.ElasticsearchInspectionResults, outputPath string) error {
+	if result == nil {
+		return fmt.Errorf("elasticsearch inspection result is nil")
+	}
+
+	if !strings.HasSuffix(strings.ToLower(outputPath), ".html") {
+		outputPath = outputPath + ".html"
+	}
+
+	tmpl, err := w.loadElasticsearchTemplate()
+	if err != nil {
+		return fmt.Errorf("failed to load Elasticsearch template: %w", err)
+	}
+
+	data := w.prepareElasticsearchTemplateData(result)
+
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer file.Close()
+
+	if err := tmpl.Execute(file, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return nil
+}
+
+func (w *Writer) loadElasticsearchTemplate() (*template.Template, error) {
+	funcMap := template.FuncMap{
+		"formatSize":     formatSize,
+		"formatDuration": formatDuration,
+		"statusClass":    func(s model.ElasticsearchInstanceStatus) string { return esStatusClass(s) },
+		"alertClass":     func(l model.AlertLevel) string { return alertLevelClass(l) },
+	}
+
+	tmpl, err := template.New("elasticsearch.html").Funcs(funcMap).ParseFS(embeddedTemplates, "templates/elasticsearch.html")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedded elasticsearch template: %w", err)
+	}
+	return tmpl, nil
+}

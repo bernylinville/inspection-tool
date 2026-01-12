@@ -1,0 +1,7 @@
+go 1.25.5
+
+use (
+	./apps/cmdb-server
+	./apps/inspect-cli
+	./pkg
+)

@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-基于监控数据的无侵入式系统巡检工具。通过调用夜莺（N9E）和 VictoriaMetrics API 查询监控数据，生成 Excel 和 HTML 格式的巡检报告。
+基于监控数据的无侵入式系统巡检工具，采用 Monorepo 结构：`pkg/` 共享基础库，`apps/*` 提供应用。支持巡检类型：Host、MySQL、Redis、Nginx、Tomcat、Elasticsearch。通过调用夜莺（N9E）和 VictoriaMetrics API 查询监控数据，生成 Excel 和 HTML 格式的巡检报告。
 
 **数据流**: Categraf → 夜莺 N9E → VictoriaMetrics → 本工具 → Excel/HTML 报告
 
 ## Tech Stack
 
 - **Language**: Go 1.25
+- **Workspace**: Go Workspace (go.work)
 - **CLI**: cobra + viper
 - **HTTP Client**: go-resty/resty/v2
 - **Excel**: xuri/excelize/v2
@@ -22,19 +23,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Build
-make build              # Build local binary
+make build              # Build CLI
 make build-all          # Cross-compile (linux/darwin/windows)
 
 # Test
-make test               # Run tests with race detection
-go test -v ./internal/client/...  # Test specific package
+make test-pkg           # Run pkg/* tests
+make test-cli           # Run apps/inspect-cli tests
 
 # Lint
 make lint               # Run golangci-lint
 
 # Run
 ./bin/inspect run -c config.yaml
-./bin/inspect run -c config.yaml --format excel,html --output ./reports
+./bin/inspect run -c config.yaml --mysql-only
+./bin/inspect run -c config.yaml --redis-only
 ./bin/inspect validate -c config.yaml
 ./bin/inspect version
 ```
@@ -44,84 +46,35 @@ make lint               # Run golangci-lint
 ```text
 CLI Layer (cobra)
     ↓
-Service Layer (Inspector → Evaluator → Reporter)
+Service Layer (Inspector → Collector → Evaluator → Reporter)
     ↓
 Client Layer (N9E Client, VM Client)
     ↓
 Report Layer (ExcelWriter, HTMLWriter)
 ```
 
-### Key Interfaces
+## Service Layer Pattern
 
-```go
-// Report writer - extensible for new formats
-type ReportWriter interface {
-    Write(result *InspectionResult, outputPath string) error
-    Format() string
-}
-
-// Data collector
-type Collector interface {
-    CollectHostMeta(ctx context.Context, hosts []string) ([]HostMeta, error)
-    CollectMetrics(ctx context.Context, hosts []string, metrics []MetricDef) ([]HostMetrics, error)
-}
-
-// Threshold evaluator
-type Evaluator interface {
-    Evaluate(metrics *HostMetrics, thresholds []Threshold) []Alert
-}
-```
+以 `collector → evaluator → inspector` 的流水线组织核心逻辑：collector 聚合数据，evaluator 评估阈值，inspector 编排流程并驱动报告输出。
 
 ## Directory Structure
 
 ```text
-cmd/inspect/main.go           # Entry point
-internal/
-├── config/                   # Config loading & validation
-├── client/
-│   ├── n9e/                  # N9E API client (host metadata)
-│   └── vm/                   # VictoriaMetrics client (metrics query)
-├── model/                    # Data models (Host, Metric, Alert, InspectionResult)
-├── service/                  # Business logic (Inspector, Collector, Evaluator)
-└── report/
-    ├── excel/                # Excel report with conditional formatting
-    └── html/                 # HTML report with templates
-configs/
-├── config.example.yaml       # Main config template
-└── metrics.yaml              # Metric definitions (PromQL queries)
+go.work                        # Workspace root
+pkg/                           # Shared library
+├── config/                    # Config & validation
+├── model/                     # Data models
+├── n9e/                       # N9E client
+└── vm/                        # VictoriaMetrics client
+apps/
+├── inspect-cli/               # CLI app
+└── cmdb-server/               # CMDB server skeleton
+configs/                       # Metric definitions
 ```
 
-## Data Sources
+## Module Dependencies
 
-| Source          | Purpose                                 | Auth                |
-| --------------- | --------------------------------------- | ------------------- |
-| N9E API         | Host metadata (OS, version, kernel, IP) | X-User-Token header |
-| VictoriaMetrics | Metrics via PromQL (/api/v1/query)      | None                |
-
-## Key Metrics (PromQL)
-
-```yaml
-cpu_usage: cpu_usage_active{cpu="cpu-total"}
-memory_usage: 100 - mem_available_percent
-disk_usage: disk_used_percent
-uptime: system_uptime
-processes_zombies: processes_zombies
-load_1m: system_load1
-```
-
-## Alert Thresholds
-
-| Metric    | Warning | Critical |
-| --------- | ------- | -------- |
-| CPU       | >70%    | >90%     |
-| Memory    | >70%    | >90%     |
-| Disk      | >70%    | >90%     |
-| Zombies   | >0      | >10      |
-| Load/core | >0.7    | >1.0     |
-
-## Concurrency Pattern
-
-Worker pool with errgroup, max 20 concurrent workers for 100+ hosts parallel collection. Single host failure doesn't abort the entire inspection.
+`pkg/` 为基础库，`apps/*` 通过 go.work 引入并依赖 `pkg/`，禁止反向依赖。
 
 ## MCP Tool Instructions
 
