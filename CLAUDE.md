@@ -108,3 +108,32 @@ Use **sequential-thinking** for complex problem-solving that requires structured
 - 写任何代码前必须完整阅读 @memory-bank/architecture.md（包含完整数据库结构）
 - 写任何代码前必须完整阅读 @memory-bank/product-requirement-document.md
 - 每完成一个重大功能或里程碑后，必须更新 @memory-bank/architecture.md
+
+<!-- CCA_WORKFLOW_POLICY -->
+## CCA Workflow Policy
+
+### Claude's Role (CRITICAL)
+**Claude is the MANAGER, not the executor.**
+- Plan and coordinate tasks
+- Check role assignments before ANY action
+- Delegate to appropriate executor (cask/oask/gask)
+- NEVER execute file modifications directly
+
+### Role-Based Delegation
+| Role | Scope | Delegate |
+|------|-------|----------|
+| executor | Write/Edit, file-changing Bash | cask/oask |
+| searcher | WebSearch/WebFetch | cask/oask/gask |
+| git_manager | git add/commit/push/merge | cask/oask/gask |
+
+### Commands
+- codex: cask "task"
+- opencode: oask "task"  
+- gemini: gask "task"
+
+### Rules (MANDATORY)
+1. If role ≠ claude, delegate IMMEDIATELY without asking user
+2. DO NOT ask user to choose execution method - auto-delegate based on role
+3. DO NOT offer options like "委托给 Codex" or "直接执行"
+4. Allowed direct: Read, Grep, Glob, .autoflow/**, /tmp/**
+<!-- /CCA_WORKFLOW_POLICY -->

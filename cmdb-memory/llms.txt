@@ -1,0 +1,674 @@
+# Flashcat API
+
+## Docs
+- [介绍](https://developer.flashcat.cloud/zh/flashduty/introduction.md):
+- Open API [快速入门](https://developer.flashcat.cloud/zh/flashduty/open-api/quickstart.md):
+- Open API [关于分页](https://developer.flashcat.cloud/zh/flashduty/open-api/about-pagination.md):
+- Open API > RUM > 通用接口 [DQL 语法](https://developer.flashcat.cloud/doc-7028545.md):
+- Webhook [快速入门](https://developer.flashcat.cloud/zh/flashduty/webhook/quickstart.md):
+- Webhook [自定义操作](https://developer.flashcat.cloud/zh/flashduty/webhook/custom-action.md):
+- Webhook [故障 Webhook](https://developer.flashcat.cloud/zh/flashduty/webhook/incident-webhook.md):
+- Webhook [告警 Webhook](https://developer.flashcat.cloud/zh/flashduty/webhook/alert-webhook.md):
+- Event API [快速入门](https://developer.flashcat.cloud/zh/flashduty/event-api/quickstart.md):
+- Event API [告警 Event](https://developer.flashcat.cloud/zh/flashduty/event-api/alert-event.md):
+- Event API [变更 Event](https://developer.flashcat.cloud/zh/flashduty/event-api/change-event.md):
+- [介绍](https://developer.flashcat.cloud/doc-3854185.md):
+- [介绍](https://developer.flashcat.cloud/doc-3892303.md):
+- 灭火图 API [快速入门](https://developer.flashcat.cloud/doc-3892373.md):
+- 北极星 API [快速入门](https://developer.flashcat.cloud/doc-3895383.md):
+
+## API Docs
+- Open API > 成员管理 [邀请成员](https://developer.flashcat.cloud/zh/flashduty/members/invite.md): 邀请即创建账号，登录可以完成激活，同时完成手机或邮件验证，对应通道才可以接收通知
+- Open API > 成员管理 [重置信息](https://developer.flashcat.cloud/api-159274244.md): <span style="color: red;">账户owner和admin可以修改所有成员信息，每个成员可以修改自己的信息</span>
+- Open API > 成员管理 [删除成员](https://developer.flashcat.cloud/api-140202372.md):
+- Open API > 成员管理 [成员列表](https://developer.flashcat.cloud/api-110655698.md):
+- Open API > 团队管理 [团队列表](https://developer.flashcat.cloud/api-110655699.md):
+- Open API > 团队管理 [基本信息](https://developer.flashcat.cloud/api-110655700.md):
+- Open API > 团队管理 [团队删除](https://developer.flashcat.cloud/api-110655701.md):
+- Open API > 团队管理 [团队Upsert](https://developer.flashcat.cloud/api-110655702.md):
+- Open API > 值班管理 [创建值班表](https://developer.flashcat.cloud/api-125481278.md):
+- Open API > 值班管理 [更新值班表](https://developer.flashcat.cloud/api-125480762.md):
+- Open API > 值班管理 [预览值班表](https://developer.flashcat.cloud/api-125491399.md):
+- Open API > 值班管理 [删除值班表](https://developer.flashcat.cloud/api-125492299.md):
+- Open API > 值班管理 [查看值班详情](https://developer.flashcat.cloud/api-125492455.md):
+- Open API > 值班管理 [查看值班列表](https://developer.flashcat.cloud/api-125492499.md):
+- Open API > 值班管理 [个人值班日程](https://developer.flashcat.cloud/api-125492614.md):
+- Open API > 值班管理 [根据ID列表获取值班表信息](https://developer.flashcat.cloud/api-176228962.md):
+- Open API > 值班管理 [角色信息](https://developer.flashcat.cloud/api-191055309.md):
+- Open API > 信息获取 [人员](https://developer.flashcat.cloud/api-110655713.md):
+- Open API > 信息获取 [团队](https://developer.flashcat.cloud/api-110655714.md):
+- Open API > 信息获取 [协作空间](https://developer.flashcat.cloud/api-252967384.md):
+- Open API > 信息获取 [故障](https://developer.flashcat.cloud/api-110655769.md):
+- Open API > 偏好设置 [查看偏好设置](https://developer.flashcat.cloud/api-110655715.md):
+- Open API > 偏好设置 [修改偏好设置](https://developer.flashcat.cloud/api-110655716.md):
+- Open API > 协作空间 > 分派策略 [策略详情](https://developer.flashcat.cloud/api-143747348.md):
+- Open API > 协作空间 > 分派策略 [策略启用](https://developer.flashcat.cloud/api-110655724.md):
+- Open API > 协作空间 > 分派策略 [策略禁用](https://developer.flashcat.cloud/api-110655725.md):
+- Open API > 协作空间 > 分派策略 [策略删除](https://developer.flashcat.cloud/api-110655726.md):
+- Open API > 协作空间 > 分派策略 [策略列表](https://developer.flashcat.cloud/api-110655727.md): filters 说明见创建接口
+- Open API > 协作空间 > 分派策略 [策略创建](https://developer.flashcat.cloud/api-110655728.md):
+- Open API > 协作空间 > 分派策略 [策略更新](https://developer.flashcat.cloud/api-110655729.md):
+- Open API > 协作空间 > 订阅规则 [策略启用](https://developer.flashcat.cloud/api-110655730.md):
+- Open API > 协作空间 > 订阅规则 [策略禁用](https://developer.flashcat.cloud/api-110655731.md):
+- Open API > 协作空间 > 订阅规则 [策略删除](https://developer.flashcat.cloud/api-110655732.md):
+- Open API > 协作空间 > 订阅规则 [策略列表](https://developer.flashcat.cloud/api-110655733.md): filters 说明见创建接口
+- Open API > 协作空间 > 订阅规则 [策略创建](https://developer.flashcat.cloud/api-110655734.md):
+- Open API > 协作空间 > 订阅规则 [策略更新](https://developer.flashcat.cloud/api-110655735.md):
+- Open API > 协作空间 > 排除规则 [策略启用](https://developer.flashcat.cloud/api-110655736.md):
+- Open API > 协作空间 > 排除规则 [策略禁用](https://developer.flashcat.cloud/api-110655737.md):
+- Open API > 协作空间 > 排除规则 [策略删除](https://developer.flashcat.cloud/api-110655738.md):
+- Open API > 协作空间 > 排除规则 [策略列表](https://developer.flashcat.cloud/api-110655739.md): filters 说明见创建接口
+- Open API > 协作空间 > 排除规则 [策略创建](https://developer.flashcat.cloud/api-110655740.md):
+- Open API > 协作空间 > 排除规则 [策略更新](https://developer.flashcat.cloud/api-110655741.md):
+- Open API > 协作空间 > 静默策略 [策略启用](https://developer.flashcat.cloud/api-110655742.md):
+- Open API > 协作空间 > 静默策略 [策略禁用](https://developer.flashcat.cloud/api-110655743.md):
+- Open API > 协作空间 > 静默策略 [策略删除](https://developer.flashcat.cloud/api-110655744.md):
+- Open API > 协作空间 > 静默策略 [策略列表](https://developer.flashcat.cloud/api-110655745.md): filters 说明见创建接口
+- Open API > 协作空间 > 静默策略 [策略创建](https://developer.flashcat.cloud/api-110655746.md):
+- Open API > 协作空间 > 静默策略 [策略更新](https://developer.flashcat.cloud/api-110655747.md):
+- Open API > 协作空间 > 抑制策略 [策略启用](https://developer.flashcat.cloud/api-110655748.md):
+- Open API > 协作空间 > 抑制策略 [策略禁用](https://developer.flashcat.cloud/api-110655749.md):
+- Open API > 协作空间 > 抑制策略 [策略删除](https://developer.flashcat.cloud/api-110655750.md):
+- Open API > 协作空间 > 抑制策略 [策略列表](https://developer.flashcat.cloud/api-110655751.md): filters 说明见创建接口
+- Open API > 协作空间 > 抑制策略 [策略创建](https://developer.flashcat.cloud/api-110655752.md):
+- Open API > 协作空间 > 抑制策略 [策略更新](https://developer.flashcat.cloud/api-110655753.md):
+- Open API > 协作空间 [空间列表](https://developer.flashcat.cloud/api-110655717.md):
+- Open API > 协作空间 [空间详情](https://developer.flashcat.cloud/api-110655718.md): filters 说明见创建接口
+- Open API > 协作空间 [空间创建](https://developer.flashcat.cloud/api-110655719.md):
+- Open API > 协作空间 [空间更新](https://developer.flashcat.cloud/api-110655720.md): filters 说明见创建接口
+- Open API > 协作空间 [空间启用](https://developer.flashcat.cloud/api-110655721.md): filters 说明见创建接口
+- Open API > 协作空间 [空间禁用](https://developer.flashcat.cloud/api-110655722.md): filters 说明见创建接口
+- Open API > 协作空间 [空间删除](https://developer.flashcat.cloud/api-110655723.md): filters 说明见创建接口
+- Open API > 协作空间 [空间排序](https://developer.flashcat.cloud/api-164136289.md):
+- Open API > 协作空间 [空间收藏](https://developer.flashcat.cloud/api-164137342.md):
+- Open API > 协作空间 [取消收藏](https://developer.flashcat.cloud/api-164137386.md):
+- Open API > 协作空间 [机器人列表](https://developer.flashcat.cloud/api-200102106.md):
+- Open API > 协作空间 [按集成查询空间名称](https://developer.flashcat.cloud/api-254924861.md): - 该api<span style="color: red;">仅支持通过共享集成的integration_key进行认证</span>。integration_key可以从集成详情获取，来自协作空间下的专属集成integration_key无法调用此api。
+- Open API > 模板管理 [模板列表](https://developer.flashcat.cloud/api-110655754.md): filters 说明见创建接口
+- Open API > 模板管理 [模板详情](https://developer.flashcat.cloud/api-110655755.md): filters 说明见创建接口
+- Open API > 模板管理 [模板删除](https://developer.flashcat.cloud/api-110655758.md): filters 说明见创建接口
+- Open API > 模板管理 [模板预览](https://developer.flashcat.cloud/api-110655759.md):
+- Open API > 模板管理 [模板创建](https://developer.flashcat.cloud/api-110655760.md): filters 说明见创建接口
+- Open API > 模板管理 [模板更新](https://developer.flashcat.cloud/api-110655761.md): filters 说明见创建接口
+- Open API > 故障管理 > 聚合视图 [视图删除](https://developer.flashcat.cloud/api-110655784.md):
+- Open API > 故障管理 > 聚合视图 [视图列表](https://developer.flashcat.cloud/api-110655785.md): filters 说明见创建接口
+- Open API > 故障管理 > 聚合视图 [视图创建](https://developer.flashcat.cloud/api-110655786.md):
+- Open API > 故障管理 > 聚合视图 [视图更新](https://developer.flashcat.cloud/api-110655787.md):
+- Open API > 故障管理 > 故障复盘 [初始化故障复盘](https://developer.flashcat.cloud/api-404007906.md):
+- Open API > 故障管理 > 故障复盘 [删除故障复盘](https://developer.flashcat.cloud/api-404007907.md):
+- Open API > 故障管理 > 故障复盘 [获取故障复盘详情](https://developer.flashcat.cloud/api-404007908.md):
+- Open API > 故障管理 > 故障复盘 [获取已发布的故障复盘列表](https://developer.flashcat.cloud/api-404007909.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘状态](https://developer.flashcat.cloud/api-404007910.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘基础信息](https://developer.flashcat.cloud/api-404007911.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘摘要](https://developer.flashcat.cloud/api-404007912.md):
+- Open API > 故障管理 > 故障复盘 [新增或更新故障复盘时间线事件](https://developer.flashcat.cloud/api-404007913.md): 如果 event_id 为空则创建新事件，否则更新现有事件
+- Open API > 故障管理 > 故障复盘 [删除故障复盘时间线事件](https://developer.flashcat.cloud/api-404007914.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘影响](https://developer.flashcat.cloud/api-404007915.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘贡献者](https://developer.flashcat.cloud/api-404007916.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘根因](https://developer.flashcat.cloud/api-404007917.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘缓解措施](https://developer.flashcat.cloud/api-404007918.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘学习与风险](https://developer.flashcat.cloud/api-404007919.md):
+- Open API > 故障管理 > 故障复盘 [新增或更新故障复盘后续行动](https://developer.flashcat.cloud/api-404007920.md): 如果 follow_up_id 为空则创建新后续行动，否则更新现有后续行动
+- Open API > 故障管理 > 故障复盘 [删除故障复盘后续行动](https://developer.flashcat.cloud/api-404007921.md):
+- Open API > 故障管理 > 故障复盘 [更新故障复盘故障指挥官](https://developer.flashcat.cloud/api-404007922.md):
+- Open API > 故障管理 [创建故障](https://developer.flashcat.cloud/api-110655781.md):
+- Open API > 故障管理 [分派故障](https://developer.flashcat.cloud/api-110655780.md):
+- Open API > 故障管理 [添加处理人](https://developer.flashcat.cloud/api-136553717.md):
+- Open API > 故障管理 [认领故障](https://developer.flashcat.cloud/api-110655772.md):
+- Open API > 故障管理 [取消认领](https://developer.flashcat.cloud/api-110655773.md):
+- Open API > 故障管理 [关闭故障](https://developer.flashcat.cloud/api-110655774.md):
+- Open API > 故障管理 [重开故障](https://developer.flashcat.cloud/api-110655776.md):
+- Open API > 故障管理 [删除故障](https://developer.flashcat.cloud/api-260058578.md): - 故障数据没有备份，<span style="color: red;">删除后不可找回</span>。请谨慎操作，或先导出再删除。
+- Open API > 故障管理 [暂缓故障](https://developer.flashcat.cloud/api-110655775.md):
+- Open API > 故障管理 [取消暂缓](https://developer.flashcat.cloud/api-110655777.md):
+- Open API > 故障管理 [合并故障](https://developer.flashcat.cloud/api-110655778.md):
+- Open API > 故障管理 [评论故障](https://developer.flashcat.cloud/api-110655763.md):
+- Open API > 故障管理 [故障详情](https://developer.flashcat.cloud/api-110655762.md):
+- Open API > 故障管理 [故障列表](https://developer.flashcat.cloud/api-110655782.md):
+- Open API > 故障管理 [故障列表-卡片视图](https://developer.flashcat.cloud/api-110655770.md):
+- Open API > 故障管理 [历史故障列表](https://developer.flashcat.cloud/api-211537159.md): 查询与传入故障相似的历史故障，仅统计相同协作空间下对应故障发生前30天内的相似故障。注意该api仅供专业版使用。
+- Open API > 故障管理 [故障时间线](https://developer.flashcat.cloud/api-110655783.md):
+- Open API > 故障管理 [标题更新](https://developer.flashcat.cloud/api-110655764.md):
+- Open API > 故障管理 [描述更新](https://developer.flashcat.cloud/api-110655765.md):
+- Open API > 故障管理 [影响更新](https://developer.flashcat.cloud/api-110655766.md):
+- Open API > 故障管理 [根因更新](https://developer.flashcat.cloud/api-110655767.md):
+- Open API > 故障管理 [解决方案更新](https://developer.flashcat.cloud/api-110655768.md):
+- Open API > 故障管理 [严重程度更新](https://developer.flashcat.cloud/api-110655779.md):
+- Open API > 故障管理 [故障更新](https://developer.flashcat.cloud/api-328928953.md):
+- Open API > 故障管理 [关联告警列表](https://developer.flashcat.cloud/api-110655771.md):
+- Open API > 故障管理 [自定义字段更新](https://developer.flashcat.cloud/api-111062343.md):
+- Open API > 故障管理 [触发自定义操作](https://developer.flashcat.cloud/api-125787279.md):
+- Open API > 故障管理 [创建作战室](https://developer.flashcat.cloud/api-310480093.md):
+- Open API > 故障管理 [解散作战室](https://developer.flashcat.cloud/api-310497943.md):
+- Open API > 故障管理 [查看作战室](https://developer.flashcat.cloud/api-335858375.md):
+- Open API > 故障管理 [查看作战室详情](https://developer.flashcat.cloud/api-344991083.md):
+- Open API > 故障管理 [添加作战室成员](https://developer.flashcat.cloud/api-378815832.md):
+- Open API > 告警管理 > 聚合视图 [视图删除](https://developer.flashcat.cloud/api-110655796.md):
+- Open API > 告警管理 > 聚合视图 [视图列表](https://developer.flashcat.cloud/api-110655797.md): filters 说明见创建接口
+- Open API > 告警管理 > 聚合视图 [视图创建](https://developer.flashcat.cloud/api-110655798.md):
+- Open API > 告警管理 > 聚合视图 [视图更新](https://developer.flashcat.cloud/api-110655799.md):
+- Open API > 告警管理 [告警详情](https://developer.flashcat.cloud/api-110655788.md):
+- Open API > 告警管理 [关闭告警](https://developer.flashcat.cloud/api-110655789.md):
+- Open API > 告警管理 [告警列表-卡片视图](https://developer.flashcat.cloud/api-110655790.md):
+- Open API > 告警管理 [告警列表](https://developer.flashcat.cloud/api-110655791.md):
+- Open API > 告警管理 [告警列表-按ID查询](https://developer.flashcat.cloud/api-110655792.md):
+- Open API > 告警管理 [关联-事件列表](https://developer.flashcat.cloud/api-110655793.md):
+- Open API > 告警管理 [时间线](https://developer.flashcat.cloud/api-110655794.md):
+- Open API > 告警管理 [合并到故障](https://developer.flashcat.cloud/api-110655795.md): 该接口仅负责合并到一个已有故障，如果是新建，请用”故障管理-故障创建“接口
+- Open API > 告警事件 [事件列表](https://developer.flashcat.cloud/api-338851914.md):
+- Open API > 变更管理 [变更列表](https://developer.flashcat.cloud/api-110655800.md):
+- Open API > 自定义字段 [字段列表](https://developer.flashcat.cloud/api-110681369.md):
+- Open API > 自定义字段 [字段详情](https://developer.flashcat.cloud/api-110681370.md): filters 说明见创建接口
+- Open API > 自定义字段 [字段删除](https://developer.flashcat.cloud/api-110681371.md):
+- Open API > 自定义字段 [字段创建](https://developer.flashcat.cloud/api-110681372.md):
+- Open API > 自定义字段 [字段更新](https://developer.flashcat.cloud/api-110681373.md):
+- Open API > 服务日历 [日历列表](https://developer.flashcat.cloud/api-131735967.md):
+- Open API > 服务日历 [日历详情](https://developer.flashcat.cloud/api-131736015.md):
+- Open API > 服务日历 [日历创建](https://developer.flashcat.cloud/api-131736047.md):
+- Open API > 服务日历 [日历更新](https://developer.flashcat.cloud/api-131736087.md):
+- Open API > 服务日历 [日历删除](https://developer.flashcat.cloud/api-131736148.md):
+- Open API > 服务日历 [日历事件设置](https://developer.flashcat.cloud/api-132636232.md):
+- Open API > 服务日历 [日历事件删除](https://developer.flashcat.cloud/api-132637293.md):
+- Open API > 服务日历 [日历事件列表](https://developer.flashcat.cloud/api-132637492.md):
+- Open API > 标签增强 > Mapping [查询schema](https://developer.flashcat.cloud/api-142429470.md):
+- Open API > 标签增强 > Mapping [创建schema](https://developer.flashcat.cloud/zh/flashduty/enrichment/mapping-shcema-create.md): 每个账户最多允许创建10个schema
+- Open API > 标签增强 > Mapping [更新schema](https://developer.flashcat.cloud/api-142429234.md):
+- Open API > 标签增强 > Mapping [删除schema](https://developer.flashcat.cloud/api-142429316.md):
+- Open API > 标签增强 > Mapping [查询data](https://developer.flashcat.cloud/api-145674742.md):
+- Open API > 标签增强 > Mapping [更新data](https://developer.flashcat.cloud/flashduty/enrichment/mapping-data-upsert.md): 每个schema最大允许上传一万条数据
+- Open API > 标签增强 > Mapping [删除data](https://developer.flashcat.cloud/api-142430996.md):
+- Open API > 标签增强 > Mapping [清空data](https://developer.flashcat.cloud/api-145673295.md):
+- Open API > 标签增强 > Mapping [csv上传data](https://developer.flashcat.cloud/api-145679479.md):
+- Open API > 标签增强 > Mapping [csv下载data](https://developer.flashcat.cloud/api-145730290.md):
+- Open API > 标签增强 [规则详情](https://developer.flashcat.cloud/api-142307781.md):
+- Open API > 标签增强 [规则更新](https://developer.flashcat.cloud/api-142307792.md):
+- Open API > 告警处理 [规则详情](https://developer.flashcat.cloud/api-201896909.md):
+- Open API > 告警处理 [规则更新](https://developer.flashcat.cloud/api-201896912.md):
+- Open API > 集成中心 > 告警集成 [路由历史列表](https://developer.flashcat.cloud/api-268205329.md):
+- Open API > 集成中心 > 告警集成 [路由列表](https://developer.flashcat.cloud/api-147765935.md):
+- Open API > 集成中心 > 告警集成 [路由详情](https://developer.flashcat.cloud/api-147765936.md):
+- Open API > 集成中心 > 告警集成 [路由更新](https://developer.flashcat.cloud/api-147765937.md):
+- Open API > 集成中心 > 告警集成 [路由预览](https://developer.flashcat.cloud/api-392829869.md):
+- Open API > 集成中心 > Webhook [集成Upsert](https://developer.flashcat.cloud/api-348821868.md):
+- Open API > 集成中心 [集成列表](https://developer.flashcat.cloud/api-348752080.md):
+- Open API > 集成中心 [集成详情](https://developer.flashcat.cloud/api-349139730.md):
+- Open API > License管理 [License成员列表](https://developer.flashcat.cloud/api-275453335.md):
+- Open API > License管理 [修改成员License类型](https://developer.flashcat.cloud/api-275500148.md): <span style="color: red;">仅账户管理员可操作</span>
+- Open API > 分析看板 [告警标签TOP](https://developer.flashcat.cloud/api-213441443.md):
+- Open API > 分析看板 [账户维度指标](https://developer.flashcat.cloud/api-211936273.md): 聚合计算整个账户下的故障数据：
+- Open API > 分析看板 [故障明细查询](https://developer.flashcat.cloud/api-212397855.md):
+- Open API > 分析看板 [故障明细导出](https://developer.flashcat.cloud/api-248927909.md):
+- Open API > 分析看板 [团队维度指标](https://developer.flashcat.cloud/api-214818178.md): 按照团队聚合计算故障数据：
+- Open API > 分析看板 [团队维度指标导出](https://developer.flashcat.cloud/api-249038786.md):
+- Open API > 分析看板 [空间维度指标](https://developer.flashcat.cloud/api-213434172.md): 按照空间聚合计算故障数据：
+- Open API > 分析看板 [空间维度指标导出](https://developer.flashcat.cloud/api-249038798.md):
+- Open API > 分析看板 [个人维度指标](https://developer.flashcat.cloud/api-214838626.md): 按照个人聚合计算故障数据：
+- Open API > 分析看板 [个人维度指标导出](https://developer.flashcat.cloud/api-249038816.md):
+- Open API > 分析看板 [通知数量](https://developer.flashcat.cloud/api-110655801.md):
+- Open API > 分析看板 [变更数量](https://developer.flashcat.cloud/api-110655802.md): 时间跨度最多支持6个月
+- Open API > APP Key [Key创建](https://developer.flashcat.cloud/api-328924444.md): 仅账户owner身份可调用此api。常用于自动化场景，后台申请成员身份app-key，并以成员身份调用故障处理（eg.认领故障）相关api。
+- Open API > APP Key [Key删除](https://developer.flashcat.cloud/api-328924445.md): 仅账户owner身份可调用此api，仅可操作由owner申请到的app-key
+- Open API > APP Key [Key启用](https://developer.flashcat.cloud/api-328924446.md): 仅账户owner身份可调用此api，仅可操作由owner申请到的app-key
+- Open API > APP Key [Key禁用](https://developer.flashcat.cloud/api-328924447.md): 仅账户owner身份可调用此api，仅可操作由owner申请到的app-key
+- Open API > APP Key [Key更新名称](https://developer.flashcat.cloud/api-328924448.md): 仅账户owner身份可调用此api，仅可操作由owner申请到的app-key
+- Open API > APP Key [Key列表](https://developer.flashcat.cloud/api-328924450.md): 仅账户owner身份可调用此api，仅可查询由owner申请到的app-key
+- Open API > RUM > 应用管理 [应用列表](https://developer.flashcat.cloud/api-321641524.md):
+- Open API > RUM > 应用管理 [应用详情](https://developer.flashcat.cloud/api-321641525.md):
+- Open API > RUM > 应用管理 [批量应用详情](https://developer.flashcat.cloud/api-321641526.md):
+- Open API > RUM > 应用管理 [应用创建](https://developer.flashcat.cloud/api-321641527.md):
+- Open API > RUM > 应用管理 [应用更新](https://developer.flashcat.cloud/api-321641528.md):
+- Open API > RUM > 应用管理 [应用删除](https://developer.flashcat.cloud/api-321641529.md):
+- Open API > RUM > 错误追踪 [Issue列表](https://developer.flashcat.cloud/api-321641530.md):
+- Open API > RUM > 错误追踪 [Issue详情](https://developer.flashcat.cloud/api-321641531.md):
+- Open API > RUM > 错误追踪 [Issue更新](https://developer.flashcat.cloud/api-321641532.md):
+- Open API > RUM > 通用接口 [数据查询](https://developer.flashcat.cloud/api-321641533.md):
+- Open API > RUM > 通用接口 [字段列表](https://developer.flashcat.cloud/api-321641536.md): 字段列表返回包含facets，以及其他可供查询的字段
+- Open API > RUM > 通用接口 [分值统计](https://developer.flashcat.cloud/api-321641535.md):
+- Open API > RUM > Sourcemap [上传](https://developer.flashcat.cloud/api-321641537.md):
+- Open API > RUM > Sourcemap [列表](https://developer.flashcat.cloud/api-321641538.md):
+- Open API > RUM > Sourcemap [错误栈信息丰富](https://developer.flashcat.cloud/api-321641539.md):
+- Open API > RUM > 会话回放 [获取元数据](https://developer.flashcat.cloud/api-321641540.md):
+- Open API > RUM > 会话回放 [获取回放片段](https://developer.flashcat.cloud/api-321641541.md):
+- Webhook [历史列表](https://developer.flashcat.cloud/api-374454124.md):
+- Webhook [历史详情](https://developer.flashcat.cloud/api-374500788.md):
+- Event API [图片上传](https://developer.flashcat.cloud/api-344943718.md):
+- /api 接口 > 告警规则 [创建告警规则](https://developer.flashcat.cloud/api-268357317.md):
+- /api 接口 > 告警规则 [删除告警规则](https://developer.flashcat.cloud/api-215441657.md):
+- /api 接口 > 告警规则 [更新告警规则](https://developer.flashcat.cloud/api-201188842.md):
+- /api 接口 > 告警规则 [获取规则列表](https://developer.flashcat.cloud/api-211453540.md):
+- /api 接口 > 告警规则 [获取业务组下告警规则列表](https://developer.flashcat.cloud/api-266214455.md):
+- /api 接口 > 告警规则 [导入告警规则](https://developer.flashcat.cloud/api-269291401.md):
+- /api 接口 > 告警规则 [测试 relabel 配置](https://developer.flashcat.cloud/api-194451532.md):
+- /api 接口 > 告警规则 [克隆到多台机器](https://developer.flashcat.cloud/api-203665975.md):
+- /api 接口 > 告警规则 [克隆告警规则到指定业务组](https://developer.flashcat.cloud/api-271526024.md):
+- /api 接口 > 告警规则 [更新告警规则指定字段内容](https://developer.flashcat.cloud/api-262575262.md):
+- /api 接口 > 告警规则 [导入prom规则](https://developer.flashcat.cloud/api-202058771.md):
+- /api 接口 > 告警规则 [告警规则通知配置测试](https://developer.flashcat.cloud/api-299513466.md):
+- /api 接口 > 告警规则 [告警规则生效配置测试](https://developer.flashcat.cloud/api-300935887.md):
+- /api 接口 > 告警规则 [获取规则数据](https://developer.flashcat.cloud/api-313070299.md):
+- /api 接口 > 订阅规则 [获取订阅规则列表](https://developer.flashcat.cloud/api-265914768.md):
+- /api 接口 > 订阅规则 [创建订阅规则](https://developer.flashcat.cloud/api-266046188.md):
+- /api 接口 > 订阅规则 [修改订阅规则](https://developer.flashcat.cloud/api-266050263.md):
+- /api 接口 > 订阅规则 [查询订阅规则](https://developer.flashcat.cloud/api-266050539.md):
+- /api 接口 > 订阅规则 [删除订阅规则](https://developer.flashcat.cloud/api-266050769.md):
+- /api 接口 > 订阅规则 [订阅规则测试](https://developer.flashcat.cloud/api-297500526.md):
+- /api 接口 > 屏蔽规则 [创建屏蔽规则](https://developer.flashcat.cloud/api-266255595.md):
+- /api 接口 > 屏蔽规则 [获取屏蔽规则](https://developer.flashcat.cloud/api-266257073.md):
+- /api 接口 > 屏蔽规则 [修改屏蔽规则状态](https://developer.flashcat.cloud/api-266257113.md):
+- /api 接口 > 屏蔽规则 [修改屏蔽规则详情](https://developer.flashcat.cloud/api-266257331.md):
+- /api 接口 > 屏蔽规则 [删除屏蔽规则](https://developer.flashcat.cloud/api-266257588.md):
+- /api 接口 > 屏蔽规则 [告警屏蔽-测试屏蔽处理](https://developer.flashcat.cloud/api-293990199.md):
+- /api 接口 > 告警事件 [活跃告警列表](https://developer.flashcat.cloud/api-266260091.md):
+- /api 接口 > 告警事件 [历史告警列表](https://developer.flashcat.cloud/api-214936573.md):
+- /api 接口 > 告警事件 [活跃告警-聚合规则](https://developer.flashcat.cloud/api-266258374.md):
+- /api 接口 > 告警事件 [修改告警聚合规则](https://developer.flashcat.cloud/api-266258538.md):
+- /api 接口 > 告警事件 [获取告警聚合规则](https://developer.flashcat.cloud/api-266258837.md):
+- /api 接口 > 告警事件 [删除告警聚合规则](https://developer.flashcat.cloud/api-266258944.md):
+- /api 接口 > 告警事件 [当前告警聚合信息](https://developer.flashcat.cloud/api-266259542.md):
+- /api 接口 > 告警事件 [取消认领告警](https://developer.flashcat.cloud/api-153721208.md): ## 接口鉴权方式
+- /api 接口 > 告警事件 [告警事件通知结果](https://developer.flashcat.cloud/api-198662329.md):
+- /api 接口 > 告警事件 [认领告警](https://developer.flashcat.cloud/api-153721209.md): ## 接口鉴权方式
+- /api 接口 > 告警事件 [事件所属的数据源列表](https://developer.flashcat.cloud/api-286011940.md):
+- /api 接口 > 告警事件 [删除历史事件按钮](https://developer.flashcat.cloud/api-304523614.md):
+- /api 接口 > 告警事件 [聚合告警事件列表](https://developer.flashcat.cloud/api-340978506.md):
+- /api 接口 > 告警事件 [根据 aggr-key 一键认领全部告警事件](https://developer.flashcat.cloud/api-346237527.md):
+- /api 接口 > 通知规则 [新增通知规则](https://developer.flashcat.cloud/api-256333034.md):
+- /api 接口 > 通知规则 [修改通知规则](https://developer.flashcat.cloud/api-256358079.md):
+- /api 接口 > 通知规则 [删除通知规则](https://developer.flashcat.cloud/api-256378765.md):
+- /api 接口 > 通知规则 [通知规则列表](https://developer.flashcat.cloud/api-256393248.md):
+- /api 接口 > 通知规则 [通知规则详情](https://developer.flashcat.cloud/api-256393355.md):
+- /api 接口 > 通知规则 [通知规则配置测试](https://developer.flashcat.cloud/api-264843491.md):
+- /api 接口 > 通知规则 [自定义配置参数列表](https://developer.flashcat.cloud/api-266373902.md):
+- /api 接口 > 通知规则 [通知规则-测试事件处理](https://developer.flashcat.cloud/api-293250100.md):
+- /api 接口 > 通知规则 [通知规则统计数据](https://developer.flashcat.cloud/api-327510751.md):
+- /api 接口 > 通知规则 [通知规则关联事件列表](https://developer.flashcat.cloud/api-327510948.md):
+- /api 接口 > 通知规则 [通知规则关联告警规则](https://developer.flashcat.cloud/api-327511425.md):
+- /api 接口 > 通知规则 [通知规则关联订阅规则](https://developer.flashcat.cloud/api-327511428.md):
+- /api 接口 > 通知规则 [事件标签 key 列表](https://developer.flashcat.cloud/api-332783808.md):
+- /api 接口 > 通知规则 [事件标签 values 列表](https://developer.flashcat.cloud/api-338987405.md):
+- /api 接口 > 事件处理 [事件 pipeline 列表](https://developer.flashcat.cloud/api-288913858.md):
+- /api 接口 > 事件处理 [事件 Pipeline 详情](https://developer.flashcat.cloud/api-289243671.md):
+- /api 接口 > 事件处理 [新增事件 Pipeline 规则](https://developer.flashcat.cloud/api-289244325.md):
+- /api 接口 > 事件处理 [修改事件 Pipeline 规则](https://developer.flashcat.cloud/api-289244416.md):
+- /api 接口 > 事件处理 [删除事件 Pipeline 规则](https://developer.flashcat.cloud/api-289244566.md):
+- /api 接口 > 事件处理 [事件 Pipeline 规则测试](https://developer.flashcat.cloud/api-289737438.md):
+- /api 接口 > 事件处理 [事件 processor 规则测试](https://developer.flashcat.cloud/api-289737676.md):
+- /api 接口 > 标签词表 > cloudwatch [aws-tag资源标签](https://developer.flashcat.cloud/api-316955087.md):
+- /api 接口 > 标签词表 > cloudwatch [资源类型](https://developer.flashcat.cloud/api-335891656.md):
+- /api 接口 > 标签词表 [词表词表列表](https://developer.flashcat.cloud/api-288909825.md):
+- /api 接口 > 标签词表 [单个标签词表详情](https://developer.flashcat.cloud/api-288911990.md):
+- /api 接口 > 标签词表 [单个标签词表数据预览](https://developer.flashcat.cloud/api-289736967.md):
+- /api 接口 > 标签词表 [创建标签词表](https://developer.flashcat.cloud/api-288912810.md):
+- /api 接口 > 标签词表 [更新标签词表](https://developer.flashcat.cloud/api-288912969.md):
+- /api 接口 > 标签词表 [删除标签词表](https://developer.flashcat.cloud/api-288913099.md):
+- /api 接口 > 标签词表 [请求测试](https://developer.flashcat.cloud/api-289346921.md):
+- /api 接口 > 标签词表 [立即触发词表更新](https://developer.flashcat.cloud/api-292823587.md):
+- /api 接口 > 标签词表 [查看更新记录](https://developer.flashcat.cloud/api-292838062.md):
+- /api 接口 > 标签词表 [上传 csv](https://developer.flashcat.cloud/api-294124936.md):
+- /api 接口 > 机器列表 [获取机器列表](https://developer.flashcat.cloud/api-205296958.md):
+- /api 接口 > 机器列表 [获取机器列表-专业版](https://developer.flashcat.cloud/api-288430236.md): 注：第三方系统使用中
+- /api 接口 > 机器列表 [绑定业务组](https://developer.flashcat.cloud/api-214142983.md): 注：第三方系统使用中
+- /api 接口 > 机器列表 [获取标签列表](https://developer.flashcat.cloud/api-238396127.md):
+- /api 接口 > 机器列表 [绑定标签](https://developer.flashcat.cloud/api-269299127.md): 注：第三方系统使用中
+- /api 接口 > 机器列表 [修改备注](https://developer.flashcat.cloud/api-269299915.md):
+- /api 接口 > 机器列表 [删除机器](https://developer.flashcat.cloud/api-269300309.md):
+- /api 接口 > 团队管理 [查询团队成员列表](https://developer.flashcat.cloud/api-153721176.md): ### 接口鉴权
+- /api 接口 > 团队管理 [团队列表](https://developer.flashcat.cloud/api-153721185.md): ### 接口鉴权
+- /api 接口 > 团队管理 [创建团队](https://developer.flashcat.cloud/api-153721184.md): ### 接口鉴权
+- /api 接口 > 团队管理 [删除用户](https://developer.flashcat.cloud/api-153721183.md): ### 接口鉴权
+- /api 接口 > 团队管理 [添加用户](https://developer.flashcat.cloud/api-153721182.md):
+- /api 接口 > 业务组管理 [创建业务组](https://developer.flashcat.cloud/api-252523616.md): ### 接口鉴权
+- /api 接口 > 业务组管理 [查询业务组列表](https://developer.flashcat.cloud/api-153721177.md): ### 接口鉴权
+- /api 接口 > 业务组管理 [查询业务组下团队列表](https://developer.flashcat.cloud/api-153721178.md): ### 接口鉴权
+- /api 接口 > 业务组管理 [修改业务组](https://developer.flashcat.cloud/api-252524619.md): ### 接口鉴权
+- /api 接口 > 业务组管理 [删除业务组](https://developer.flashcat.cloud/api-252526793.md): ### 接口鉴权
+- /api 接口 > 业务组管理 [业务组添加团队](https://developer.flashcat.cloud/api-276687009.md):
+- /api 接口 > 业务组管理 [业务组删除团队](https://developer.flashcat.cloud/api-276688304.md):
+- /api 接口 > 用户管理 [创建 token](https://developer.flashcat.cloud/api-253305676.md):
+- /api 接口 > 用户管理 [获取 token 列表](https://developer.flashcat.cloud/api-253311669.md):
+- /api 接口 > 用户管理 [获取指定用户信息](https://developer.flashcat.cloud/api-265075419.md):
+- /api 接口 > 用户管理 [查询用户信息](https://developer.flashcat.cloud/api-179058094.md):
+- /api 接口 > 用户管理 [新增用户](https://developer.flashcat.cloud/api-269301235.md):
+- /api 接口 > 用户管理 [重置用户密码](https://developer.flashcat.cloud/api-269303926.md):
+- /api 接口 > 用户管理 [删除 token](https://developer.flashcat.cloud/api-253314593.md):
+- /api 接口 > 用户管理 [用户权限](https://developer.flashcat.cloud/api-265062350.md):
+- /api 接口 > 用户管理 [用户个人信息](https://developer.flashcat.cloud/api-265066570.md):
+- /api 接口 > 用户管理 [修改用户个人信息](https://developer.flashcat.cloud/api-265068828.md):
+- /api 接口 > 用户管理 [修改密码](https://developer.flashcat.cloud/api-265070361.md):
+- /api 接口 > 用户管理 [编辑用户](https://developer.flashcat.cloud/api-269301986.md):
+- /api 接口 > 用户管理 [删除用户](https://developer.flashcat.cloud/api-269305640.md):
+- /api 接口 > 权限管理 [获取角色列表](https://developer.flashcat.cloud/api-153721179.md): ### 接口鉴权
+- /api 接口 > 权限管理 [获取所有操作权限点](https://developer.flashcat.cloud/api-153721180.md): ### 接口鉴权
+- /api 接口 > 权限管理 [获取指定角色的权限点](https://developer.flashcat.cloud/api-153721181.md): ### 接口鉴权
+- /api 接口 > 权限管理 [创建角色](https://developer.flashcat.cloud/api-270076287.md):
+- /api 接口 > 权限管理 [更新角色名](https://developer.flashcat.cloud/api-270081004.md):
+- /api 接口 > 权限管理 [更新角色权限](https://developer.flashcat.cloud/api-270078659.md):
+- /api 接口 > 权限管理 [删除角色](https://developer.flashcat.cloud/api-270081605.md):
+- /api 接口 > 采集配置 [创建测试任务](https://developer.flashcat.cloud/api-178006229.md):
+- /api 接口 > 采集配置 [查询测试任务结果](https://developer.flashcat.cloud/api-178012874.md):
+- /api 接口 > 采集配置 [创建采集配置](https://developer.flashcat.cloud/api-153721186.md): ### 接口鉴权
+- /api 接口 > 采集配置 [更新采集配置](https://developer.flashcat.cloud/api-153721187.md): ### 接口鉴权
+- /api 接口 > 采集配置 [删除采集配置](https://developer.flashcat.cloud/api-153721188.md): ### 接口鉴权
+- /api 接口 > 采集配置 [采集配置列表](https://developer.flashcat.cloud/api-153721189.md): ### 接口鉴权
+- /api 接口 > 采集配置 [获取采集配置](https://developer.flashcat.cloud/api-153721190.md): ### 接口鉴权
+- /api 接口 > 网络设备 [批量更新网络设备字段](https://developer.flashcat.cloud/api-157372753.md):
+- /api 接口 > 网络设备 [删除网络设备](https://developer.flashcat.cloud/api-157372752.md): ### 接口鉴权
+- /api 接口 > 网络设备 [创建网络设备](https://developer.flashcat.cloud/api-157372747.md):
+- /api 接口 > 网络设备 [网络设备详情](https://developer.flashcat.cloud/api-157372751.md):
+- /api 接口 > 网络设备 [更新网络设备](https://developer.flashcat.cloud/api-157372749.md):
+- /api 接口 > 网络设备 [导入网络设备](https://developer.flashcat.cloud/api-157372748.md):
+- /api 接口 > 网络设备 [网络设备列表](https://developer.flashcat.cloud/api-157372750.md):
+- /api 接口 > 网络设备 [批量绑定标签](https://developer.flashcat.cloud/api-157376431.md):
+- /api 接口 > 网络设备 [批量解绑标签](https://developer.flashcat.cloud/api-157376485.md):
+- /api 接口 > 网络设备 [获取设备的标签](https://developer.flashcat.cloud/api-157908706.md):
+- /api 接口 > 网络设备 [获取设备的模板ids](https://developer.flashcat.cloud/api-157957133.md):
+- /api 接口 > 网络设备 [批量绑定采集模板](https://developer.flashcat.cloud/api-157957168.md):
+- /api 接口 > 网络设备 [批量解绑采集模板](https://developer.flashcat.cloud/api-157957388.md):
+- /api 接口 > 网络设备 [获取组内所有标签](https://developer.flashcat.cloud/api-214385699.md):
+- /api 接口 > 网络设备 [创建测试任务](https://developer.flashcat.cloud/api-242968081.md):
+- /api 接口 > 网络设备 [获取设备的型号](https://developer.flashcat.cloud/api-254433317.md):
+- /api 接口 > 指标视图 [获取指标查询条件](https://developer.flashcat.cloud/api-171557588.md):
+- /api 接口 > 指标视图 [查询 Metric Filter](https://developer.flashcat.cloud/api-170956921.md):
+- /api 接口 > 指标视图 [添加 Metric Filter](https://developer.flashcat.cloud/api-170932862.md):
+- /api 接口 > 指标视图 [删除 Metric Filter](https://developer.flashcat.cloud/api-170932864.md):
+- /api 接口 > 指标视图 [更新 Metric Filter](https://developer.flashcat.cloud/api-170932863.md):
+- /api 接口 > 指标视图 [导入内置指标](https://developer.flashcat.cloud/api-162163503.md):
+- /api 接口 > 指标视图 [获取内置指标](https://developer.flashcat.cloud/api-162219541.md):
+- /api 接口 > 指标视图 [更新内置指标](https://developer.flashcat.cloud/api-162232127.md):
+- /api 接口 > 指标视图 [删除内置指标](https://developer.flashcat.cloud/api-162236287.md):
+- /api 接口 > 指标视图 [获取指标类型列表](https://developer.flashcat.cloud/api-162241765.md):
+- /api 接口 > 指标视图 [获取默认指标类型](https://developer.flashcat.cloud/api-162284939.md):
+- /api 接口 > 指标视图 [获取采集器列表](https://developer.flashcat.cloud/api-162283737.md):
+- /api 接口 > 告警自愈 [创建自愈脚本](https://developer.flashcat.cloud/api-268827790.md):
+- /api 接口 > 告警自愈 [获取自愈脚本列表](https://developer.flashcat.cloud/api-269077806.md):
+- /api 接口 > 告警自愈 [自愈脚本详情](https://developer.flashcat.cloud/api-269078759.md):
+- /api 接口 > 告警自愈 [删除自愈脚本](https://developer.flashcat.cloud/api-269078793.md):
+- /api 接口 > 告警自愈 [更新自愈脚本](https://developer.flashcat.cloud/api-269079598.md):
+- /api 接口 > 告警自愈 [创建自愈任务](https://developer.flashcat.cloud/api-269080778.md):
+- /api 接口 > 告警自愈 [获取自愈任务列表](https://developer.flashcat.cloud/api-269080922.md):
+- /api 接口 > 告警自愈 [自愈任务详情](https://developer.flashcat.cloud/api-269081239.md):
+- /api 接口 > 告警自愈 [获取自愈任务脚本错误输出stderr](https://developer.flashcat.cloud/api-269289344.md):
+- /api 接口 > 告警自愈 [获取自愈任务脚本输出stdout](https://developer.flashcat.cloud/api-269289563.md):
+- /api 接口 > 采集配置 [获取数据采集列表](https://developer.flashcat.cloud/api-271036740.md):
+- /api 接口 > 采集配置 [创建采集配置](https://developer.flashcat.cloud/api-270888909.md):
+- /api 接口 > 采集配置 [更新采集状态](https://developer.flashcat.cloud/api-271040755.md):
+- /api 接口 > 采集配置 [更新采集配置](https://developer.flashcat.cloud/api-271047008.md):
+- /api 接口 > 采集配置 [删除数据采集](https://developer.flashcat.cloud/api-271045171.md):
+- /api 接口 > 网络设备 [获取网络设备列表](https://developer.flashcat.cloud/api-271307768.md):
+- /api 接口 > 网络设备 [新增网络设备](https://developer.flashcat.cloud/api-271306236.md):
+- /api 接口 > 网络设备 [更新网络设备](https://developer.flashcat.cloud/api-271314310.md):
+- /api 接口 > 网络设备 [批量更新设备](https://developer.flashcat.cloud/api-271314796.md):
+- /api 接口 > 网络设备 [导入设备](https://developer.flashcat.cloud/api-271315099.md):
+- /api 接口 > 网络设备 [删除网络设备](https://developer.flashcat.cloud/api-271306614.md):
+- /api 接口 > pingmesh [pingmesh-idc网络规则注册](https://developer.flashcat.cloud/api-153721191.md):
+- /api 接口 > pingmesh [pingmesh-idc网络规则修改](https://developer.flashcat.cloud/api-153721192.md):
+- /api 接口 > pingmesh [pingmesh-idc网络规则查询](https://developer.flashcat.cloud/api-153721193.md):
+- /api 接口 > pingmesh [pingmesh-idc网络规则删除](https://developer.flashcat.cloud/api-153721194.md):
+- /api 接口 > pingmesh [pingmesh-idc间ping规则配置注册](https://developer.flashcat.cloud/api-153721195.md):
+- /api 接口 > pingmesh [pingmesh-idc间ping规则配置查看](https://developer.flashcat.cloud/api-153721196.md):
+- /api 接口 > pingmesh [pingmesh-idc间ping规则配置修改](https://developer.flashcat.cloud/api-153721197.md):
+- /api 接口 > pingmesh [pingmesh-idc间ping规则配置删除](https://developer.flashcat.cloud/api-153721198.md):
+- /api 接口 > pingmesh [pingmesh-ping动作开关设置](https://developer.flashcat.cloud/api-153721199.md): 打开开关，停止所有ping动作, 返回true，则表示打开开关
+- /api 接口 > pingmesh [pingmesh-ping动作开关查询](https://developer.flashcat.cloud/api-153721200.md): 打开开关，停止所有ping动作, 返回true，则表示打开开关
+- /api 接口 > pingmesh [pingmesh-idc之间拓扑图](https://developer.flashcat.cloud/api-153721201.md):
+- /api 接口 > pingmesh [pingmesh-idc内netident拓扑](https://developer.flashcat.cloud/api-153721202.md):
+- /api 接口 > pingmesh [pingmesh-netident内server之间拓扑](https://developer.flashcat.cloud/api-153721203.md):
+- /api 接口 > pingmesh [pingmesh-查询指标历史数据](https://developer.flashcat.cloud/api-153721204.md):
+- /api 接口 > pingmesh [pingmesh-idc网络规则注册（From CMDB）](https://developer.flashcat.cloud/api-153721205.md):
+- /api 接口 > pingmesh [pingmesh-报警规则导出](https://developer.flashcat.cloud/api-153721206.md): #### body参数说明：
+- /api 接口 > 数据查询 [数据批量查询接口](https://developer.flashcat.cloud/api-165413370.md):
+- /api 接口 > 数据查询 [table 数据批量查询接口](https://developer.flashcat.cloud/api-189165769.md):
+- /api 接口 > 数据查询 [查询数据库名称列表](https://developer.flashcat.cloud/api-207459018.md):
+- /api 接口 > 数据查询 [查询数据库表名称列表](https://developer.flashcat.cloud/api-207459338.md):
+- /api 接口 > 数据查询 [查询数据库表结构](https://developer.flashcat.cloud/api-207460682.md):
+- /api 接口 > 数据查询 [sql 查询 table](https://developer.flashcat.cloud/api-207466844.md):
+- /api 接口 > 数据查询 [sql 查询 graph](https://developer.flashcat.cloud/api-207527071.md):
+- /api 接口 > 数据查询 [查询数据库名称列表 Copy](https://developer.flashcat.cloud/api-248473777.md):
+- /api 接口 > 数据查询 [查询数据库表名称列表 Copy](https://developer.flashcat.cloud/api-248483445.md):
+- /api 接口 > 数据查询 [根据告警事件，预览数据](https://developer.flashcat.cloud/api-381621456.md):
+- /api 接口 > 仪表盘 [仪表盘列表](https://developer.flashcat.cloud/api-166009659.md): ### 接口鉴权
+- /api 接口 > 仪表盘 [仪表盘详情](https://developer.flashcat.cloud/api-166018865.md): ### 接口鉴权
+- /api 接口 > 仪表盘 [新增仪表盘](https://developer.flashcat.cloud/api-166013800.md): ### 接口鉴权
+- /api 接口 > 仪表盘 [删除仪表盘](https://developer.flashcat.cloud/api-166014572.md): ### 接口鉴权
+- /api 接口 > 仪表盘 [修改仪表盘图表](https://developer.flashcat.cloud/api-166022627.md): ### 接口鉴权
+- /api 接口 > 仪表盘 [克隆仪表盘到指定业务组](https://developer.flashcat.cloud/api-173811927.md):
+- /api 接口 > 仪表盘 [根据 bids 获取 board名称](https://developer.flashcat.cloud/api-217836656.md):
+- /api 接口 > 模板中心 [获取内置模板类型列表](https://developer.flashcat.cloud/api-167990571.md):
+- /api 接口 > 模板中心 [更新内置模板类型](https://developer.flashcat.cloud/api-167990947.md):
+- /api 接口 > 模板中心 [创建内置模板类型 ](https://developer.flashcat.cloud/api-167991621.md):
+- /api 接口 > 模板中心 [删除内置模板类型](https://developer.flashcat.cloud/api-167993406.md):
+- /api 接口 > 模板中心 [获取选中模板的某类模板](https://developer.flashcat.cloud/api-168220022.md):
+- /api 接口 > 模板中心 [获取选中模板的某类模板分类](https://developer.flashcat.cloud/api-177650370.md):
+- /api 接口 > 模板中心 [获取单个模板](https://developer.flashcat.cloud/api-168222412.md):
+- /api 接口 > 模板中心 [更新内置模板](https://developer.flashcat.cloud/api-168224769.md):
+- /api 接口 > 模板中心 [创建内置模板](https://developer.flashcat.cloud/api-168232792.md):
+- /api 接口 > 模板中心 [删除内置模板](https://developer.flashcat.cloud/api-168234275.md):
+- /api 接口 > 模板中心 [根据 uuids 获取内置模版](https://developer.flashcat.cloud/api-215962451.md):
+- /api 接口 > 模板中心 [根据 uuid 获取内置payload](https://developer.flashcat.cloud/api-215976626.md):
+- /api 接口 > 拨测任务API [创建拨测任务](https://developer.flashcat.cloud/api-173889096.md): **参数说明：**
+- /api 接口 > 拨测任务API [更新拨测任务](https://developer.flashcat.cloud/api-174043148.md): **参数说明：**
+- /api 接口 > 拨测任务API [任务禁用](https://developer.flashcat.cloud/api-174047898.md):
+- /api 接口 > 拨测任务API [任务启用](https://developer.flashcat.cloud/api-174048118.md):
+- /api 接口 > 拨测任务API [任务删除](https://developer.flashcat.cloud/api-174049603.md):
+- /api 接口 > 拨测任务API [查询业务组下的拨测任务列表](https://developer.flashcat.cloud/api-174050169.md):
+- /api 接口 > 拨测任务API [任务详情查询](https://developer.flashcat.cloud/api-196752392.md): 查询单个任务详情
+- /api 接口 > 审计管理 [查看审计](https://developer.flashcat.cloud/api-174323048.md): ## 接口鉴权方式
+- /api 接口 > 数据源 > cloudwatch [添加数据源-cloudwatch](https://developer.flashcat.cloud/api-277914950.md):
+- /api 接口 > 数据源 > cloudwatch [获取 cloudwatch region 列表](https://developer.flashcat.cloud/api-277915565.md):
+- /api 接口 > 数据源 > cloudwatch [获取 cloudwatch namespace 列表](https://developer.flashcat.cloud/api-277915572.md):
+- /api 接口 > 数据源 > cloudwatch [获取 cloudwatch metric name 列表 ](https://developer.flashcat.cloud/api-277915597.md):
+- /api 接口 > 数据源 > cloudwatch [获取 cloudwatch dimension key 列表](https://developer.flashcat.cloud/api-277915987.md):
+- /api 接口 > 数据源 > cloudwatch [获取 cloudwatch dimension value 列表](https://developer.flashcat.cloud/api-277917055.md):
+- /api 接口 > 数据源 > cloudwatch [查询数据--停用，统一走query-batch](https://developer.flashcat.cloud/api-277918338.md):
+- /api 接口 > 数据源 > cloudwatch [创建告警规则-cloudwatch 数据源](https://developer.flashcat.cloud/api-278706541.md):
+- /api 接口 > 数据源 > cloudwatch [仪表盘查询数据](https://developer.flashcat.cloud/api-280504217.md):
+- /api 接口 > 数据源 > cloudwatch [(停用)多region获取 cloudwatch namespace 列表](https://developer.flashcat.cloud/api-322775132.md):
+- /api 接口 > 数据源 > victorialogs [添加数据源-victorialogs](https://developer.flashcat.cloud/api-284977838.md):
+- /api 接口 > 数据源 > azure [获取azure订阅列表](https://developer.flashcat.cloud/api-318315358.md):
+- /api 接口 > 数据源 > azure [获取azure资源组列表](https://developer.flashcat.cloud/api-318409002.md):
+- /api 接口 > 数据源 > azure [获取azure资源信息列表](https://developer.flashcat.cloud/api-318409057.md):
+- /api 接口 > 数据源 > azure [获取azure指标名称列表](https://developer.flashcat.cloud/api-318409830.md):
+- /api 接口 > 数据源 > azure [获取azure dimension key的列表](https://developer.flashcat.cloud/api-318409926.md):
+- /api 接口 > 数据源 > azure [添加数据源azure](https://developer.flashcat.cloud/api-318454791.md):
+- /api 接口 > 数据源 > azure [获取dimension对应的value值](https://developer.flashcat.cloud/api-325793962.md):
+- /api 接口 > 数据源 > azure [azure查询数据](https://developer.flashcat.cloud/api-326046179.md):
+- /api 接口 > 数据源 > 数据源标签词表 [数据源关联词表](https://developer.flashcat.cloud/api-323581908.md):
+- /api 接口 > 数据源 > 数据源标签词表 [获取数据源关联词表](https://developer.flashcat.cloud/api-323585613.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS log ](https://developer.flashcat.cloud/api-368981043.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS fields](https://developer.flashcat.cloud/api-368981044.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS project](https://developer.flashcat.cloud/api-368981045.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS logstore](https://developer.flashcat.cloud/api-368981046.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS metric数据](https://developer.flashcat.cloud/api-368981047.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS histogram数据](https://developer.flashcat.cloud/api-368981048.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS index](https://developer.flashcat.cloud/api-368981049.md):
+- /api 接口 > 数据源 > 数据源-sls [查询 SLS log 的上下文](https://developer.flashcat.cloud/api-368981050.md):
+- /api 接口 > 数据源 [添加数据源-sqlserver](https://developer.flashcat.cloud/api-223507284.md):
+- /api 接口 > 数据源 [添加数据源-es](https://developer.flashcat.cloud/api-308574180.md):
+- /api 接口 > 数据源 [数据源查询](https://developer.flashcat.cloud/api-230362956.md):
+- /api 接口 > 数据源 [获取数据源列表](https://developer.flashcat.cloud/api-270082791.md):
+- /api 接口 > 数据源 [新增数据源](https://developer.flashcat.cloud/api-270099644.md):
+- /api 接口 > 数据源 [数据源类型列表](https://developer.flashcat.cloud/api-270104401.md):
+- /api 接口 > 数据源 [更新数据源状态](https://developer.flashcat.cloud/api-270107483.md):
+- /api 接口 > 数据源 [删除数据源](https://developer.flashcat.cloud/api-270108252.md):
+- /api 接口 > 数据源 [数据源授权](https://developer.flashcat.cloud/api-276693292.md):
+- /api 接口 > 数据源 [数据源删除授权](https://developer.flashcat.cloud/api-276694599.md):
+- /api 接口 > 数据源 [数据源查看授权](https://developer.flashcat.cloud/api-276694899.md):
+- /api 接口 > 全局屏蔽 [查询全局屏蔽列表](https://developer.flashcat.cloud/api-243688650.md):
+- /api 接口 > 全局屏蔽 [查询指定全局屏蔽](https://developer.flashcat.cloud/api-243691281.md):
+- /api 接口 > 全局屏蔽 [新建全局屏蔽](https://developer.flashcat.cloud/api-243691765.md):
+- /api 接口 > 全局屏蔽 [修改指定全局屏蔽](https://developer.flashcat.cloud/api-243702492.md):
+- /api 接口 > 全局屏蔽 [删除指定全局屏蔽](https://developer.flashcat.cloud/api-243708110.md):
+- /api 接口 > 全局屏蔽 [批量更新全局屏蔽](https://developer.flashcat.cloud/api-243716621.md):
+- /api 接口 > 仪表盘标注 [添加仪表盘注释](https://developer.flashcat.cloud/api-250921119.md): 创建新的仪表盘注释
+- /api 接口 > 仪表盘标注 [删除仪表盘注释](https://developer.flashcat.cloud/api-250921122.md): 删除指定ID的仪表盘注释
+- /api 接口 > 仪表盘标注 [获取仪表盘注释列表](https://developer.flashcat.cloud/api-250921120.md): 根据时间范围获取仪表盘注释
+- /api 接口 > 仪表盘标注 [更新仪表盘注释](https://developer.flashcat.cloud/api-250921121.md): 修改指定ID的仪表盘注释
+- /api 接口 > 通知媒介 [新增通知媒介](https://developer.flashcat.cloud/api-256413328.md):
+- /api 接口 > 通知媒介 [修改通知媒介](https://developer.flashcat.cloud/api-256415342.md):
+- /api 接口 > 通知媒介 [删除通知媒介](https://developer.flashcat.cloud/api-256416017.md):
+- /api 接口 > 通知媒介 [通知媒介列表](https://developer.flashcat.cloud/api-256428530.md):
+- /api 接口 > 通知媒介 [通知媒介详情](https://developer.flashcat.cloud/api-256440381.md):
+- /api 接口 > 通知媒介 [（简化）通知媒介列表](https://developer.flashcat.cloud/api-262297556.md):
+- /api 接口 > 通知媒介 [flushduty 协作空间列表](https://developer.flashcat.cloud/api-262353266.md):
+- /api 接口 > 通知媒介 [通知媒介详情（get by）](https://developer.flashcat.cloud/api-263023776.md):
+- /api 接口 > 通知媒介 [通知媒介列表LabelKey](https://developer.flashcat.cloud/api-266214284.md):
+- /api 接口 > 通知媒介 [通知媒介类别列表](https://developer.flashcat.cloud/api-270894329.md):
+- /api 接口 > 消息模板 [新增消息模板](https://developer.flashcat.cloud/api-256449965.md):
+- /api 接口 > 消息模板 [修改消息模板](https://developer.flashcat.cloud/api-256453953.md):
+- /api 接口 > 消息模板 [删除消息模板](https://developer.flashcat.cloud/api-256454565.md):
+- /api 接口 > 消息模板 [消息模板列表](https://developer.flashcat.cloud/api-256456836.md):
+- /api 接口 > 消息模板 [消息模板详情](https://developer.flashcat.cloud/api-256458762.md):
+- /api 接口 > 消息模板 [事件预览](https://developer.flashcat.cloud/api-262531749.md):
+- /api 接口 > auth认证 > 度小满 [global_sso_way](https://developer.flashcat.cloud/api-284246755.md): 获取global_sso_way配置
+- /api 接口 > auth认证 > 度小满 [获取SSO跳转地址](https://developer.flashcat.cloud/api-288886234.md):
+- /api 接口 > auth认证 > 度小满 [SSO登陆回调](https://developer.flashcat.cloud/api-288881445.md):
+- /api 接口 > auth认证 > 度小满 [sso-config](https://developer.flashcat.cloud/api-290320443.md):
+- /api 接口 > auth认证 > 钉钉 [钉钉单点登陆重定向](https://developer.flashcat.cloud/api-373697016.md):
+- /api 接口 > auth认证 > 钉钉 [回调地址](https://developer.flashcat.cloud/api-373698642.md):
+- /api 接口 > auth认证 > 飞书 [飞书单点登陆重定向](https://developer.flashcat.cloud/api-397788052.md):
+- /api 接口 > auth认证 > 飞书 [回调地址](https://developer.flashcat.cloud/api-397788069.md):
+- /api 接口 > auth认证 [login登陆](https://developer.flashcat.cloud/api-262942396.md): 用户登陆post
+- /api 接口 > auth认证 [logout登出](https://developer.flashcat.cloud/api-263156979.md): 用户退出登陆
+- /api 接口 > auth认证 [刷新token](https://developer.flashcat.cloud/api-263162411.md): 用户退出登陆
+- /api 接口 > auth认证 [生成图形验证码](https://developer.flashcat.cloud/api-263300091.md): 生成图形验证码
+- /api 接口 > auth认证 [验证码验证](https://developer.flashcat.cloud/api-263306481.md): 验证码验证
+- /api 接口 > auth认证 [验证码开关](https://developer.flashcat.cloud/api-264557256.md): 验证码验证
+- /api 接口 > auth认证 [sso-config](https://developer.flashcat.cloud/api-264560088.md): 获取sso配置
+- /api 接口 > auth认证 [rsa-config](https://developer.flashcat.cloud/api-264560229.md): 获取rsa配置
+- /api 接口 > auth认证 [重定向](https://developer.flashcat.cloud/api-264561181.md): 重定向
+- /api 接口 > auth认证 [sso登陆回调](https://developer.flashcat.cloud/api-264561690.md):
+- /api 接口 > auth认证 [perms](https://developer.flashcat.cloud/api-264564219.md):
+- /api 接口 > metricsDesc [metrics释义](https://developer.flashcat.cloud/api-264565587.md):
+- /api 接口 > metricsDesc [添加metricsDesc](https://developer.flashcat.cloud/api-264565926.md): 前端传过来一个metric数组，后端去查询有没有对应的释义，返回map
+- /api 接口 > 快捷视图(指标) [获取视图列表](https://developer.flashcat.cloud/api-265080397.md):
+- /api 接口 > 变量设置 [创建变量](https://developer.flashcat.cloud/api-270117843.md):
+- /api 接口 > 变量设置 [读取变量列表](https://developer.flashcat.cloud/api-270118733.md):
+- /api 接口 > 变量设置 [更新变量](https://developer.flashcat.cloud/api-270120791.md):
+- /api 接口 > 变量设置 [删除变量](https://developer.flashcat.cloud/api-270122357.md):
+- /api 接口 > 单点登陆 [获取单点登陆配置列表](https://developer.flashcat.cloud/api-270124260.md):
+- /api 接口 > 单点登陆 [更新单点登陆](https://developer.flashcat.cloud/api-270124829.md):
+- /api 接口 > 系统集成 [系统集成详情](https://developer.flashcat.cloud/api-289992656.md):
+- /api 接口 > 系统集成 [获取集成仪表盘列表](https://developer.flashcat.cloud/api-289993271.md):
+- /api 接口 > 系统集成 [添加集成仪表盘](https://developer.flashcat.cloud/api-289993497.md):
+- /api 接口 > 系统集成 [编辑集成仪表盘](https://developer.flashcat.cloud/api-289993541.md):
+- /api 接口 > 系统集成 [删除集成仪表盘](https://developer.flashcat.cloud/api-289993585.md):
+- /api 接口 > 系统集成 [更新集成仪表盘列表](https://developer.flashcat.cloud/api-187503015.md):
+- /api 接口 > 系统集成 [获取集成仪表盘列表](https://developer.flashcat.cloud/api-187502999.md):
+- /api 接口 > 通知配置-待下线 [通知模板-更新](https://developer.flashcat.cloud/api-153721163.md):
+- /api 接口 > 通知配置-待下线 [通知模板-获取](https://developer.flashcat.cloud/api-153721164.md):
+- /api 接口 > 通知配置-待下线 [通知模板-新增](https://developer.flashcat.cloud/api-266754964.md):
+- /api 接口 > 通知配置-待下线 [通知设置-回调地址-获取](https://developer.flashcat.cloud/api-266756892.md):
+- /api 接口 > 通知配置-待下线 [通知设置-回调地址-更新](https://developer.flashcat.cloud/api-266756909.md):
+- /api 接口 > 通知配置-待下线 [通知设置-通知脚本-获取](https://developer.flashcat.cloud/api-266761065.md):
+- /api 接口 > 通知配置-待下线 [通知设置-通知脚本-更新](https://developer.flashcat.cloud/api-266761109.md):
+- /api 接口 > 通知配置-待下线 [通知设置-通知媒介-更新](https://developer.flashcat.cloud/api-266766685.md):
+- /api 接口 > 通知配置-待下线 [通知设置-通知媒介-获取](https://developer.flashcat.cloud/api-266768460.md):
+- /api 接口 > 通知配置-待下线 [通知设置-联系方式-更新](https://developer.flashcat.cloud/api-266769710.md):
+- /api 接口 > 通知配置-待下线 [通知设置-联系方式-获取](https://developer.flashcat.cloud/api-266769796.md):
+- /api 接口 > 通知配置-待下线 [通知设置-SMTP设置-获取](https://developer.flashcat.cloud/api-266770607.md):
+- /api 接口 > 资产视图 [资产视图配置列表](https://developer.flashcat.cloud/api-308909863.md):
+- /api 接口 > 资产视图 [资产视图配置详情](https://developer.flashcat.cloud/api-338326397.md):
+- /api 接口 > 资产视图 [创建资产视图配置](https://developer.flashcat.cloud/api-308910063.md):
+- /api 接口 > 资产视图 [更新资产视图配置](https://developer.flashcat.cloud/api-308917498.md):
+- /api 接口 > 资产视图 [删除资产视图配置](https://developer.flashcat.cloud/api-308917510.md):
+- /api 接口 > 资产视图 [资产视图实例列表](https://developer.flashcat.cloud/api-308917608.md):
+- /api 接口 > 网络设备模板 > collect-tpls [获取设备类型列表](https://developer.flashcat.cloud/api-357682982.md): 从已保存的 SNMP 采集模板中提取所有不重复的设备类型列表，按字母顺序排序
+- /api 接口 > 网络设备模板 > collect-tpls [获取设备品牌列表](https://developer.flashcat.cloud/api-357682983.md): 从已保存的 SNMP 采集模板中提取所有不重复的设备品牌列表，按字母顺序排序
+- /api 接口 > 网络设备模板 [创建网络设备采集模板](https://developer.flashcat.cloud/api-317060149.md):
+- /api 接口 > 网络设备模板 [查询网络设备采集模板列表](https://developer.flashcat.cloud/api-317063315.md):
+- /api 接口 > 网络设备模板 [查询网络设备采集模板详情](https://developer.flashcat.cloud/api-317065356.md):
+- /api 接口 > 网络设备模板 [更新网络设备采集模板](https://developer.flashcat.cloud/api-317065983.md):
+- /api 接口 > 网络设备模板 [删除网络设备采集模板](https://developer.flashcat.cloud/api-317066598.md):
+- /api 接口 > 查询视图 [Get saved views list](https://developer.flashcat.cloud/api-394334207.md): Get a list of saved views filtered by page, visibility and search query
+- /api 接口 > 查询视图 [Create a saved view](https://developer.flashcat.cloud/api-394334208.md): Create a new saved view with the current filter conditions
+- /api 接口 > 查询视图 [Update a saved view](https://developer.flashcat.cloud/api-394334209.md): Update an existing saved view. Only the creator or admin can update.
+- /api 接口 > 查询视图 [Delete a saved view](https://developer.flashcat.cloud/api-394334210.md): Delete a saved view. Only the creator or admin can delete.
+- /api 接口 > 查询视图 [Add view to favorites](https://developer.flashcat.cloud/api-394334211.md): Add a saved view to the current user's favorites
+- /api 接口 > 查询视图 [Remove view from favorites](https://developer.flashcat.cloud/api-394334212.md): Remove a saved view from the current user's favorites
+- /api 接口 > 执行记录 [获取所有工作流执行记录列表](https://developer.flashcat.cloud/api-399441686.md): 分页获取所有工作流的执行记录，支持按工作流名称、触发模式、状态筛选
+- /api 接口 > 执行记录 [获取单条执行记录详情](https://developer.flashcat.cloud/api-399441687.md): 根据执行ID获取执行记录的详细信息，包括解析后的节点执行结果和环境变量快照
+- /api 接口 [资源鉴权 token](https://developer.flashcat.cloud/api-302089138.md):
+- /api 接口 [夜莺首次安装时间](https://developer.flashcat.cloud/api-308926439.md):
+- /v1 接口 > 用户管理 [用户列表](https://developer.flashcat.cloud/api-153721171.md):
+- /v1 接口 > 用户管理 [创建](https://developer.flashcat.cloud/api-153721172.md):
+- /v1 接口 > 用户管理 [修改用户](https://developer.flashcat.cloud/api-153721173.md):
+- /v1 接口 > 用户管理 [删除用户](https://developer.flashcat.cloud/api-153721174.md):
+- /v1 接口 > 告警规则 [创建告警规则](https://developer.flashcat.cloud/api-153721165.md):
+- /v1 接口 > 告警规则 [创建单个告警规则](https://developer.flashcat.cloud/api-153721166.md):
+- /v1 接口 > 告警规则 [根据产品查询告警规则列表](https://developer.flashcat.cloud/api-153721167.md):
+- /v1 接口 > 告警规则 [根据id查询告警规则](https://developer.flashcat.cloud/api-153721168.md):
+- /v1 接口 > 告警规则 [根据id更新告警规则](https://developer.flashcat.cloud/api-153721169.md):
+- /v1 接口 > 告警规则 [删除告警规则](https://developer.flashcat.cloud/api-153721170.md):
+- /v1 接口 > 告警事件 [生成告警事件](https://developer.flashcat.cloud/api-153721157.md):
+- /v1 接口 > 告警事件 [查看告警历史](https://developer.flashcat.cloud/api-153721161.md):
+- /v1 接口 > 告警屏蔽 [创建告警屏蔽](https://developer.flashcat.cloud/api-153721158.md):
+- /v1 接口 > 告警屏蔽 [查看告警屏蔽](https://developer.flashcat.cloud/api-153721159.md):
+- /v1 接口 > 告警屏蔽 [删除告警屏蔽](https://developer.flashcat.cloud/api-153721160.md):
+- /v1 接口 > 主机列表 [获取监控对象](https://developer.flashcat.cloud/api-153721162.md):
+- /v1 接口 > 主机列表 [删除监控对象](https://developer.flashcat.cloud/api-177235154.md):
+- /v1 接口 > 主机列表 [获取机器元信息](https://developer.flashcat.cloud/api-177237487.md):
+- /v1 接口 > 主机列表 [修改监控对象业务组](https://developer.flashcat.cloud/api-177238567.md):
+- /v1 接口 > 智能告警 [查询曲线的训练效果分数](https://developer.flashcat.cloud/api-153721207.md):
+- /v1 接口 > 接收数据 [/opentsdb/put](https://developer.flashcat.cloud/api-175770005.md):
+- /v1 接口 > 采集配置 [获取采集测试任务](https://developer.flashcat.cloud/api-180428407.md):
+- /v1 接口 > 采集配置 [上报采集测试结果](https://developer.flashcat.cloud/api-180431462.md):
+- /v1 接口 > 用户组管理 [获取用户组信息](https://developer.flashcat.cloud/api-182402836.md):
+- /v1 接口 > 标签词表 [创建标签词表](https://developer.flashcat.cloud/api-301520650.md):
+- /v1 接口 > 标签词表 [标签词表](https://developer.flashcat.cloud/api-295581188.md):
+- /v1 接口 > 标签词表 [标签词表版本](https://developer.flashcat.cloud/api-301529929.md):
+- /v1 接口 [心跳接口](https://developer.flashcat.cloud/api-309467912.md):
+- 灭火图 API > 树结构管理 > 层级管理 [层级列表](https://developer.flashcat.cloud/api-155787764.md):
+- 灭火图 API > 树结构管理 > 层级管理 [新增/修改层级](https://developer.flashcat.cloud/api-155787765.md):
+- 灭火图 API > 树结构管理 > 层级管理 [删除层级](https://developer.flashcat.cloud/api-155787766.md):
+- 灭火图 API > 树结构管理 > 层级管理 [启用层级](https://developer.flashcat.cloud/api-155787767.md):
+- 灭火图 API > 树结构管理 > 层级管理 [禁用层级](https://developer.flashcat.cloud/api-155787768.md):
+- 灭火图 API > 树结构管理 > 层级管理 [修改层级的顺序](https://developer.flashcat.cloud/api-155787769.md):
+- 灭火图 API > 树结构管理 > 业务线管理 [新增/修改业务线](https://developer.flashcat.cloud/api-155836737.md):
+- 灭火图 API > 树结构管理 > 业务线管理 [删除业务线](https://developer.flashcat.cloud/api-155836738.md):
+- 灭火图 API > 树结构管理 > 业务线管理 [业务线详情](https://developer.flashcat.cloud/api-155836739.md):
+- 灭火图 API > 树结构管理 > 业务线管理 [业务线列表](https://developer.flashcat.cloud/api-155836740.md):
+- 灭火图 API > 树结构管理 > 业务线管理 [修改业务线的顺序](https://developer.flashcat.cloud/api-155836741.md): 请求参数去掉了 business_group_id 字段
+- 灭火图 API > 树结构管理 > 分组管理 [新增/修改分组](https://developer.flashcat.cloud/api-155841625.md): 内置的"系统层级"中，有功能、模块两个分页，该接口主要用于 功能分页中分组管理
+- 灭火图 API > 树结构管理 > 分组管理 [新增/修改分组 - 模块分页](https://developer.flashcat.cloud/api-155841626.md): 内置的"系统层级"中，有功能、模块两个分页，该接口仅用于 模块分页中分组管理
+- 灭火图 API > 树结构管理 > 分组管理 [删除分组](https://developer.flashcat.cloud/api-155841627.md):
+- 灭火图 API > 树结构管理 > 分组管理 [分组详情](https://developer.flashcat.cloud/api-155841628.md):
+- 灭火图 API > 树结构管理 > 分组管理 [分组列表](https://developer.flashcat.cloud/api-155841629.md):
+- 灭火图 API > 树结构管理 > 分组管理 [分组列表 - 模块分页](https://developer.flashcat.cloud/api-155841630.md):
+- 灭火图 API > 树结构管理 > 分组管理 [修改分组的顺序](https://developer.flashcat.cloud/api-155841631.md):
+- 灭火图 API > 树结构管理 [树结构 - 当前空间的整棵树](https://developer.flashcat.cloud/api-155864466.md): 第一层是 系统或自定义层级，第二层是business卡片；对于系统卡片，第三层是功能或模块，第四层是分组或最底层卡片；对于组件等卡片，第三层就是分组或最底层卡片
+- 灭火图 API > 卡片管理 [新增/修改卡片](https://developer.flashcat.cloud/api-155852856.md): 日志分析类型的卡片，暂不支持通过API添加
+- 灭火图 API > 卡片管理 [卡片名称冲突校验](https://developer.flashcat.cloud/api-155852858.md):
+- 灭火图 API > 卡片管理 [卡片详情](https://developer.flashcat.cloud/api-155852855.md): 在单个系统内调用时， business_id 必须大于0，因为需要补齐group_id信息；在卡片池内调用时，business_id设置为0
+- 灭火图 API > 卡片管理 [业务线下的卡片列表](https://developer.flashcat.cloud/api-155864465.md):
+- 灭火图 API > 卡片管理 [分组内的卡片列表](https://developer.flashcat.cloud/api-155841634.md):
+- 灭火图 API > 卡片管理 [添加单个卡片到分组中](https://developer.flashcat.cloud/api-155841632.md): group_id 大于0 代表添加到分组
+- 灭火图 API > 卡片管理 [从分组移除单个卡片](https://developer.flashcat.cloud/api-155841633.md): 卡片会自动归属到分组所在的系统中
+- 灭火图 API > 数据查询 [查看首页所有业务线的实时状态](https://developer.flashcat.cloud/api-155874948.md):
+- 灭火图 API > 数据查询 [查看任意卡片的snapshot](https://developer.flashcat.cloud/api-155874947.md):
+- 灭火图 API > 数据查询 [查看卡片指标的时序数据](https://developer.flashcat.cloud/api-155874949.md): .metric 参考卡片详情中的.metrics[*].metric 字段
+- 灭火图 API > 词表管理 > 标签增强词表管理 [获取词表列表](https://developer.flashcat.cloud/api-284969124.md): 本接口返回数据库内的标签映射词表列表。
+- 灭火图 API > 词表管理 > 标签增强词表管理 [获取特定词表](https://developer.flashcat.cloud/api-284969335.md): 本接口返回数据库内指定ID对应的标签映射词表。
+- 灭火图 API > 词表管理 > 标签增强词表管理 [新建 / 更新词表](https://developer.flashcat.cloud/api-284970559.md): 本接口上传指定词表，或根据词表ID更新指定词表内容。上传 / 更新的词表名称应该保持唯一。
+- 灭火图 API > 词表管理 > 标签增强词表管理 [删除特定词表](https://developer.flashcat.cloud/api-284973410.md): 本接口根据词表ID删除指定词表。
+- 灭火图 API > FlashAI [获取灭火图 AI 分析结果](https://developer.flashcat.cloud/api-385299602.md):
+- 空间管理 [查看空间列表](https://developer.flashcat.cloud/api-155883996.md): 由于空间操作非常低频且危险，暂时不提供管理API，仅提供查看
+- 北极星 API > 业务线管理 [新增/修改业务线](https://developer.flashcat.cloud/api-155893661.md):
+- 北极星 API > 业务线管理 [业务线配置](https://developer.flashcat.cloud/api-155893662.md):
+- 北极星 API > 业务线管理 [业务线列表](https://developer.flashcat.cloud/api-155893663.md):
+- 北极星 API > 业务线管理 [删除业务线](https://developer.flashcat.cloud/api-155893664.md):
+- 北极星 API > 指标管理 [新增/修改 指标](https://developer.flashcat.cloud/api-155893653.md): settings选项与数据源有关，与数据源配置相关
+- 北极星 API > 指标管理 [禁用指标](https://developer.flashcat.cloud/api-155893654.md):
+- 北极星 API > 指标管理 [启用指标](https://developer.flashcat.cloud/api-155893655.md): 启用代表该指标会不断生成最新值
+- 北极星 API > 指标管理 [删除指标](https://developer.flashcat.cloud/api-155893656.md): 如果指标关联到某个业务线，不允许删除
+- 北极星 API > 指标管理 [指标列表](https://developer.flashcat.cloud/api-155893657.md): 返回结果不包含指标配置信息
+- 北极星 API > 指标管理 [指标详情](https://developer.flashcat.cloud/api-155893658.md):
+- 北极星 API > 指标管理 [指标名称的唯一性冲突校验](https://developer.flashcat.cloud/api-155893659.md):
+- 北极星 API > 指标管理 [指标的历史数据](https://developer.flashcat.cloud/api-155893660.md):
+- 北极星 API > 图表管理 [新增/修改图表](https://developer.flashcat.cloud/api-155893669.md):
+- 北极星 API > 图表管理 [图表详情](https://developer.flashcat.cloud/api-155893670.md):
+- 北极星 API > 图表管理 [图表列表](https://developer.flashcat.cloud/api-155893671.md):
+- 北极星 API > 图表管理 [删除图表](https://developer.flashcat.cloud/api-155893672.md):
+- 北极星 API > 事件气泡管理 [新增/修改事件](https://developer.flashcat.cloud/api-155893665.md):
+- 北极星 API > 事件气泡管理 [事件详情](https://developer.flashcat.cloud/api-155893666.md):
+- 北极星 API > 事件气泡管理 [事件列表](https://developer.flashcat.cloud/api-155893667.md):
+- 北极星 API > 事件气泡管理 [删除事件](https://developer.flashcat.cloud/api-155893668.md):

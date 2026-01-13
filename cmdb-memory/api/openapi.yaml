@@ -1,0 +1,1670 @@
+openapi: 3.1.0
+info:
+  title: CMDB 资产管理平台 API
+  description: |
+    CMDB 资产管理平台 RESTful API 文档。
+
+    ## 功能概述
+    - **资产管理**: 主机、MySQL、Redis、Nginx、Tomcat、Elasticsearch 等资产的 CRUD
+    - **数据聚合**: 透传 VictoriaMetrics 监控数据和 FlashDuty 告警数据（只读）
+    - **巡检管理**: Web 触发巡检、查看历史报告
+    - **权限控制**: 基于 RBAC 的用户权限管理
+
+    ## 认证方式
+    使用 JWT Bearer Token 认证，在请求头中添加：
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## 错误码说明
+    | 错误码 | 说明 |
+    |--------|------|
+    | 0 | 成功 |
+    | 1001 | 请求参数错误 |
+    | 1002 | 数据验证失败 |
+    | 2001 | 未认证 |
+    | 2002 | Token 过期 |
+    | 2003 | Token 无效 |
+    | 3001 | 权限不足 |
+    | 4001 | 资源不存在 |
+    | 5001 | 服务器内部错误 |
+    | 5002 | 数据库错误 |
+    | 5003 | 外部服务调用失败 |
+  version: 1.0.0
+  contact:
+    name: CMDB Platform Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+  - url: https://cmdb.example.com
+    description: 生产环境
+
+tags:
+  - name: auth
+    description: 用户认证（登录/登出/刷新Token）
+  - name: users
+    description: 用户管理
+  - name: roles
+    description: 角色管理
+  - name: projects
+    description: 项目管理
+  - name: applications
+    description: 应用管理
+  - name: hosts
+    description: 主机资产管理
+  - name: mysql-instances
+    description: MySQL 实例管理
+  - name: redis-instances
+    description: Redis 实例管理
+  - name: nginx-instances
+    description: Nginx 实例管理
+  - name: tomcat-instances
+    description: Tomcat 实例管理
+  - name: elasticsearch-clusters
+    description: Elasticsearch 集群管理
+  - name: monitor
+    description: 监控数据透传（VictoriaMetrics）
+  - name: alerts
+    description: 告警数据透传（FlashDuty）
+  - name: inspection
+    description: 巡检管理
+  - name: health
+    description: 健康检查
+
+paths:
+  # 健康检查
+  /health:
+    get:
+      tags:
+        - health
+      summary: 健康检查
+      description: 检查服务是否正常运行
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  # 认证
+  /api/v1/auth/login:
+    post:
+      tags:
+        - auth
+      summary: 用户登录
+      description: 使用用户名和密码登录
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - auth
+      summary: 用户登出
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /api/v1/auth/refresh:
+    post:
+      tags:
+        - auth
+      summary: 刷新 Token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+      responses:
+        '200':
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+
+  /api/v1/users:
+    get:
+      tags:
+        - users
+      summary: 获取用户列表
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      total:
+                        type: integer
+    post:
+      tags:
+        - users
+      summary: 创建用户
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/v1/users/{id}:
+    get:
+      tags:
+        - users
+      summary: 获取用户详情
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - users
+      summary: 更新用户
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      tags:
+        - users
+      summary: 删除用户
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+
+  /api/v1/roles:
+    get:
+      tags:
+        - roles
+      summary: 获取角色列表
+      operationId: listRoles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+    post:
+      tags:
+        - roles
+      summary: 创建角色
+      operationId: createRole
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/v1/roles/{id}:
+    get:
+      tags:
+        - roles
+      summary: 获取角色详情
+      operationId: getRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+    put:
+      tags:
+        - roles
+      summary: 更新角色
+      operationId: updateRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      tags:
+        - roles
+      summary: 删除角色
+      operationId: deleteRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+
+  /api/v1/projects:
+    get:
+      tags:
+        - projects
+      summary: 获取项目列表
+      operationId: listProjects
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+    post:
+      tags:
+        - projects
+      summary: 创建项目
+      operationId: createProject
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/v1/projects/{id}:
+    get:
+      tags:
+        - projects
+      summary: 获取项目详情
+      operationId: getProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+    put:
+      tags:
+        - projects
+      summary: 更新项目
+      operationId: updateProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      tags:
+        - projects
+      summary: 删除项目
+      operationId: deleteProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+
+  /api/v1/applications:
+    get:
+      tags:
+        - applications
+      summary: 获取应用列表
+      operationId: listApplications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+    post:
+      tags:
+        - applications
+      summary: 创建应用
+      operationId: createApplication
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreate'
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/v1/applications/{id}:
+    get:
+      tags:
+        - applications
+      summary: 获取应用详情
+      operationId: getApplication
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+    put:
+      tags:
+        - applications
+      summary: 更新应用
+      operationId: updateApplication
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      tags:
+        - applications
+      summary: 删除应用
+      operationId: deleteApplication
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+
+  /api/v1/hosts:
+    get:
+      tags:
+        - hosts
+      summary: 获取主机列表
+      operationId: listHosts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline]
+      responses:
+        '200':
+          description: 成功
+    post:
+      tags:
+        - hosts
+      summary: 创建主机
+      operationId: createHost
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/v1/hosts/{id}:
+    get:
+      tags:
+        - hosts
+      summary: 获取主机详情
+      operationId: getHost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+    put:
+      tags:
+        - hosts
+      summary: 更新主机
+      operationId: updateHost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 更新成功
+    delete:
+      tags:
+        - hosts
+      summary: 删除主机
+      operationId: deleteHost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+
+  /api/v1/hosts/sync:
+    post:
+      tags:
+        - hosts
+      summary: 从 N9E 同步主机
+      operationId: syncHosts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 同步成功
+
+  /api/v1/hosts/{id}/metrics:
+    get:
+      tags:
+        - hosts
+      summary: 获取主机实时指标
+      operationId: getHostMetrics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/mysql-instances:
+    get:
+      tags:
+        - mysql-instances
+      summary: 获取 MySQL 实例列表
+      operationId: listMySQLInstances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+    post:
+      tags:
+        - mysql-instances
+      summary: 创建 MySQL 实例
+      operationId: createMySQLInstance
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/v1/mysql-instances/{id}:
+    get:
+      tags:
+        - mysql-instances
+      summary: 获取 MySQL 实例详情
+      operationId: getMySQLInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+    delete:
+      tags:
+        - mysql-instances
+      summary: 删除 MySQL 实例
+      operationId: deleteMySQLInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+
+  /api/v1/redis-instances:
+    get:
+      tags:
+        - redis-instances
+      summary: 获取 Redis 实例列表
+      operationId: listRedisInstances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/redis-instances/{id}:
+    get:
+      tags:
+        - redis-instances
+      summary: 获取 Redis 实例详情
+      operationId: getRedisInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/nginx-instances:
+    get:
+      tags:
+        - nginx-instances
+      summary: 获取 Nginx 实例列表
+      operationId: listNginxInstances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/nginx-instances/{id}:
+    get:
+      tags:
+        - nginx-instances
+      summary: 获取 Nginx 实例详情
+      operationId: getNginxInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/tomcat-instances:
+    get:
+      tags:
+        - tomcat-instances
+      summary: 获取 Tomcat 实例列表
+      operationId: listTomcatInstances
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/tomcat-instances/{id}:
+    get:
+      tags:
+        - tomcat-instances
+      summary: 获取 Tomcat 实例详情
+      operationId: getTomcatInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/elasticsearch-clusters:
+    get:
+      tags:
+        - elasticsearch-clusters
+      summary: 获取 ES 集群列表
+      operationId: listESClusters
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/elasticsearch-clusters/{id}:
+    get:
+      tags:
+        - elasticsearch-clusters
+      summary: 获取 ES 集群详情
+      operationId: getESCluster
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/monitor/query:
+    get:
+      tags:
+        - monitor
+      summary: 实时指标查询
+      description: 透传 VictoriaMetrics 即时查询
+      operationId: queryMetrics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: PromQL 查询表达式
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/monitor/query_range:
+    get:
+      tags:
+        - monitor
+      summary: 历史趋势查询
+      description: 透传 VictoriaMetrics 范围查询
+      operationId: queryMetricsRange
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: step
+          in: query
+          schema:
+            type: string
+            default: 5m
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/alerts:
+    get:
+      tags:
+        - alerts
+      summary: 获取告警列表
+      description: 透传 FlashDuty 告警列表
+      operationId: listAlerts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [firing, resolved]
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/alerts/{id}:
+    get:
+      tags:
+        - alerts
+      summary: 获取告警详情
+      operationId: getAlert
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/incidents:
+    get:
+      tags:
+        - alerts
+      summary: 获取故障列表
+      operationId: listIncidents
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/incidents/{id}:
+    get:
+      tags:
+        - alerts
+      summary: 获取故障详情
+      operationId: getIncident
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+
+  /api/v1/inspection/jobs:
+    get:
+      tags:
+        - inspection
+      summary: 获取巡检任务列表
+      operationId: listInspectionJobs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed]
+      responses:
+        '200':
+          description: 成功
+    post:
+      tags:
+        - inspection
+      summary: 触发巡检任务
+      operationId: createInspectionJob
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectionJobCreate'
+      responses:
+        '201':
+          description: 创建成功
+
+  /api/v1/inspection/jobs/{id}:
+    get:
+      tags:
+        - inspection
+      summary: 获取巡检任务详情
+      operationId: getInspectionJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+    delete:
+      tags:
+        - inspection
+      summary: 删除巡检任务
+      operationId: deleteInspectionJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer Token 认证
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: 未认证或 Token 无效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # 通用响应
+    ApiResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 业务状态码，0 表示成功
+          example: 0
+        message:
+          type: string
+          description: 响应消息
+          example: success
+        data:
+          type: object
+          description: 响应数据
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: 错误码
+          example: 1001
+        message:
+          type: string
+          description: 错误消息
+          example: 请求参数错误
+        details:
+          type: string
+          description: 错误详情
+
+    # 分页
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 当前页码
+          example: 1
+        page_size:
+          type: integer
+          description: 每页数量
+          example: 20
+        total:
+          type: integer
+          description: 总记录数
+          example: 100
+
+    # 认证相关
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: 用户名
+          example: admin
+        password:
+          type: string
+          format: password
+          description: 密码
+          example: '********'
+
+    LoginResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+              description: 访问令牌
+            refresh_token:
+              type: string
+              description: 刷新令牌
+            expires_in:
+              type: integer
+              description: 过期时间（秒）
+              example: 86400
+            user:
+              $ref: '#/components/schemas/User'
+
+    TokenRefreshRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          description: 刷新令牌
+
+    TokenRefreshResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+            expires_in:
+              type: integer
+              example: 86400
+
+    # 用户相关
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 用户ID
+        username:
+          type: string
+          description: 用户名
+        email:
+          type: string
+          format: email
+          description: 邮箱
+        display_name:
+          type: string
+          description: 显示名称
+        status:
+          type: string
+          enum: [active, inactive]
+          description: 状态
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        last_login_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserCreate:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        password:
+          type: string
+          format: password
+          minLength: 8
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        role_ids:
+          type: array
+          items:
+            type: integer
+
+    UserUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        role_ids:
+          type: array
+          items:
+            type: integer
+
+    # 角色相关
+    Role:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          description: 角色名称
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        created_at:
+          type: string
+          format: date-time
+
+    RoleCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        permission_ids:
+          type: array
+          items:
+            type: integer
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+        description:
+          type: string
+
+    # 项目相关
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        owner:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProjectCreate:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        owner:
+          type: string
+
+    # 应用相关
+    Application:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        project_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        owner:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ApplicationCreate:
+      type: object
+      required:
+        - name
+        - code
+        - project_id
+      properties:
+        project_id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        owner:
+          type: string
+
+    # 主机资产
+    Host:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        ident:
+          type: string
+          description: 主机标识符
+        hostname:
+          type: string
+        ip:
+          type: string
+          format: ipv4
+        os:
+          type: string
+        os_version:
+          type: string
+        kernel_version:
+          type: string
+        cpu_cores:
+          type: integer
+        cpu_model:
+          type: string
+        memory_total:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [online, offline]
+        business_group:
+          type: string
+        env:
+          type: string
+        application_id:
+          type: integer
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # MySQL 实例
+    MySQLInstance:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        address:
+          type: string
+          description: 实例地址 (IP:Port)
+        ip:
+          type: string
+        port:
+          type: integer
+        version:
+          type: string
+        cluster_mode:
+          type: string
+          enum: [mgr, dual-master, master-slave]
+        server_id:
+          type: string
+        host_id:
+          type: integer
+        application_id:
+          type: integer
+        status:
+          type: string
+          enum: [online, offline]
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # Redis 实例
+    RedisInstance:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        address:
+          type: string
+        ip:
+          type: string
+        port:
+          type: integer
+        version:
+          type: string
+        cluster_mode:
+          type: string
+        role:
+          type: string
+          enum: [master, slave]
+        host_id:
+          type: integer
+        application_id:
+          type: integer
+        status:
+          type: string
+          enum: [online, offline]
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # Nginx 实例
+    NginxInstance:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        address:
+          type: string
+        ip:
+          type: string
+        port:
+          type: integer
+        version:
+          type: string
+        host_id:
+          type: integer
+        application_id:
+          type: integer
+        status:
+          type: string
+          enum: [online, offline]
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # Tomcat 实例
+    TomcatInstance:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        address:
+          type: string
+        ip:
+          type: string
+        port:
+          type: integer
+        version:
+          type: string
+        jvm_version:
+          type: string
+        host_id:
+          type: integer
+        application_id:
+          type: integer
+        status:
+          type: string
+          enum: [online, offline]
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # Elasticsearch 集群
+    ElasticsearchCluster:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        cluster_name:
+          type: string
+        version:
+          type: string
+        node_count:
+          type: integer
+        status:
+          type: string
+          enum: [green, yellow, red]
+        application_id:
+          type: integer
+        last_sync_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # 监控相关
+    MetricsQuery:
+      type: object
+      properties:
+        query:
+          type: string
+          description: PromQL 查询表达式
+        time:
+          type: string
+          format: date-time
+          description: 查询时间点
+
+    MetricsRangeQuery:
+      type: object
+      properties:
+        query:
+          type: string
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        step:
+          type: string
+          description: 步长，如 5m
+
+    # 告警相关
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [critical, warning, info]
+        status:
+          type: string
+          enum: [firing, resolved]
+        source:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Incident:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+        severity:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # 巡检相关
+    InspectionJob:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: string
+          enum: [host, mysql, redis, nginx, tomcat, elasticsearch, all]
+        trigger_type:
+          type: string
+          enum: [manual, api, cron]
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        duration_seconds:
+          type: integer
+        report_excel_path:
+          type: string
+        report_html_path:
+          type: string
+        summary:
+          type: object
+        error_message:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    InspectionJobCreate:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [host, mysql, redis, nginx, tomcat, elasticsearch, all]

@@ -1,6 +1,4 @@
 bin/
-inspect
-.claude/
 .roo/
 .spec-workflow/
 .DS_Store
@@ -11,3 +9,4 @@ reports/*
 .sisyphus/
 config.yaml
 .venv/
+*-session
