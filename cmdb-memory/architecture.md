@@ -119,13 +119,20 @@ use (
 
 ---
 
-### 5.4 目录结构 (Phase 2 Step 2.10 已实现)
+### 5.4 目录结构 (Phase 3 Step 3.3 已实现)
 
 ```
 apps/cmdb-server/
 ├── cmd/
 │   └── main.go              # 程序入口，支持 -migrate 参数
 ├── internal/
+│   ├── api/
+│   │   ├── router/
+│   │   │   └── router.go    # Gin 路由器 (Step 3.1)
+│   │   ├── middleware/
+│   │   │   ├── auth.go      # JWT 认证中间件 (Step 3.2)
+│   │   │   └── casbin.go    # Casbin 授权中间件 (Step 3.3)
+│   │   └── handler/         # HTTP 处理器 (待实现)
 │   ├── database/
 │   │   └── database.go      # GORM 连接、连接池、AutoMigrate
 │   ├── model/
@@ -243,6 +250,51 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | MonitorProxy | proxy/monitor_proxy.go | Query, QueryRange, QueryRangeForECharts |
 | AlertProxy | proxy/alert_proxy.go | ListAlerts, ListIncidents |
 
+### 5.10 Service Layer (Phase 2 Step 2.9-2.10)
+
+| 服务 | 文件 | 方法 |
+|------|------|------|
+| InspectService | inspection/inspect_service.go | CreateJob, GetJob, ListJobs, ListJobsByStatus, ListJobsByType, DeleteJob, UpdateStatus |
+
+### 5.11 Casbin RBAC Configuration (Phase 2 Step 2.10)
+
+#### casbin_model.conf
+- Request Definition: (sub, obj, act)
+- Policy Definition: (sub, obj, act)
+- Role Definition: g = _, _ (支持角色继承)
+- Matcher: g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && (r.act == p.act || p.act == "*")
+
+#### casbin_policy.csv 权限矩阵
+| 角色 | hosts | projects | applications | middleware | inspection | users | roles | monitor | alerts |
+|------|-------|----------|--------------|------------|------------|-------|-------|---------|--------|
+| admin | * | * | * | * | * | * | * | * | * |
+| operator | r/w | r | r/w | r/w | r/w | - | - | r/w | r/w |
+| viewer | r | r | r | r | r | r | r | r | r |
+
+角色继承: admin → operator → viewer
+
+### 5.12 API Layer (Phase 3 Step 3.1-3.3)
+
+#### Router (router/router.go)
+| 组件 | 说明 |
+|------|------|
+| Config | Mode, ReadTimeout, WriteTimeout |
+| Router | Gin Engine 封装 |
+| Middlewares | Recovery, RequestLogger, CORS |
+
+#### Auth Middleware (middleware/auth.go)
+| 方法 | 说明 |
+|------|------|
+| RequireAuth() | JWT Token 验证，注入 user_id/username/roles 到 Context |
+| GetUserID/GetUsername/GetRoles | Context 辅助函数 |
+
+#### Casbin Middleware (middleware/casbin.go)
+| 方法 | 说明 |
+|------|------|
+| RequirePermission() | 基于角色的权限检查 |
+| extractResource | URL 路径转资源名 (/api/v1/users/1 → /users) |
+| mapMethodToAction | HTTP 方法转操作 (GET→read, POST/PUT/DELETE→write) |
+
 ## 6. Vue 前端 (web/)
 
 ### 6.1 技术栈
@@ -329,3 +381,5 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.3 | Phase 2 服务层实现 (Step 2.1-2.3): 认证、用户、角色服务 |
 | 2026-01-14 | v1.4 | Phase 2 服务层实现 (Step 2.4-2.5): 主机同步服务、中间件实例发现服务 |
 | 2026-01-14 | v1.5 | Phase 2 服务层实现 (Step 2.6-2.8): 资产管理服务、监控透传服务、告警透传服务 |
+| 2026-01-14 | v1.6 | Phase 2 服务层实现 (Step 2.9-2.10): 巡检管理服务、Casbin RBAC 配置 |
+| 2026-01-14 | v1.7 | Phase 3 API层实现 (Step 3.1-3.3): Gin路由器、JWT认证中间件、Casbin授权中间件 |

@@ -349,3 +349,60 @@ None
 
 ### Next Step
 Phase 3: API Layer Implementation (Step 3.1: Create Gin Router)
+
+---
+
+## Phase 3 - API Layer Implementation (Step 3.1 - 3.3)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 3.1: Create Gin Router**
+   - Created internal/api/router/router.go
+   - Installed github.com/gin-gonic/gin v1.11.0
+   - Installed github.com/gin-contrib/cors v1.7.6
+   - Implemented Router struct with Config
+   - Configured global middlewares: Recovery, RequestLogger, CORS
+   - SetupRoutes with /health endpoint and /api/v1 group
+   - setupPublicRoutes: /auth/login, /auth/refresh
+   - setupProtectedRoutes: users, roles, projects, applications, hosts, middleware instances, monitor, alerts, incidents, inspection
+   - setupMiddlewareRoutes: mysql, redis, nginx, tomcat, elasticsearch, instance discovery
+
+2. **Step 3.2: Implement Auth Middleware**
+   - Created internal/api/middleware/auth.go
+   - Implemented AuthMiddleware struct with AuthService dependency
+   - RequireAuth() middleware: extracts Bearer token, validates JWT, sets context
+   - Context keys: user_id, username, roles
+   - Error codes: 40100 (missing header), 40101 (invalid token), 40102 (token expired)
+   - Helper functions: GetUserID, GetUsername, GetRoles
+
+3. **Step 3.3: Implement Casbin Middleware**
+   - Created internal/api/middleware/casbin.go
+   - Installed github.com/casbin/casbin/v2 v2.135.0
+   - Implemented CasbinMiddleware struct with Enforcer dependency
+   - RequirePermission() middleware: extracts roles from context, checks permission
+   - extractResource: maps URL path to resource (e.g., /api/v1/users/1 → /users)
+   - mapMethodToAction: GET→read, POST/PUT/PATCH/DELETE→write
+   - Error codes: 40300 (no roles), 40301 (permission denied), 50001 (check failed)
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/api/router/router.go | Gin router with routes and logging middleware |
+| internal/api/middleware/auth.go | JWT authentication middleware |
+| internal/api/middleware/casbin.go | Casbin RBAC authorization middleware |
+
+### Dependencies Added
+- github.com/gin-gonic/gin v1.11.0
+- github.com/gin-contrib/cors v1.7.6
+- github.com/casbin/casbin/v2 v2.135.0
+
+### Issues Encountered
+None
+
+### Verification Results
+- go build ./apps/cmdb-server/internal/api/... : SUCCESS
+
+### Next Step
+Phase 3 Step 3.4: Implement Health Check Endpoint
