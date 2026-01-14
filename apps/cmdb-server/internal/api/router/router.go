@@ -17,8 +17,10 @@ type Config struct {
 }
 
 type Handlers struct {
-	User *handler.UserHandler
-	Role *handler.RoleHandler
+	User    *handler.UserHandler
+	Role    *handler.RoleHandler
+	Asset   *handler.AssetHandler
+	Monitor *handler.MonitorHandler
 }
 
 type Router struct {
@@ -125,39 +127,70 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 
 	projects := rg.Group("/projects")
 	{
-		projects.GET("", placeholder("list projects"))
-		projects.POST("", placeholder("create project"))
-		projects.GET("/:id", placeholder("get project"))
-		projects.PUT("/:id", placeholder("update project"))
-		projects.DELETE("/:id", placeholder("delete project"))
+		if r.handlers.Asset != nil {
+			projects.GET("", r.handlers.Asset.ListProjects)
+			projects.POST("", r.handlers.Asset.CreateProject)
+			projects.GET("/:id", r.handlers.Asset.GetProject)
+			projects.PUT("/:id", r.handlers.Asset.UpdateProject)
+			projects.DELETE("/:id", r.handlers.Asset.DeleteProject)
+		} else {
+			projects.GET("", placeholder("list projects"))
+			projects.POST("", placeholder("create project"))
+			projects.GET("/:id", placeholder("get project"))
+			projects.PUT("/:id", placeholder("update project"))
+			projects.DELETE("/:id", placeholder("delete project"))
+		}
 	}
 
 	applications := rg.Group("/applications")
 	{
-		applications.GET("", placeholder("list applications"))
-		applications.POST("", placeholder("create application"))
-		applications.GET("/:id", placeholder("get application"))
-		applications.PUT("/:id", placeholder("update application"))
-		applications.DELETE("/:id", placeholder("delete application"))
+		if r.handlers.Asset != nil {
+			applications.GET("", r.handlers.Asset.ListApplications)
+			applications.POST("", r.handlers.Asset.CreateApplication)
+			applications.GET("/:id", r.handlers.Asset.GetApplication)
+			applications.PUT("/:id", r.handlers.Asset.UpdateApplication)
+			applications.DELETE("/:id", r.handlers.Asset.DeleteApplication)
+		} else {
+			applications.GET("", placeholder("list applications"))
+			applications.POST("", placeholder("create application"))
+			applications.GET("/:id", placeholder("get application"))
+			applications.PUT("/:id", placeholder("update application"))
+			applications.DELETE("/:id", placeholder("delete application"))
+		}
 	}
 
 	hosts := rg.Group("/hosts")
 	{
-		hosts.GET("", placeholder("list hosts"))
-		hosts.POST("", placeholder("create host"))
-		hosts.GET("/:id", placeholder("get host"))
-		hosts.PUT("/:id", placeholder("update host"))
-		hosts.DELETE("/:id", placeholder("delete host"))
-		hosts.POST("/sync", placeholder("sync hosts"))
-		hosts.GET("/:id/metrics", placeholder("get host metrics"))
+		if r.handlers.Asset != nil {
+			hosts.GET("", r.handlers.Asset.ListHosts)
+			hosts.POST("", r.handlers.Asset.CreateHost)
+			hosts.GET("/:id", r.handlers.Asset.GetHost)
+			hosts.PUT("/:id", r.handlers.Asset.UpdateHost)
+			hosts.DELETE("/:id", r.handlers.Asset.DeleteHost)
+			hosts.POST("/sync", r.handlers.Asset.SyncHosts)
+			hosts.GET("/:id/metrics", placeholder("get host metrics"))
+		} else {
+			hosts.GET("", placeholder("list hosts"))
+			hosts.POST("", placeholder("create host"))
+			hosts.GET("/:id", placeholder("get host"))
+			hosts.PUT("/:id", placeholder("update host"))
+			hosts.DELETE("/:id", placeholder("delete host"))
+			hosts.POST("/sync", placeholder("sync hosts"))
+			hosts.GET("/:id/metrics", placeholder("get host metrics"))
+		}
 	}
 
 	r.setupMiddlewareRoutes(rg)
 
 	monitor := rg.Group("/monitor")
 	{
-		monitor.GET("/query", placeholder("query metrics"))
-		monitor.GET("/query_range", placeholder("query range metrics"))
+		if r.handlers.Monitor != nil {
+			monitor.GET("/query", r.handlers.Monitor.Query)
+			monitor.GET("/query_range", r.handlers.Monitor.QueryRange)
+		} else {
+			monitor.GET("/query", placeholder("query metrics"))
+			monitor.GET("/query_range", placeholder("query range metrics"))
+		}
 	}
 
 	alerts := rg.Group("/alerts")
@@ -187,37 +220,67 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 func (r *Router) setupMiddlewareRoutes(rg *gin.RouterGroup) {
 	mysql := rg.Group("/mysql")
 	{
-		mysql.GET("", placeholder("list mysql instances"))
-		mysql.GET("/:id", placeholder("get mysql instance"))
-		mysql.DELETE("/:id", placeholder("delete mysql instance"))
+		if r.handlers.Asset != nil {
+			mysql.GET("", r.handlers.Asset.ListMySQLInstances)
+			mysql.GET("/:id", r.handlers.Asset.GetMySQLInstance)
+			mysql.DELETE("/:id", r.handlers.Asset.DeleteMySQLInstance)
+		} else {
+			mysql.GET("", placeholder("list mysql instances"))
+			mysql.GET("/:id", placeholder("get mysql instance"))
+			mysql.DELETE("/:id", placeholder("delete mysql instance"))
+		}
 	}
 
 	redis := rg.Group("/redis")
 	{
-		redis.GET("", placeholder("list redis instances"))
-		redis.GET("/:id", placeholder("get redis instance"))
-		redis.DELETE("/:id", placeholder("delete redis instance"))
+		if r.handlers.Asset != nil {
+			redis.GET("", r.handlers.Asset.ListRedisInstances)
+			redis.GET("/:id", r.handlers.Asset.GetRedisInstance)
+			redis.DELETE("/:id", r.handlers.Asset.DeleteRedisInstance)
+		} else {
+			redis.GET("", placeholder("list redis instances"))
+			redis.GET("/:id", placeholder("get redis instance"))
+			redis.DELETE("/:id", placeholder("delete redis instance"))
+		}
 	}
 
 	nginx := rg.Group("/nginx")
 	{
-		nginx.GET("", placeholder("list nginx instances"))
-		nginx.GET("/:id", placeholder("get nginx instance"))
-		nginx.DELETE("/:id", placeholder("delete nginx instance"))
+		if r.handlers.Asset != nil {
+			nginx.GET("", r.handlers.Asset.ListNginxInstances)
+			nginx.GET("/:id", r.handlers.Asset.GetNginxInstance)
+			nginx.DELETE("/:id", r.handlers.Asset.DeleteNginxInstance)
+		} else {
+			nginx.GET("", placeholder("list nginx instances"))
+			nginx.GET("/:id", placeholder("get nginx instance"))
+			nginx.DELETE("/:id", placeholder("delete nginx instance"))
+		}
 	}
 
 	tomcat := rg.Group("/tomcat")
 	{
-		tomcat.GET("", placeholder("list tomcat instances"))
-		tomcat.GET("/:id", placeholder("get tomcat instance"))
-		tomcat.DELETE("/:id", placeholder("delete tomcat instance"))
+		if r.handlers.Asset != nil {
+			tomcat.GET("", r.handlers.Asset.ListTomcatInstances)
+			tomcat.GET("/:id", r.handlers.Asset.GetTomcatInstance)
+			tomcat.DELETE("/:id", r.handlers.Asset.DeleteTomcatInstance)
+		} else {
+			tomcat.GET("", placeholder("list tomcat instances"))
+			tomcat.GET("/:id", placeholder("get tomcat instance"))
+			tomcat.DELETE("/:id", placeholder("delete tomcat instance"))
+		}
 	}
 
 	elasticsearch := rg.Group("/elasticsearch")
 	{
-		elasticsearch.GET("", placeholder("list elasticsearch clusters"))
-		elasticsearch.GET("/:id", placeholder("get elasticsearch cluster"))
-		elasticsearch.DELETE("/:id", placeholder("delete elasticsearch cluster"))
+		if r.handlers.Asset != nil {
+			elasticsearch.GET("", r.handlers.Asset.ListElasticsearchClusters)
+			elasticsearch.GET("/:id", r.handlers.Asset.GetElasticsearchCluster)
+			elasticsearch.DELETE("/:id", r.handlers.Asset.DeleteElasticsearchCluster)
+		} else {
+			elasticsearch.GET("", placeholder("list elasticsearch clusters"))
+			elasticsearch.GET("/:id", placeholder("get elasticsearch cluster"))
+			elasticsearch.DELETE("/:id", placeholder("delete elasticsearch cluster"))
+		}
 	}
 
 	rg.POST("/instances/discover", placeholder("discover instances"))

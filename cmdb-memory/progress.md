@@ -529,3 +529,116 @@ Phase 3 Step 3.6: Implement User Management Endpoints
 
 ### Next Step
 Phase 3 Step 3.8: Implement Asset Management Endpoints
+
+---
+
+## Phase 3 - API Layer Implementation (Step 3.8 - 3.9)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 3.8: Implement Asset Management Endpoints**
+   - Created internal/api/handler/asset.go
+   - Implemented AssetHandler struct with AssetService and HostSyncService dependencies
+   - **Project Endpoints**:
+     - ListProjects(): GET /api/v1/projects (pagination, status filter)
+     - CreateProject(): POST /api/v1/projects
+     - GetProject(): GET /api/v1/projects/:id
+     - UpdateProject(): PUT /api/v1/projects/:id
+     - DeleteProject(): DELETE /api/v1/projects/:id
+   - **Application Endpoints**:
+     - ListApplications(): GET /api/v1/applications (pagination, status/project_id filter)
+     - CreateApplication(): POST /api/v1/applications
+     - GetApplication(): GET /api/v1/applications/:id
+     - UpdateApplication(): PUT /api/v1/applications/:id
+     - DeleteApplication(): DELETE /api/v1/applications/:id
+   - **Host Endpoints**:
+     - ListHosts(): GET /api/v1/hosts (pagination, status/business_group filter)
+     - CreateHost(): POST /api/v1/hosts
+     - GetHost(): GET /api/v1/hosts/:id
+     - UpdateHost(): PUT /api/v1/hosts/:id
+     - DeleteHost(): DELETE /api/v1/hosts/:id
+     - SyncHosts(): POST /api/v1/hosts/sync (triggers N9E sync)
+   - **Middleware Instance Endpoints**:
+     - MySQL: GET/GET/:id/DELETE/:id /api/v1/mysql
+     - Redis: GET/GET/:id/DELETE/:id /api/v1/redis
+     - Nginx: GET/GET/:id/DELETE/:id /api/v1/nginx
+     - Tomcat: GET/GET/:id/DELETE/:id /api/v1/tomcat
+     - Elasticsearch: GET/GET/:id/DELETE/:id /api/v1/elasticsearch
+
+2. **Step 3.9: Implement Monitor Proxy Endpoints**
+   - Created internal/api/handler/monitor.go
+   - Implemented MonitorHandler struct with MonitorProxy dependency
+   - Query(): GET /api/v1/monitor/query
+     - Parameters: query (required)
+     - Returns raw VM query response
+   - QueryRange(): GET /api/v1/monitor/query_range
+     - Parameters: query (required), start (required), end (required), step (optional, default 60)
+     - format=echarts returns ECharts-formatted data
+     - format=raw (default) returns raw VM response
+
+3. **Router Integration**
+   - Updated Handlers struct to include Asset and Monitor handlers
+   - Integrated AssetHandler for projects, applications, hosts, middleware routes
+   - Integrated MonitorHandler for monitor/query and monitor/query_range routes
+   - All routes use conditional handler injection (fallback to placeholder if nil)
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/api/handler/asset.go | Asset management endpoints (Project, Application, Host, Middleware CRUD + SyncHosts) |
+| internal/api/handler/monitor.go | Monitor proxy endpoints (Query, QueryRange with ECharts support) |
+
+### Files Modified
+| File | Description |
+|------|-------------|
+| internal/api/router/router.go | Extended Handlers struct, integrated AssetHandler and MonitorHandler |
+
+### API Endpoints Summary (Step 3.8 - 3.9)
+
+| Method | Endpoint | Handler | Description |
+|--------|----------|---------|-------------|
+| GET | /api/v1/projects | AssetHandler.ListProjects | List projects with pagination |
+| POST | /api/v1/projects | AssetHandler.CreateProject | Create new project |
+| GET | /api/v1/projects/:id | AssetHandler.GetProject | Get project by ID |
+| PUT | /api/v1/projects/:id | AssetHandler.UpdateProject | Update project |
+| DELETE | /api/v1/projects/:id | AssetHandler.DeleteProject | Delete project |
+| GET | /api/v1/applications | AssetHandler.ListApplications | List applications |
+| POST | /api/v1/applications | AssetHandler.CreateApplication | Create application |
+| GET | /api/v1/applications/:id | AssetHandler.GetApplication | Get application |
+| PUT | /api/v1/applications/:id | AssetHandler.UpdateApplication | Update application |
+| DELETE | /api/v1/applications/:id | AssetHandler.DeleteApplication | Delete application |
+| GET | /api/v1/hosts | AssetHandler.ListHosts | List hosts |
+| POST | /api/v1/hosts | AssetHandler.CreateHost | Create host |
+| GET | /api/v1/hosts/:id | AssetHandler.GetHost | Get host |
+| PUT | /api/v1/hosts/:id | AssetHandler.UpdateHost | Update host |
+| DELETE | /api/v1/hosts/:id | AssetHandler.DeleteHost | Delete host |
+| POST | /api/v1/hosts/sync | AssetHandler.SyncHosts | Sync hosts from N9E |
+| GET | /api/v1/mysql | AssetHandler.ListMySQLInstances | List MySQL instances |
+| GET | /api/v1/mysql/:id | AssetHandler.GetMySQLInstance | Get MySQL instance |
+| DELETE | /api/v1/mysql/:id | AssetHandler.DeleteMySQLInstance | Delete MySQL instance |
+| GET | /api/v1/redis | AssetHandler.ListRedisInstances | List Redis instances |
+| GET | /api/v1/redis/:id | AssetHandler.GetRedisInstance | Get Redis instance |
+| DELETE | /api/v1/redis/:id | AssetHandler.DeleteRedisInstance | Delete Redis instance |
+| GET | /api/v1/nginx | AssetHandler.ListNginxInstances | List Nginx instances |
+| GET | /api/v1/nginx/:id | AssetHandler.GetNginxInstance | Get Nginx instance |
+| DELETE | /api/v1/nginx/:id | AssetHandler.DeleteNginxInstance | Delete Nginx instance |
+| GET | /api/v1/tomcat | AssetHandler.ListTomcatInstances | List Tomcat instances |
+| GET | /api/v1/tomcat/:id | AssetHandler.GetTomcatInstance | Get Tomcat instance |
+| DELETE | /api/v1/tomcat/:id | AssetHandler.DeleteTomcatInstance | Delete Tomcat instance |
+| GET | /api/v1/elasticsearch | AssetHandler.ListElasticsearchClusters | List ES clusters |
+| GET | /api/v1/elasticsearch/:id | AssetHandler.GetElasticsearchCluster | Get ES cluster |
+| DELETE | /api/v1/elasticsearch/:id | AssetHandler.DeleteElasticsearchCluster | Delete ES cluster |
+| GET | /api/v1/monitor/query | MonitorHandler.Query | Instant metric query |
+| GET | /api/v1/monitor/query_range | MonitorHandler.QueryRange | Range metric query |
+
+### Issues Encountered
+None
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 3 Step 3.10: Implement Alert Proxy Endpoints

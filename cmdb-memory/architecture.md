@@ -119,7 +119,7 @@ use (
 
 ---
 
-### 5.4 目录结构 (Phase 3 Step 3.7 已实现)
+### 5.4 目录结构 (Phase 3 Step 3.9 已实现)
 
 ```
 apps/cmdb-server/
@@ -128,7 +128,7 @@ apps/cmdb-server/
 ├── internal/
 │   ├── api/
 │   │   ├── router/
-│   │   │   └── router.go    # Gin 路由器 (Step 3.1, 3.6-3.7 更新)
+│   │   │   └── router.go    # Gin 路由器 (Step 3.1, 3.6-3.9 更新)
 │   │   ├── middleware/
 │   │   │   ├── auth.go      # JWT 认证中间件 (Step 3.2)
 │   │   │   └── casbin.go    # Casbin 授权中间件 (Step 3.3)
@@ -136,7 +136,9 @@ apps/cmdb-server/
 │   │       ├── health.go    # 健康检查端点 (Step 3.4)
 │   │       ├── auth.go      # 认证端点 (Step 3.5)
 │   │       ├── user.go      # 用户管理端点 (Step 3.6)
-│   │       └── role.go      # 角色管理端点 (Step 3.7)
+│   │       ├── role.go      # 角色管理端点 (Step 3.7)
+│   │       ├── asset.go     # 资产管理端点 (Step 3.8)
+│   │       └── monitor.go   # 监控透传端点 (Step 3.9)
 │   ├── database/
 │   │   └── database.go      # GORM 连接、连接池、AutoMigrate
 │   ├── model/
@@ -335,6 +337,47 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | DeleteRole() | DELETE /api/v1/roles/:id，删除角色 |
 | AssignPermissions() | PUT /api/v1/roles/:id/permissions，分配权限 |
 
+#### Asset Handler (handler/asset.go) - Step 3.8
+| 方法 | 说明 |
+|------|------|
+| ListProjects() | GET /api/v1/projects，分页查询项目列表 |
+| CreateProject() | POST /api/v1/projects，创建项目 |
+| GetProject() | GET /api/v1/projects/:id，获取项目详情 |
+| UpdateProject() | PUT /api/v1/projects/:id，更新项目信息 |
+| DeleteProject() | DELETE /api/v1/projects/:id，删除项目 |
+| ListApplications() | GET /api/v1/applications，分页查询应用列表 |
+| CreateApplication() | POST /api/v1/applications，创建应用 |
+| GetApplication() | GET /api/v1/applications/:id，获取应用详情 |
+| UpdateApplication() | PUT /api/v1/applications/:id，更新应用信息 |
+| DeleteApplication() | DELETE /api/v1/applications/:id，删除应用 |
+| ListHosts() | GET /api/v1/hosts，分页查询主机列表 |
+| CreateHost() | POST /api/v1/hosts，创建主机 |
+| GetHost() | GET /api/v1/hosts/:id，获取主机详情 |
+| UpdateHost() | PUT /api/v1/hosts/:id，更新主机信息 |
+| DeleteHost() | DELETE /api/v1/hosts/:id，删除主机 |
+| SyncHosts() | POST /api/v1/hosts/sync，从 N9E 同步主机 |
+| ListMySQLInstances() | GET /api/v1/mysql，查询 MySQL 实例列表 |
+| GetMySQLInstance() | GET /api/v1/mysql/:id，获取 MySQL 实例详情 |
+| DeleteMySQLInstance() | DELETE /api/v1/mysql/:id，删除 MySQL 实例 |
+| ListRedisInstances() | GET /api/v1/redis，查询 Redis 实例列表 |
+| GetRedisInstance() | GET /api/v1/redis/:id，获取 Redis 实例详情 |
+| DeleteRedisInstance() | DELETE /api/v1/redis/:id，删除 Redis 实例 |
+| ListNginxInstances() | GET /api/v1/nginx，查询 Nginx 实例列表 |
+| GetNginxInstance() | GET /api/v1/nginx/:id，获取 Nginx 实例详情 |
+| DeleteNginxInstance() | DELETE /api/v1/nginx/:id，删除 Nginx 实例 |
+| ListTomcatInstances() | GET /api/v1/tomcat，查询 Tomcat 实例列表 |
+| GetTomcatInstance() | GET /api/v1/tomcat/:id，获取 Tomcat 实例详情 |
+| DeleteTomcatInstance() | DELETE /api/v1/tomcat/:id，删除 Tomcat 实例 |
+| ListElasticsearchClusters() | GET /api/v1/elasticsearch，查询 ES 集群列表 |
+| GetElasticsearchCluster() | GET /api/v1/elasticsearch/:id，获取 ES 集群详情 |
+| DeleteElasticsearchCluster() | DELETE /api/v1/elasticsearch/:id，删除 ES 集群 |
+
+#### Monitor Handler (handler/monitor.go) - Step 3.9
+| 方法 | 说明 |
+|------|------|
+| Query() | GET /api/v1/monitor/query，实时指标查询 (透传 VM) |
+| QueryRange() | GET /api/v1/monitor/query_range，历史趋势查询 (支持 format=echarts) |
+
 ## 6. Vue 前端 (web/)
 
 ### 6.1 技术栈
@@ -425,3 +468,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.7 | Phase 3 API层实现 (Step 3.1-3.3): Gin路由器、JWT认证中间件、Casbin授权中间件 |
 | 2026-01-14 | v1.8 | Phase 3 API层实现 (Step 3.4-3.5): 健康检查端点、认证端点 |
 | 2026-01-14 | v1.9 | Phase 3 API层实现 (Step 3.6-3.7): 用户管理端点、角色管理端点 |
+| 2026-01-14 | v1.10 | Phase 3 API层实现 (Step 3.8-3.9): 资产管理端点、监控透传端点 |
