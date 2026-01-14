@@ -406,3 +406,55 @@ None
 
 ### Next Step
 Phase 3 Step 3.4: Implement Health Check Endpoint
+
+---
+
+## Phase 3 - API Layer Implementation (Step 3.4 - 3.5)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 3.4: Implement Health Check Endpoint**
+   - Created internal/api/handler/health.go
+   - Implemented HealthHandler struct with DB and Redis dependencies
+   - HealthCheck() endpoint: checks database and Redis connection status
+   - ComponentStatus struct: status, message, latency
+   - HealthResponse struct: overall status, timestamp, components map
+   - checkDatabase(): pings PostgreSQL with 5s timeout
+   - checkRedis(): pings Redis with 5s timeout
+   - Returns HTTP 200 if healthy, HTTP 503 if unhealthy
+   - SimpleHealthCheck(): lightweight status check (no dependencies)
+
+2. **Step 3.5: Implement Authentication Endpoints**
+   - Created internal/api/handler/auth.go
+   - Implemented AuthHandler struct with AuthService dependency
+   - Login() endpoint: POST /api/v1/auth/login
+     - Request: username, password (required)
+     - Response: access_token, refresh_token, expires_at, token_type
+     - Error codes: 40001 (invalid request), 40100 (auth failed)
+   - Logout() endpoint: POST /api/v1/auth/logout
+     - Returns success message (stateless logout)
+   - Refresh() endpoint: POST /api/v1/auth/refresh
+     - Request: refresh_token (required)
+     - Response: new token pair
+     - Error codes: 40101 (invalid token), 40102 (token expired)
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/api/handler/health.go | Health check endpoint with DB/Redis status |
+| internal/api/handler/auth.go | Authentication endpoints (Login/Logout/Refresh) |
+
+### Dependencies Added
+- github.com/redis/go-redis/v9 v9.17.2
+
+### Issues Encountered
+None
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 3 Step 3.6: Implement User Management Endpoints

@@ -273,7 +273,7 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 
 角色继承: admin → operator → viewer
 
-### 5.12 API Layer (Phase 3 Step 3.1-3.3)
+### 5.12 API Layer (Phase 3 Step 3.1-3.5)
 
 #### Router (router/router.go)
 | 组件 | 说明 |
@@ -294,6 +294,21 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | RequirePermission() | 基于角色的权限检查 |
 | extractResource | URL 路径转资源名 (/api/v1/users/1 → /users) |
 | mapMethodToAction | HTTP 方法转操作 (GET→read, POST/PUT/DELETE→write) |
+
+#### Health Handler (handler/health.go)
+| 方法 | 说明 |
+|------|------|
+| HealthCheck() | 完整健康检查，检测 DB 和 Redis 连接状态 |
+| checkDatabase() | PostgreSQL 连接检测，5s 超时 |
+| checkRedis() | Redis 连接检测，5s 超时 |
+| SimpleHealthCheck() | 轻量级状态检查 |
+
+#### Auth Handler (handler/auth.go)
+| 方法 | 说明 |
+|------|------|
+| Login() | POST /api/v1/auth/login，用户登录 |
+| Logout() | POST /api/v1/auth/logout，用户登出 |
+| Refresh() | POST /api/v1/auth/refresh，刷新 Token |
 
 ## 6. Vue 前端 (web/)
 
@@ -383,3 +398,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.5 | Phase 2 服务层实现 (Step 2.6-2.8): 资产管理服务、监控透传服务、告警透传服务 |
 | 2026-01-14 | v1.6 | Phase 2 服务层实现 (Step 2.9-2.10): 巡检管理服务、Casbin RBAC 配置 |
 | 2026-01-14 | v1.7 | Phase 3 API层实现 (Step 3.1-3.3): Gin路由器、JWT认证中间件、Casbin授权中间件 |
+| 2026-01-14 | v1.8 | Phase 3 API层实现 (Step 3.4-3.5): 健康检查端点、认证端点 |
