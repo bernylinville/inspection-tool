@@ -143,3 +143,50 @@ Phase 1 Step 1.6: Initialize Base Data (roles, permissions)
 
 ### Next Step
 Phase 2: Service Layer Implementation (Step 2.1: Implement Authentication Service)
+
+---
+
+## Phase 2 - Service Layer Implementation (Step 2.1 - 2.3)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 2.1: Implement Authentication Service**
+   - Created internal/service/auth/auth_service.go
+   - Installed github.com/golang-jwt/jwt/v5 v5.3.0
+   - Implemented TokenPair and Claims structs
+   - Implemented AuthService with methods: Login, ValidateToken, RefreshToken, HashPassword, VerifyPassword
+   - Error definitions: ErrInvalidCredentials, ErrUserNotFound, ErrUserDisabled, ErrInvalidToken, ErrTokenExpired
+
+2. **Step 2.2: Implement User Service**
+   - Created internal/service/user/user_service.go
+   - Implemented CreateUserRequest and UpdateUserRequest structs
+   - Implemented UserService with methods: CreateUser, UpdateUser, DeleteUser, GetUser, ListUsers, AssignRoles, ChangePassword
+   - Error definitions: ErrUserExists, ErrOldPasswordIncorrect
+
+3. **Step 2.3: Implement Role Service**
+   - Created internal/service/role/role_service.go
+   - Implemented CreateRoleRequest and UpdateRoleRequest structs
+   - Implemented RoleService with methods: CreateRole, UpdateRole, DeleteRole, GetRole, ListRoles, AssignPermissions, GetRolePermissions
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/service/auth/auth_service.go | Authentication service (JWT, bcrypt) |
+| internal/service/user/user_service.go | User management service |
+| internal/service/role/role_service.go | Role management service |
+
+### Dependencies Added
+- github.com/golang-jwt/jwt/v5 v5.3.0
+
+### Issues Encountered
+1. Codex delegation required for file creation due to CCA workflow policy
+2. Multiple cask retries needed as Codex sometimes returned previous task responses
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 2 Step 2.4: Implement Host Sync Service

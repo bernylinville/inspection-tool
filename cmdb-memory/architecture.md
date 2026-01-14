@@ -147,6 +147,13 @@ apps/cmdb-server/
 │       ├── role.go                  # 角色仓库
 │       ├── tomcat_instance.go       # Tomcat 实例仓库
 │       └── user.go                  # 用户仓库
+│   └── service/
+│       ├── auth/
+│       │   └── auth_service.go      # 认证服务
+│       ├── user/
+│       │   └── user_service.go      # 用户服务
+│       └── role/
+│           └── role_service.go      # 角色服务
 ├── configs/
 │   └── config.yaml          # 配置文件
 ├── go.mod                   # Go 模块定义
@@ -205,6 +212,14 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 - 默认角色：admin、operator、viewer
 - 默认权限：18 项，覆盖 hosts、projects、applications、middleware、inspection、users、roles、monitor、alerts
 - InitializeBaseData：创建默认角色/权限并为角色绑定权限
+
+### 5.8 Service Layer (Phase 2 Step 2.1-2.3)
+
+| 服务 | 文件 | 方法 |
+|------|------|------|
+| AuthService | auth/auth_service.go | Login, ValidateToken, RefreshToken, HashPassword, VerifyPassword |
+| UserService | user/user_service.go | CreateUser, UpdateUser, DeleteUser, GetUser, ListUsers, AssignRoles, ChangePassword |
+| RoleService | role/role_service.go | CreateRole, UpdateRole, DeleteRole, GetRole, ListRoles, AssignPermissions, GetRolePermissions |
 
 ## 6. Vue 前端 (web/)
 
@@ -289,3 +304,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-12 | v1.0 | 初始版本，统一架构文档 |
 | 2026-01-14 | v1.1 | Phase 1 数据层实现 (Step 1.1-1.5) |
 | 2026-01-14 | v1.2 | Phase 1 数据层实现 (Step 1.6-1.8): Repository层、基础数据初始化 |
+| 2026-01-14 | v1.3 | Phase 2 服务层实现 (Step 2.1-2.3): 认证、用户、角色服务 |
