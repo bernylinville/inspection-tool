@@ -11,7 +11,7 @@
 | 应用 | 定位 | 状态 |
 |------|------|------|
 | **巡检工具 CLI** | 基于监控数据的无侵入式系统巡检，生成 Excel/HTML 报告 | ✅ 已实现 |
-| **CMDB 资产管理平台** | 资产管理 + 数据聚合展示，Web 化管理界面 | 📋 规划中 |
+| **CMDB 资产管理平台** | 资产管理 + 数据聚合展示，Web 化管理界面 | 🚧 开发中 |
 
 ### 1.2 核心理念
 
@@ -119,6 +119,52 @@ use (
 
 ---
 
+### 5.4 目录结构 (Phase 1 已实现)
+
+```
+apps/cmdb-server/
+├── cmd/
+│   └── main.go              # 程序入口，支持 -migrate 参数
+├── internal/
+│   ├── database/
+│   │   └── database.go      # GORM 连接、连接池、AutoMigrate
+│   └── model/
+│       ├── asset.go         # 资产模型 (9个)
+│       ├── user.go          # 用户权限模型 (3个)
+│       └── inspection.go    # 巡检任务模型 (1个)
+├── configs/
+│   └── config.yaml          # 配置文件
+├── go.mod                   # Go 模块定义
+└── go.sum                   # 依赖校验
+```
+
+### 5.5 数据模型定义
+
+#### asset.go (9 models)
+| 模型 | 表名 | 说明 |
+|------|------|------|
+| Project | projects | 项目 |
+| Application | applications | 应用 |
+| Host | hosts | 主机 |
+| MySQLInstance | mysql_instances | MySQL实例 |
+| RedisInstance | redis_instances | Redis实例 |
+| NginxInstance | nginx_instances | Nginx实例 |
+| TomcatInstance | tomcat_instances | Tomcat实例 |
+| ElasticsearchCluster | elasticsearch_clusters | ES集群 |
+| ApplicationHost | application_hosts | 应用-主机关联 |
+
+#### user.go (3 models)
+| 模型 | 表名 | 说明 |
+|------|------|------|
+| User | users | 用户 |
+| Role | roles | 角色 |
+| Permission | permissions | 权限 |
+
+#### inspection.go (1 model)
+| 模型 | 表名 | 说明 |
+|------|------|------|
+| InspectionJob | inspection_jobs | 巡检任务 |
+
 ## 6. Vue 前端 (web/)
 
 ### 6.1 技术栈
@@ -200,3 +246,4 @@ use (
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-01-12 | v1.0 | 初始版本，统一架构文档 |
+| 2026-01-14 | v1.1 | Phase 1 数据层实现 (Step 1.1-1.5) |
