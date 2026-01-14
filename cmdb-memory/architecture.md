@@ -130,8 +130,23 @@ apps/cmdb-server/
 │   │   └── database.go      # GORM 连接、连接池、AutoMigrate
 │   └── model/
 │       ├── asset.go         # 资产模型 (9个)
+│       ├── init.go          # 基础数据初始化
 │       ├── user.go          # 用户权限模型 (3个)
 │       └── inspection.go    # 巡检任务模型 (1个)
+│   └── repository/
+│       ├── application.go           # 应用仓库
+│       ├── elasticsearch_cluster.go # ES 集群仓库
+│       ├── host.go                  # 主机仓库
+│       ├── inspection_job.go        # 巡检任务仓库
+│       ├── mysql_instance.go        # MySQL 实例仓库
+│       ├── nginx_instance.go        # Nginx 实例仓库
+│       ├── permission.go            # 权限仓库
+│       ├── project.go               # 项目仓库
+│       ├── redis_instance.go        # Redis 实例仓库
+│       ├── repository.go            # 仓库接口与分页定义
+│       ├── role.go                  # 角色仓库
+│       ├── tomcat_instance.go       # Tomcat 实例仓库
+│       └── user.go                  # 用户仓库
 ├── configs/
 │   └── config.yaml          # 配置文件
 ├── go.mod                   # Go 模块定义
@@ -164,6 +179,32 @@ apps/cmdb-server/
 | 模型 | 表名 | 说明 |
 |------|------|------|
 | InspectionJob | inspection_jobs | 巡检任务 |
+
+### 5.6 Repository Layer (Phase 1 Step 1.6-1.8)
+
+| 接口 | 方法 |
+|------|------|
+| Repository[T] | Create, Update, Delete, FindByID, List |
+| HostRepository | Repository[Host], FindByIdent, FindByIP, ListByBusinessGroup |
+| ProjectRepository | Repository[Project], FindByCode |
+| ApplicationRepository | Repository[Application], FindByCode, ListByProjectID |
+| MySQLInstanceRepository | Repository[MySQLInstance], FindByAddress, ListByHostID |
+| RedisInstanceRepository | Repository[RedisInstance], FindByAddress, ListByHostID |
+| NginxInstanceRepository | Repository[NginxInstance], FindByAddress, ListByHostID |
+| TomcatInstanceRepository | Repository[TomcatInstance], FindByAddress, ListByHostID |
+| ElasticsearchClusterRepository | Repository[ElasticsearchCluster], FindByClusterName |
+| UserRepository | Repository[User], FindByUsername |
+| RoleRepository | Repository[Role], FindByName |
+| PermissionRepository | Repository[Permission], FindByName, ListByResource |
+| InspectionJobRepository | Repository[InspectionJob], ListByStatus, ListByType |
+
+ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters。
+
+### 5.7 Base Data Initialization
+
+- 默认角色：admin、operator、viewer
+- 默认权限：18 项，覆盖 hosts、projects、applications、middleware、inspection、users、roles、monitor、alerts
+- InitializeBaseData：创建默认角色/权限并为角色绑定权限
 
 ## 6. Vue 前端 (web/)
 
@@ -247,3 +288,4 @@ apps/cmdb-server/
 |------|------|------|
 | 2026-01-12 | v1.0 | 初始版本，统一架构文档 |
 | 2026-01-14 | v1.1 | Phase 1 数据层实现 (Step 1.1-1.5) |
+| 2026-01-14 | v1.2 | Phase 1 数据层实现 (Step 1.6-1.8): Repository层、基础数据初始化 |
