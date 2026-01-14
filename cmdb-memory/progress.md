@@ -190,3 +190,43 @@ Phase 2: Service Layer Implementation (Step 2.1: Implement Authentication Servic
 
 ### Next Step
 Phase 2 Step 2.4: Implement Host Sync Service
+
+---
+
+## Phase 2 - Service Layer Implementation (Step 2.4 - 2.5)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 2.4: Implement Host Sync Service**
+   - Created internal/service/sync/host_sync_service.go
+   - Implemented SyncResult struct (TotalHosts, NewHosts, UpdatedHosts, FailedHosts, Duration)
+   - Implemented HostSyncService with methods: SyncHosts, syncHost
+   - Depends on pkg/n9e.Client for N9E API calls
+   - Depends on repository.HostRepository for database operations
+   - Sync logic: GetTargets → ToHostMeta → FindByIdent → Create/Update
+
+2. **Step 2.5: Implement Instance Discovery Service**
+   - Created internal/service/sync/instance_discovery_service.go
+   - Implemented DiscoveryResult struct (MySQL, Redis, Nginx, Tomcat, Elasticsearch, Duration)
+   - Implemented InstanceDiscoveryService with methods: DiscoverAll, DiscoverMySQL, DiscoverRedis, DiscoverNginx, DiscoverTomcat, DiscoverElasticsearch
+   - Depends on pkg/vm.Client for VictoriaMetrics queries
+   - PromQL queries: mysql_up, redis_up, nginx_up, tomcat_up, elasticsearch_cluster_health_status
+   - Discovery logic: Query VM → Parse labels → FindByIdent → Associate host → Create/Update instance
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/service/sync/host_sync_service.go | Host sync service from N9E |
+| internal/service/sync/instance_discovery_service.go | Middleware instance discovery from VM |
+
+### Issues Encountered
+1. HostID field type mismatch: model uses *int64 (pointer), initial code used int64; fixed by using pointer type and address operator
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 2 Step 2.6: Implement Monitor Proxy Service

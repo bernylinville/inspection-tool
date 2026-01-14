@@ -154,6 +154,9 @@ apps/cmdb-server/
 │       │   └── user_service.go      # 用户服务
 │       └── role/
 │           └── role_service.go      # 角色服务
+│       └── sync/
+│           ├── host_sync_service.go       # 主机同步服务
+│           └── instance_discovery_service.go # 中间件实例发现服务
 ├── configs/
 │   └── config.yaml          # 配置文件
 ├── go.mod                   # Go 模块定义
@@ -220,6 +223,8 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | AuthService | auth/auth_service.go | Login, ValidateToken, RefreshToken, HashPassword, VerifyPassword |
 | UserService | user/user_service.go | CreateUser, UpdateUser, DeleteUser, GetUser, ListUsers, AssignRoles, ChangePassword |
 | RoleService | role/role_service.go | CreateRole, UpdateRole, DeleteRole, GetRole, ListRoles, AssignPermissions, GetRolePermissions |
+| HostSyncService | sync/host_sync_service.go | SyncHosts |
+| InstanceDiscoveryService | sync/instance_discovery_service.go | DiscoverAll, DiscoverMySQL, DiscoverRedis, DiscoverNginx, DiscoverTomcat, DiscoverElasticsearch |
 
 ## 6. Vue 前端 (web/)
 
@@ -305,3 +310,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.1 | Phase 1 数据层实现 (Step 1.1-1.5) |
 | 2026-01-14 | v1.2 | Phase 1 数据层实现 (Step 1.6-1.8): Repository层、基础数据初始化 |
 | 2026-01-14 | v1.3 | Phase 2 服务层实现 (Step 2.1-2.3): 认证、用户、角色服务 |
+| 2026-01-14 | v1.4 | Phase 2 服务层实现 (Step 2.4-2.5): 主机同步服务、中间件实例发现服务 |
