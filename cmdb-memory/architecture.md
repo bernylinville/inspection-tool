@@ -119,7 +119,7 @@ use (
 
 ---
 
-### 5.4 目录结构 (Phase 1 已实现)
+### 5.4 目录结构 (Phase 2 Step 2.8 已实现)
 
 ```
 apps/cmdb-server/
@@ -128,35 +128,40 @@ apps/cmdb-server/
 ├── internal/
 │   ├── database/
 │   │   └── database.go      # GORM 连接、连接池、AutoMigrate
-│   └── model/
-│       ├── asset.go         # 资产模型 (9个)
-│       ├── init.go          # 基础数据初始化
-│       ├── user.go          # 用户权限模型 (3个)
-│       └── inspection.go    # 巡检任务模型 (1个)
-│   └── repository/
-│       ├── application.go           # 应用仓库
-│       ├── elasticsearch_cluster.go # ES 集群仓库
-│       ├── host.go                  # 主机仓库
-│       ├── inspection_job.go        # 巡检任务仓库
-│       ├── mysql_instance.go        # MySQL 实例仓库
-│       ├── nginx_instance.go        # Nginx 实例仓库
-│       ├── permission.go            # 权限仓库
-│       ├── project.go               # 项目仓库
-│       ├── redis_instance.go        # Redis 实例仓库
-│       ├── repository.go            # 仓库接口与分页定义
-│       ├── role.go                  # 角色仓库
-│       ├── tomcat_instance.go       # Tomcat 实例仓库
-│       └── user.go                  # 用户仓库
-│   └── service/
-│       ├── auth/
-│       │   └── auth_service.go      # 认证服务
-│       ├── user/
-│       │   └── user_service.go      # 用户服务
-│       └── role/
-│           └── role_service.go      # 角色服务
-│       └── sync/
-│           ├── host_sync_service.go       # 主机同步服务
-│           └── instance_discovery_service.go # 中间件实例发现服务
+│   ├── model/
+│   │   ├── asset.go         # 资产模型 (9个)
+│   │   ├── init.go          # 基础数据初始化
+│   │   ├── user.go          # 用户权限模型 (3个)
+│   │   └── inspection.go    # 巡检任务模型 (1个)
+│   ├── repository/
+│   │   ├── application.go           # 应用仓库
+│   │   ├── elasticsearch_cluster.go # ES 集群仓库
+│   │   ├── host.go                  # 主机仓库
+│   │   ├── inspection_job.go        # 巡检任务仓库
+│   │   ├── mysql_instance.go        # MySQL 实例仓库
+│   │   ├── nginx_instance.go        # Nginx 实例仓库
+│   │   ├── permission.go            # 权限仓库
+│   │   ├── project.go               # 项目仓库
+│   │   ├── redis_instance.go        # Redis 实例仓库
+│   │   ├── repository.go            # 仓库接口与分页定义
+│   │   ├── role.go                  # 角色仓库
+│   │   ├── tomcat_instance.go       # Tomcat 实例仓库
+│   │   └── user.go                  # 用户仓库
+│   ├── service/
+│   │   ├── auth/
+│   │   │   └── auth_service.go      # 认证服务
+│   │   ├── user/
+│   │   │   └── user_service.go      # 用户服务
+│   │   ├── role/
+│   │   │   └── role_service.go      # 角色服务
+│   │   ├── sync/
+│   │   │   ├── host_sync_service.go       # 主机同步服务
+│   │   │   └── instance_discovery_service.go # 中间件实例发现服务
+│   │   └── asset/
+│   │       └── asset_service.go     # 资产管理服务 (Step 2.6)
+│   └── proxy/
+│       ├── monitor_proxy.go         # 监控透传服务 (Step 2.7)
+│       └── alert_proxy.go           # 告警透传服务 (Step 2.8)
 ├── configs/
 │   └── config.yaml          # 配置文件
 ├── go.mod                   # Go 模块定义
@@ -225,6 +230,14 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | RoleService | role/role_service.go | CreateRole, UpdateRole, DeleteRole, GetRole, ListRoles, AssignPermissions, GetRolePermissions |
 | HostSyncService | sync/host_sync_service.go | SyncHosts |
 | InstanceDiscoveryService | sync/instance_discovery_service.go | DiscoverAll, DiscoverMySQL, DiscoverRedis, DiscoverNginx, DiscoverTomcat, DiscoverElasticsearch |
+
+### 5.9 Service Layer (Phase 2 Step 2.6-2.8)
+
+| 服务 | 文件 | 方法 |
+|------|------|------|
+| AssetService | asset/asset_service.go | CreateProject, UpdateProject, DeleteProject, GetProject, ListProjects, CreateApplication, UpdateApplication, DeleteApplication, GetApplication, ListApplications, ListApplicationsByProject, CreateHost, UpdateHost, DeleteHost, GetHost, ListHosts, ListHostsByBusinessGroup, AssociateHostToApplication, DisassociateHostFromApplication, Get/List/Delete for MySQL/Redis/Nginx/Tomcat/ES |
+| MonitorProxy | proxy/monitor_proxy.go | Query, QueryRange, QueryRangeForECharts |
+| AlertProxy | proxy/alert_proxy.go | ListAlerts, ListIncidents |
 
 ## 6. Vue 前端 (web/)
 
@@ -311,3 +324,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.2 | Phase 1 数据层实现 (Step 1.6-1.8): Repository层、基础数据初始化 |
 | 2026-01-14 | v1.3 | Phase 2 服务层实现 (Step 2.1-2.3): 认证、用户、角色服务 |
 | 2026-01-14 | v1.4 | Phase 2 服务层实现 (Step 2.4-2.5): 主机同步服务、中间件实例发现服务 |
+| 2026-01-14 | v1.5 | Phase 2 服务层实现 (Step 2.6-2.8): 资产管理服务、监控透传服务、告警透传服务 |

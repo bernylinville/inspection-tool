@@ -10,3 +10,4 @@ reports/*
 config.yaml
 .venv/
 *-session
+*.bak

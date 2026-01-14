@@ -1,0 +1,163 @@
+package proxy
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/rs/zerolog"
+)
+
+var (
+	ErrAlertQueryFailed = errors.New("alert query failed")
+	ErrInvalidAPIKey    = errors.New("invalid API key")
+)
+
+type FlashDutyConfig struct {
+	Endpoint string
+	APIKey   string
+	Timeout  time.Duration
+}
+
+type AlertListRequest struct {
+	StartTime int64  `json:"start_time"`
+	EndTime   int64  `json:"end_time"`
+	OrderBy   string `json:"orderby,omitempty"`
+	Page      int    `json:"page,omitempty"`
+	PageSize  int    `json:"page_size,omitempty"`
+}
+
+type Alert struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Severity    string `json:"severity"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+}
+
+type AlertListResponse struct {
+	Code    int     `json:"code"`
+	Message string  `json:"message"`
+	Data    []Alert `json:"data"`
+	Total   int64   `json:"total"`
+}
+
+type IncidentListRequest struct {
+	StartTime int64  `json:"start_time"`
+	EndTime   int64  `json:"end_time"`
+	Status    string `json:"status,omitempty"`
+	Page      int    `json:"page,omitempty"`
+	PageSize  int    `json:"page_size,omitempty"`
+}
+
+type Incident struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Severity    string `json:"severity"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+}
+
+type IncidentListResponse struct {
+	Code    int        `json:"code"`
+	Message string     `json:"message"`
+	Data    []Incident `json:"data"`
+	Total   int64      `json:"total"`
+}
+
+type AlertProxy struct {
+	config     *FlashDutyConfig
+	httpClient *resty.Client
+	logger     zerolog.Logger
+}
+
+func NewAlertProxy(cfg *FlashDutyConfig, logger zerolog.Logger) *AlertProxy {
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+
+	httpClient := resty.New().
+		SetBaseURL(cfg.Endpoint).
+		SetTimeout(timeout).
+		SetHeader("Content-Type", "application/json")
+
+	return &AlertProxy{
+		config:     cfg,
+		httpClient: httpClient,
+		logger:     logger.With().Str("component", "alert-proxy").Logger(),
+	}
+}
+
+func (p *AlertProxy) ListAlerts(ctx context.Context, req *AlertListRequest) (*AlertListResponse, error) {
+	p.logger.Debug().
+		Int64("start_time", req.StartTime).
+		Int64("end_time", req.EndTime).
+		Msg("querying alerts")
+
+	var result AlertListResponse
+
+	resp, err := p.httpClient.R().
+		SetContext(ctx).
+		SetQueryParam("app_key", p.config.APIKey).
+		SetBody(req).
+		SetResult(&result).
+		Post("/alert/list")
+
+	if err != nil {
+		p.logger.Error().Err(err).Msg("failed to query alerts")
+		return nil, ErrAlertQueryFailed
+	}
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, ErrInvalidAPIKey
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		p.logger.Error().
+			Int("status_code", resp.StatusCode()).
+			Str("body", string(resp.Body())).
+			Msg("FlashDuty API returned non-200 status")
+		return nil, fmt.Errorf("FlashDuty API returned status %d", resp.StatusCode())
+	}
+
+	return &result, nil
+}
+
+func (p *AlertProxy) ListIncidents(ctx context.Context, req *IncidentListRequest) (*IncidentListResponse, error) {
+	p.logger.Debug().
+		Int64("start_time", req.StartTime).
+		Int64("end_time", req.EndTime).
+		Msg("querying incidents")
+
+	var result IncidentListResponse
+
+	resp, err := p.httpClient.R().
+		SetContext(ctx).
+		SetQueryParam("app_key", p.config.APIKey).
+		SetBody(req).
+		SetResult(&result).
+		Post("/incident/list")
+
+	if err != nil {
+		p.logger.Error().Err(err).Msg("failed to query incidents")
+		return nil, ErrAlertQueryFailed
+	}
+
+	if resp.StatusCode() == http.StatusUnauthorized {
+		return nil, ErrInvalidAPIKey
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("FlashDuty API returned status %d", resp.StatusCode())
+	}
+
+	return &result, nil
+}

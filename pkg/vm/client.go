@@ -180,6 +180,49 @@ func (c *Client) QueryByIdentWithFilter(ctx context.Context, query string, filte
 	return GroupResultsByIdent(results), nil
 }
 
+func (c *Client) QueryRange(ctx context.Context, query string, start, end, step int64) (*QueryResponse, error) {
+	c.logger.Debug().
+		Str("query", query).
+		Int64("start", start).
+		Int64("end", end).
+		Int64("step", step).
+		Msg("executing range query")
+
+	var result QueryResponse
+
+	resp, err := c.httpClient.R().
+		SetContext(ctx).
+		SetQueryParam("query", query).
+		SetQueryParam("start", fmt.Sprintf("%d", start)).
+		SetQueryParam("end", fmt.Sprintf("%d", end)).
+		SetQueryParam("step", fmt.Sprintf("%d", step)).
+		SetResult(&result).
+		Get("/api/v1/query_range")
+
+	if err != nil {
+		c.logger.Error().Err(err).Str("query", query).Msg("failed to execute range query")
+		return nil, fmt.Errorf("failed to execute range query: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		c.logger.Error().
+			Int("status_code", resp.StatusCode()).
+			Str("body", string(resp.Body())).
+			Msg("VM API returned non-200 status")
+		return nil, fmt.Errorf("VM API returned status %d: %s", resp.StatusCode(), string(resp.Body()))
+	}
+
+	if !result.IsSuccess() {
+		c.logger.Error().
+			Str("error_type", result.ErrorType).
+			Str("error", result.Error).
+			Msg("VM API returned error")
+		return nil, fmt.Errorf("VM API error [%s]: %s", result.ErrorType, result.Error)
+	}
+
+	return &result, nil
+}
+
 // injectLabelMatchers injects label matchers into a PromQL query based on the filter.
 // Business groups are joined with OR (regex ~), tags are added with AND.
 func (c *Client) injectLabelMatchers(query string, filter *HostFilter) string {

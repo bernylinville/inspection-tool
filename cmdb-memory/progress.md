@@ -230,3 +230,58 @@ Phase 2 Step 2.4: Implement Host Sync Service
 
 ### Next Step
 Phase 2 Step 2.6: Implement Monitor Proxy Service
+
+---
+
+## Phase 2 - Service Layer Implementation (Step 2.6 - 2.8)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 2.6: Implement Asset Management Service**
+   - Created internal/service/asset/asset_service.go
+   - Implemented AssetService with all repository dependencies
+   - Project CRUD: CreateProject, UpdateProject, DeleteProject, GetProject, ListProjects
+   - Application CRUD: CreateApplication, UpdateApplication, DeleteApplication, GetApplication, ListApplications, ListApplicationsByProject
+   - Host CRUD: CreateHost, UpdateHost, DeleteHost, GetHost, ListHosts, ListHostsByBusinessGroup
+   - Host-Application association: AssociateHostToApplication, DisassociateHostFromApplication
+   - Middleware instance operations: Get/List/Delete for MySQL, Redis, Nginx, Tomcat, Elasticsearch
+
+2. **Step 2.7: Implement Monitor Proxy Service**
+   - Created internal/proxy/monitor_proxy.go
+   - Added QueryRange method to pkg/vm/client.go for range queries
+   - Implemented MonitorProxy with methods: Query, QueryRange, QueryRangeForECharts
+   - ECharts format conversion: convertToECharts (timestamp in milliseconds)
+   - Request types: QueryRequest, QueryRangeRequest
+   - Response types: EChartsDataPoint, EChartsSeries, EChartsResponse
+
+3. **Step 2.8: Implement Alert Proxy Service**
+   - Created internal/proxy/alert_proxy.go
+   - Implemented AlertProxy with FlashDuty API integration
+   - Methods: ListAlerts, ListIncidents
+   - Uses POST method with app_key URL parameter (as discovered in Phase 0)
+   - Request types: AlertListRequest, IncidentListRequest
+   - Response types: Alert, AlertListResponse, Incident, IncidentListResponse
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/service/asset/asset_service.go | Asset management service (Project, Application, Host, Middleware CRUD) |
+| internal/proxy/monitor_proxy.go | Monitor proxy service (VM query passthrough, ECharts format) |
+| internal/proxy/alert_proxy.go | Alert proxy service (FlashDuty API integration) |
+
+### Files Modified
+| File | Description |
+|------|-------------|
+| pkg/vm/client.go | Added QueryRange method for range queries |
+
+### Issues Encountered
+None
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 2 Step 2.9: Implement Inspection Management Service
