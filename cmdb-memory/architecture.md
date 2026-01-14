@@ -119,7 +119,7 @@ use (
 
 ---
 
-### 5.4 目录结构 (Phase 2 Step 2.8 已实现)
+### 5.4 目录结构 (Phase 2 Step 2.10 已实现)
 
 ```
 apps/cmdb-server/
@@ -157,13 +157,17 @@ apps/cmdb-server/
 │   │   ├── sync/
 │   │   │   ├── host_sync_service.go       # 主机同步服务
 │   │   │   └── instance_discovery_service.go # 中间件实例发现服务
-│   │   └── asset/
-│   │       └── asset_service.go     # 资产管理服务 (Step 2.6)
+│   │   ├── asset/
+│   │   │   └── asset_service.go     # 资产管理服务 (Step 2.6)
+│   │   └── inspection/
+│   │       └── inspect_service.go   # 巡检管理服务 (Step 2.9)
 │   └── proxy/
 │       ├── monitor_proxy.go         # 监控透传服务 (Step 2.7)
 │       └── alert_proxy.go           # 告警透传服务 (Step 2.8)
 ├── configs/
-│   └── config.yaml          # 配置文件
+│   ├── config.yaml          # 配置文件
+│   ├── casbin_model.conf    # Casbin RBAC 模型 (Step 2.10)
+│   └── casbin_policy.csv    # Casbin 权限策略 (Step 2.10)
 ├── go.mod                   # Go 模块定义
 └── go.sum                   # 依赖校验
 ```

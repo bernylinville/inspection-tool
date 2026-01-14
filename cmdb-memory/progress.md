@@ -285,3 +285,67 @@ None
 
 ### Next Step
 Phase 2 Step 2.9: Implement Inspection Management Service
+
+---
+
+## Phase 2 - Service Layer Implementation (Step 2.9 - 2.10)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 2.9: Implement Inspection Management Service**
+   - Created internal/service/inspection/inspect_service.go
+   - Implemented CreateJobRequest and JobSummary structs
+   - Implemented InspectService with methods:
+     - CreateJob: Creates inspection job and starts async execution
+     - GetJob: Retrieves job by ID
+     - ListJobs: Lists jobs with pagination
+     - ListJobsByStatus: Lists jobs by status
+     - ListJobsByType: Lists jobs by type
+     - DeleteJob: Deletes job (prevents deletion of running jobs)
+     - UpdateStatus: Updates job status with timestamps
+   - Async CLI execution using exec.Command and goroutine
+   - CLI argument builder for different inspection types (host, mysql, redis)
+   - Error definitions: ErrJobNotFound, ErrInvalidJobType, ErrJobAlreadyExists, ErrCLINotFound, ErrJobRunning
+
+2. **Step 2.10: Configure Casbin Permission Model**
+   - Created configs/casbin_model.conf
+     - RBAC model with role hierarchy (g = _, _)
+     - keyMatch for resource pattern matching
+     - Wildcard action support (p.act == "*")
+   - Created configs/casbin_policy.csv
+     - admin: Full access (*) to all resources
+     - operator: Read/Write on operational resources (hosts, applications, middleware, inspection, monitor, alerts)
+     - viewer: Read-only access to all resources
+     - Role hierarchy: admin → operator → viewer
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/service/inspection/inspect_service.go | Inspection management service (job CRUD, async CLI execution) |
+| configs/casbin_model.conf | Casbin RBAC model definition |
+| configs/casbin_policy.csv | Initial permission policies for admin/operator/viewer |
+
+### Casbin Model Details
+- Request: (sub, obj, act) - subject, object, action
+- Policy: (sub, obj, act) - role, resource path, action
+- Role Definition: g = _, _ (role inheritance)
+- Matcher: g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && (r.act == p.act || p.act == "*")
+
+### Permission Matrix
+| Role | hosts | projects | applications | middleware | inspection | users | roles | monitor | alerts |
+|------|-------|----------|--------------|------------|------------|-------|-------|---------|--------|
+| admin | * | * | * | * | * | * | * | * | * |
+| operator | r/w | r | r/w | r/w | r/w | - | - | r/w | r/w |
+| viewer | r | r | r | r | r | r | r | r | r |
+
+### Issues Encountered
+None
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 3: API Layer Implementation (Step 3.1: Create Gin Router)
