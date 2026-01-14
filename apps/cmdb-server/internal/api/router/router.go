@@ -6,6 +6,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+
+	"inspection-tool/apps/cmdb-server/internal/api/handler"
 )
 
 type Config struct {
@@ -14,13 +16,19 @@ type Config struct {
 	WriteTimeout time.Duration
 }
 
-type Router struct {
-	engine *gin.Engine
-	logger zerolog.Logger
-	config Config
+type Handlers struct {
+	User *handler.UserHandler
+	Role *handler.RoleHandler
 }
 
-func New(config Config, logger zerolog.Logger) *Router {
+type Router struct {
+	engine   *gin.Engine
+	logger   zerolog.Logger
+	config   Config
+	handlers Handlers
+}
+
+func New(config Config, logger zerolog.Logger, handlers Handlers) *Router {
 	switch config.Mode {
 	case "release":
 		gin.SetMode(gin.ReleaseMode)
@@ -43,9 +51,10 @@ func New(config Config, logger zerolog.Logger) *Router {
 	}))
 
 	return &Router{
-		engine: engine,
-		logger: logger,
-		config: config,
+		engine:   engine,
+		logger:   logger,
+		config:   config,
+		handlers: handlers,
 	}
 }
 
@@ -79,20 +88,39 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 
 	users := rg.Group("/users")
 	{
-		users.GET("", placeholder("list users"))
-		users.POST("", placeholder("create user"))
-		users.GET("/:id", placeholder("get user"))
-		users.PUT("/:id", placeholder("update user"))
-		users.DELETE("/:id", placeholder("delete user"))
+		if r.handlers.User != nil {
+			users.GET("", r.handlers.User.ListUsers)
+			users.POST("", r.handlers.User.CreateUser)
+			users.GET("/:id", r.handlers.User.GetUser)
+			users.PUT("/:id", r.handlers.User.UpdateUser)
+			users.DELETE("/:id", r.handlers.User.DeleteUser)
+			users.PUT("/:id/roles", r.handlers.User.AssignRoles)
+			users.PUT("/:id/password", r.handlers.User.ChangePassword)
+		} else {
+			users.GET("", placeholder("list users"))
+			users.POST("", placeholder("create user"))
+			users.GET("/:id", placeholder("get user"))
+			users.PUT("/:id", placeholder("update user"))
+			users.DELETE("/:id", placeholder("delete user"))
+		}
 	}
 
 	roles := rg.Group("/roles")
 	{
-		roles.GET("", placeholder("list roles"))
-		roles.POST("", placeholder("create role"))
-		roles.GET("/:id", placeholder("get role"))
-		roles.PUT("/:id", placeholder("update role"))
-		roles.DELETE("/:id", placeholder("delete role"))
+		if r.handlers.Role != nil {
+			roles.GET("", r.handlers.Role.ListRoles)
+			roles.POST("", r.handlers.Role.CreateRole)
+			roles.GET("/:id", r.handlers.Role.GetRole)
+			roles.PUT("/:id", r.handlers.Role.UpdateRole)
+			roles.DELETE("/:id", r.handlers.Role.DeleteRole)
+			roles.PUT("/:id/permissions", r.handlers.Role.AssignPermissions)
+		} else {
+			roles.GET("", placeholder("list roles"))
+			roles.POST("", placeholder("create role"))
+			roles.GET("/:id", placeholder("get role"))
+			roles.PUT("/:id", placeholder("update role"))
+			roles.DELETE("/:id", placeholder("delete role"))
+		}
 	}
 
 	projects := rg.Group("/projects")

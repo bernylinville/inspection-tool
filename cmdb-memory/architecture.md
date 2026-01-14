@@ -119,7 +119,7 @@ use (
 
 ---
 
-### 5.4 目录结构 (Phase 3 Step 3.3 已实现)
+### 5.4 目录结构 (Phase 3 Step 3.7 已实现)
 
 ```
 apps/cmdb-server/
@@ -128,11 +128,15 @@ apps/cmdb-server/
 ├── internal/
 │   ├── api/
 │   │   ├── router/
-│   │   │   └── router.go    # Gin 路由器 (Step 3.1)
+│   │   │   └── router.go    # Gin 路由器 (Step 3.1, 3.6-3.7 更新)
 │   │   ├── middleware/
 │   │   │   ├── auth.go      # JWT 认证中间件 (Step 3.2)
 │   │   │   └── casbin.go    # Casbin 授权中间件 (Step 3.3)
-│   │   └── handler/         # HTTP 处理器 (待实现)
+│   │   └── handler/
+│   │       ├── health.go    # 健康检查端点 (Step 3.4)
+│   │       ├── auth.go      # 认证端点 (Step 3.5)
+│   │       ├── user.go      # 用户管理端点 (Step 3.6)
+│   │       └── role.go      # 角色管理端点 (Step 3.7)
 │   ├── database/
 │   │   └── database.go      # GORM 连接、连接池、AutoMigrate
 │   ├── model/
@@ -310,6 +314,27 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | Logout() | POST /api/v1/auth/logout，用户登出 |
 | Refresh() | POST /api/v1/auth/refresh，刷新 Token |
 
+#### User Handler (handler/user.go) - Step 3.6
+| 方法 | 说明 |
+|------|------|
+| ListUsers() | GET /api/v1/users，分页查询用户列表 |
+| CreateUser() | POST /api/v1/users，创建用户 |
+| GetUser() | GET /api/v1/users/:id，获取用户详情 |
+| UpdateUser() | PUT /api/v1/users/:id，更新用户信息 |
+| DeleteUser() | DELETE /api/v1/users/:id，删除用户 |
+| AssignRoles() | PUT /api/v1/users/:id/roles，分配角色 |
+| ChangePassword() | PUT /api/v1/users/:id/password，修改密码 |
+
+#### Role Handler (handler/role.go) - Step 3.7
+| 方法 | 说明 |
+|------|------|
+| ListRoles() | GET /api/v1/roles，分页查询角色列表 |
+| CreateRole() | POST /api/v1/roles，创建角色 |
+| GetRole() | GET /api/v1/roles/:id，获取角色详情 |
+| UpdateRole() | PUT /api/v1/roles/:id，更新角色信息 |
+| DeleteRole() | DELETE /api/v1/roles/:id，删除角色 |
+| AssignPermissions() | PUT /api/v1/roles/:id/permissions，分配权限 |
+
 ## 6. Vue 前端 (web/)
 
 ### 6.1 技术栈
@@ -399,3 +424,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.6 | Phase 2 服务层实现 (Step 2.9-2.10): 巡检管理服务、Casbin RBAC 配置 |
 | 2026-01-14 | v1.7 | Phase 3 API层实现 (Step 3.1-3.3): Gin路由器、JWT认证中间件、Casbin授权中间件 |
 | 2026-01-14 | v1.8 | Phase 3 API层实现 (Step 3.4-3.5): 健康检查端点、认证端点 |
+| 2026-01-14 | v1.9 | Phase 3 API层实现 (Step 3.6-3.7): 用户管理端点、角色管理端点 |

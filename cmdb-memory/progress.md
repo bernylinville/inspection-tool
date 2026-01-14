@@ -458,3 +458,74 @@ None
 
 ### Next Step
 Phase 3 Step 3.6: Implement User Management Endpoints
+
+---
+
+## Phase 3 - API Layer Implementation (Step 3.6 - 3.7)
+- Date: 2026-01-14
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 3.6: Implement User Management Endpoints**
+   - Created internal/api/handler/user.go
+   - Implemented UserHandler struct with UserService dependency
+   - ListUsers() endpoint: GET /api/v1/users
+     - Pagination: page, page_size query params
+     - Filter: status query param
+     - Response: items, total, page, page_size, total_pages
+   - CreateUser() endpoint: POST /api/v1/users
+     - Request: username, password, email, display_name, role_ids
+     - Error codes: 40001 (invalid request), 40901 (user exists)
+   - GetUser() endpoint: GET /api/v1/users/:id
+     - Error codes: 40001 (invalid id), 40401 (not found)
+   - UpdateUser() endpoint: PUT /api/v1/users/:id
+     - Request: email, display_name, status
+   - DeleteUser() endpoint: DELETE /api/v1/users/:id
+   - AssignRoles() endpoint: PUT /api/v1/users/:id/roles
+     - Request: role_ids
+   - ChangePassword() endpoint: PUT /api/v1/users/:id/password
+     - Request: old_password, new_password
+     - Error codes: 40002 (old password incorrect)
+
+2. **Step 3.7: Implement Role Management Endpoints**
+   - Created internal/api/handler/role.go
+   - Implemented RoleHandler struct with RoleService dependency
+   - ListRoles() endpoint: GET /api/v1/roles
+     - Pagination: page, page_size query params
+   - CreateRole() endpoint: POST /api/v1/roles
+     - Request: name, description, permission_ids
+   - GetRole() endpoint: GET /api/v1/roles/:id
+   - UpdateRole() endpoint: PUT /api/v1/roles/:id
+     - Request: name, description
+   - DeleteRole() endpoint: DELETE /api/v1/roles/:id
+   - AssignPermissions() endpoint: PUT /api/v1/roles/:id/permissions
+     - Request: permission_ids
+
+3. **Router Integration**
+   - Modified internal/api/router/router.go
+   - Added Handlers struct to hold UserHandler and RoleHandler
+   - Updated New() function to accept Handlers parameter
+   - Updated setupProtectedRoutes() to use actual handlers when available
+   - Added routes: /users/:id/roles, /users/:id/password, /roles/:id/permissions
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/api/handler/user.go | User management endpoints (CRUD + AssignRoles + ChangePassword) |
+| internal/api/handler/role.go | Role management endpoints (CRUD + AssignPermissions) |
+
+### Files Modified
+| File | Description |
+|------|-------------|
+| internal/api/router/router.go | Added Handlers struct, integrated UserHandler and RoleHandler |
+
+### Issues Encountered
+1. Role model lacks UpdatedAt field; resolved by using CreatedAt for both timestamps in response
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 3 Step 3.8: Implement Asset Management Endpoints
