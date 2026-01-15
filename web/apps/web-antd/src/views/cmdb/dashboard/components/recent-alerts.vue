@@ -4,7 +4,7 @@ import type { Alert } from '#/api/cmdb/types';
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@vben-core/shadcn-ui';
+import { Card } from 'ant-design-vue';
 
 interface Props {
   alerts: Alert[];
@@ -47,14 +47,15 @@ const goToAlerts = () => {
 </script>
 
 <template>
-  <Card>
-    <CardHeader class="flex items-center justify-between">
-      <CardTitle>最近告警</CardTitle>
-      <button class="text-sm text-primary" type="button" @click="goToAlerts">
-        查看全部
-      </button>
-    </CardHeader>
-    <CardContent>
+  <Card size="small">
+    <template #title>
+      <div class="flex items-center justify-between">
+        <span>最近告警</span>
+        <button class="text-sm text-primary" type="button" @click="goToAlerts">
+          查看全部
+        </button>
+      </div>
+    </template>
       <div v-if="props.loading" class="space-y-3">
         <div
           v-for="index in 4"
@@ -90,6 +91,5 @@ const goToAlerts = () => {
           </div>
         </div>
       </div>
-    </CardContent>
   </Card>
 </template>
