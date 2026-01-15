@@ -440,6 +440,32 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | inspect/ | 巡检管理（任务、报告、历史）|
 | system/ | 系统设置（用户、角色、权限）|
 
+### Frontend API Client (web/apps/web-antd/src/api/)
+
+| Directory/File | Purpose | Status |
+|----------------|---------|--------|
+| cmdb/types.ts | TypeScript type definitions for all CMDB entities | ✅ |
+| cmdb/auth.ts | Authentication API functions | ✅ |
+| cmdb/user.ts | User management API | ✅ |
+| cmdb/role.ts | Role management API | ✅ |
+| cmdb/asset.ts | Asset (Project/Application/Host) API | ✅ |
+| cmdb/middleware.ts | Middleware instance API | ✅ |
+| cmdb/monitor.ts | Monitoring query API | ✅ |
+| cmdb/alert.ts | Alert/Incident API | ✅ |
+| cmdb/inspection.ts | Inspection job API | ✅ |
+| cmdb/health.ts | Health check API | ✅ |
+| cmdb/index.ts | Barrel export | ✅ |
+| request.ts | Axios client with interceptors | ✅ |
+
+#### API Client Architecture
+
+- Uses @vben/request library with RequestClient class
+- Response format: { code: number, message: string, data: T }
+- Success code: 0
+- Automatic Bearer token injection via request interceptor
+- Token refresh with authenticateResponseInterceptor
+- Error display via errorMessageResponseInterceptor
+
 ---
 
 ## 7. 数据库设计
