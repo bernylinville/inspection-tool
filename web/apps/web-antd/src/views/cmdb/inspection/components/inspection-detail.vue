@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Modal, Descriptions, DescriptionsItem, Tag, Button } from 'ant-design-vue';
-import type { InspectionJob } from '@/api/cmdb/types';
+import type { InspectionJob } from '#/api/cmdb/types';
 import dayjs from 'dayjs';
 
 const props = defineProps<{

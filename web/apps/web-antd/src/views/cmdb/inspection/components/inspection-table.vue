@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Table, Tag, Button, Space } from 'ant-design-vue';
-import type { InspectionJob } from '@/api/cmdb/types';
+import type { InspectionJob } from '#/api/cmdb/types';
 import dayjs from 'dayjs';
 
 defineProps<{

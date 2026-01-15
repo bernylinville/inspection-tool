@@ -27,8 +27,8 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
-import { listRolesApi } from '@/api/cmdb/role';
-import type { AssignRolesRequest, Role, User } from '@/api/cmdb/types';
+import { listRolesApi } from '#/api/cmdb/role';
+import type { AssignRolesRequest, Role, User } from '#/api/cmdb/types';
 
 const props = defineProps<{
   visible: boolean;

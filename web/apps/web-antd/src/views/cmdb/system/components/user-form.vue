@@ -34,7 +34,7 @@
 
 <script lang="ts" setup>
 import { reactive, ref, watch } from 'vue';
-import type { User, UserCreateRequest, UserUpdateRequest } from '@/api/cmdb/types';
+import type { User, UserCreateRequest, UserUpdateRequest } from '#/api/cmdb/types';
 import type { FormInstance } from 'ant-design-vue';
 
 const props = defineProps<{

@@ -7,7 +7,7 @@ import RoleSearch from './components/role-search.vue';
 import RoleForm from './components/role-form.vue';
 import AssignPermissionsModal from './components/assign-permissions-modal.vue';
 import { useRoleList } from './composables/use-role-list';
-import type { AssignPermissionsRequest, RoleCreateRequest, RoleUpdateRequest } from '@/api/cmdb/types';
+import type { AssignPermissionsRequest, RoleCreateRequest, RoleUpdateRequest } from '#/api/cmdb/types';
 
 const {
   roles,

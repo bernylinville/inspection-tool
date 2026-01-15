@@ -1,6 +1,6 @@
 import { ref, reactive } from 'vue';
-import { listInspectionJobsApi, createInspectionJobApi, deleteInspectionJobApi, getInspectionJobApi } from '@/api/cmdb/inspection';
-import type { InspectionJob, CreateInspectionJobRequest } from '@/api/cmdb/types';
+import { listInspectionJobsApi, createInspectionJobApi, deleteInspectionJobApi, getInspectionJobApi } from '#/api/cmdb/inspection';
+import type { InspectionJob, CreateInspectionJobRequest } from '#/api/cmdb/types';
 
 export function useInspectionList() {
   const jobs = ref<InspectionJob[]>([]);

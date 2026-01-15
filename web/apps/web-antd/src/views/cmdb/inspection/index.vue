@@ -7,7 +7,7 @@ import InspectionSearch from './components/inspection-search.vue';
 import InspectionDetail from './components/inspection-detail.vue';
 import CreateJobModal from './components/create-job-modal.vue';
 import { useInspectionList } from './composables/use-inspection-list';
-import type { InspectionJob, CreateInspectionJobRequest } from '@/api/cmdb/types';
+import type { InspectionJob, CreateInspectionJobRequest } from '#/api/cmdb/types';
 
 const {
   jobs,

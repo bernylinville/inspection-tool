@@ -8,7 +8,7 @@ import UserDetail from './components/user-detail.vue';
 import UserForm from './components/user-form.vue';
 import AssignRolesModal from './components/assign-roles-modal.vue';
 import { useUserList } from './composables/use-user-list';
-import type { AssignRolesRequest, UserCreateRequest, UserUpdateRequest } from '@/api/cmdb/types';
+import type { AssignRolesRequest, UserCreateRequest, UserUpdateRequest } from '#/api/cmdb/types';
 
 const {
   users,

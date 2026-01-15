@@ -45,7 +45,7 @@
 
 <script lang="ts" setup>
 import type { TableColumnType } from 'ant-design-vue';
-import type { Role } from '@/api/cmdb/types';
+import type { Role } from '#/api/cmdb/types';
 
 const props = defineProps<{
   roles: Role[];

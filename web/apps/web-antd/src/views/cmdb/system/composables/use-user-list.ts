@@ -1,7 +1,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
-import { assignUserRolesApi, createUserApi, deleteUserApi, getUserApi, listUsersApi, updateUserApi } from '@/api/cmdb/user';
-import type { AssignRolesRequest, User, UserCreateRequest, UserUpdateRequest } from '@/api/cmdb/types';
+import { assignUserRolesApi, createUserApi, deleteUserApi, getUserApi, listUsersApi, updateUserApi } from '#/api/cmdb/user';
+import type { AssignRolesRequest, User, UserCreateRequest, UserUpdateRequest } from '#/api/cmdb/types';
 
 export interface UserFilters {
   status?: 'active' | 'inactive';

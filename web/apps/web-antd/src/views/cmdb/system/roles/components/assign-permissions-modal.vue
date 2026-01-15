@@ -27,8 +27,8 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
-import { listPermissionsApi } from '@/api/cmdb/permission';
-import type { AssignPermissionsRequest, Permission, Role } from '@/api/cmdb/types';
+import { listPermissionsApi } from '#/api/cmdb/permission';
+import type { AssignPermissionsRequest, Permission, Role } from '#/api/cmdb/types';
 
 const props = defineProps<{
   visible: boolean;

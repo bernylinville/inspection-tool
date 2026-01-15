@@ -1,14 +1,14 @@
 <template>
   <a-button type="primary" :loading="loading" @click="emit('sync')">
     <template #icon>
-      <RefreshCw class="h-4 w-4" />
+      <RotateCw class="h-4 w-4" />
     </template>
     同步主机
   </a-button>
 </template>
 
 <script lang="ts" setup>
-import { RefreshCw } from '@vben/icons';
+import { RotateCw } from '@vben/icons';
 
 defineProps<{
   loading: boolean;

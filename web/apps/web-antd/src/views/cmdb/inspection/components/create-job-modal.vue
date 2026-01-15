@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { Modal, Form, FormItem, Select, Button } from 'ant-design-vue';
-import type { CreateInspectionJobRequest } from '@/api/cmdb/types';
+import type { CreateInspectionJobRequest } from '#/api/cmdb/types';
 
 const props = defineProps<{
   visible: boolean;

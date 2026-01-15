@@ -40,7 +40,7 @@
 </template>
 
 <script lang="ts" setup>
-import type { User } from '@/api/cmdb/types';
+import type { User } from '#/api/cmdb/types';
 
 const props = defineProps<{
   visible: boolean;

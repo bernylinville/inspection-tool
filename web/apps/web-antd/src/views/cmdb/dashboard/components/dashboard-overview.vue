@@ -5,7 +5,8 @@ import {
   AnalysisOverview,
   type AnalysisOverviewItem,
 } from '@vben/common-ui';
-import { Bell, ClipboardCheck, Database, Folder, Server } from '@vben/icons';
+import { Bell } from '@vben/icons';
+import { ClipboardCheck, Database, FolderKanban, Server } from 'lucide-vue-next';
 
 import type { DashboardStats } from '../composables/use-dashboard-data';
 
@@ -20,7 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const overviewItems = computed<AnalysisOverviewItem[]>(() => [
   {
-    icon: Folder,
+    icon: FolderKanban,
     title: '项目数',
     totalTitle: '应用数',
     totalValue: props.stats.applicationCount,

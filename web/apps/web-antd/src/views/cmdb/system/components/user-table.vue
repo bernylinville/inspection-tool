@@ -51,7 +51,7 @@
 
 <script lang="ts" setup>
 import type { TableColumnType } from 'ant-design-vue';
-import type { User } from '@/api/cmdb/types';
+import type { User } from '#/api/cmdb/types';
 
 const props = defineProps<{
   users: User[];

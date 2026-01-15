@@ -1,7 +1,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { message } from 'ant-design-vue';
-import { assignRolePermissionsApi, createRoleApi, deleteRoleApi, getRoleApi, listRolesApi, updateRoleApi } from '@/api/cmdb/role';
-import type { AssignPermissionsRequest, Permission, Role, RoleCreateRequest, RoleUpdateRequest } from '@/api/cmdb/types';
+import { assignRolePermissionsApi, createRoleApi, deleteRoleApi, getRoleApi, listRolesApi, updateRoleApi } from '#/api/cmdb/role';
+import type { AssignPermissionsRequest, Permission, Role, RoleCreateRequest, RoleUpdateRequest } from '#/api/cmdb/types';
 
 export interface RoleFilters {}
 
