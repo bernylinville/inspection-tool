@@ -21,6 +21,7 @@ type Handlers struct {
 	Role    *handler.RoleHandler
 	Asset   *handler.AssetHandler
 	Monitor *handler.MonitorHandler
+	Alert   *handler.AlertHandler
 }
 
 type Router struct {
@@ -195,14 +196,24 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 
 	alerts := rg.Group("/alerts")
 	{
-		alerts.GET("", placeholder("list alerts"))
-		alerts.GET("/:id", placeholder("get alert"))
+		if r.handlers.Alert != nil {
+			alerts.GET("", r.handlers.Alert.ListAlerts)
+			alerts.GET("/:id", r.handlers.Alert.GetAlert)
+		} else {
+			alerts.GET("", placeholder("list alerts"))
+			alerts.GET("/:id", placeholder("get alert"))
+		}
 	}
 
 	incidents := rg.Group("/incidents")
 	{
-		incidents.GET("", placeholder("list incidents"))
-		incidents.GET("/:id", placeholder("get incident"))
+		if r.handlers.Alert != nil {
+			incidents.GET("", r.handlers.Alert.ListIncidents)
+			incidents.GET("/:id", r.handlers.Alert.GetIncident)
+		} else {
+			incidents.GET("", placeholder("list incidents"))
+			incidents.GET("/:id", placeholder("get incident"))
+		}
 	}
 
 	inspection := rg.Group("/inspection")

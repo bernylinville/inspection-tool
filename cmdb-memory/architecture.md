@@ -119,7 +119,7 @@ use (
 
 ---
 
-### 5.4 目录结构 (Phase 3 Step 3.9 已实现)
+### 5.4 目录结构 (Phase 3 Step 3.10 已实现)
 
 ```
 apps/cmdb-server/
@@ -128,7 +128,7 @@ apps/cmdb-server/
 ├── internal/
 │   ├── api/
 │   │   ├── router/
-│   │   │   └── router.go    # Gin 路由器 (Step 3.1, 3.6-3.9 更新)
+│   │   │   └── router.go    # Gin 路由器 (Step 3.1, 3.6-3.10 更新)
 │   │   ├── middleware/
 │   │   │   ├── auth.go      # JWT 认证中间件 (Step 3.2)
 │   │   │   └── casbin.go    # Casbin 授权中间件 (Step 3.3)
@@ -138,7 +138,8 @@ apps/cmdb-server/
 │   │       ├── user.go      # 用户管理端点 (Step 3.6)
 │   │       ├── role.go      # 角色管理端点 (Step 3.7)
 │   │       ├── asset.go     # 资产管理端点 (Step 3.8)
-│   │       └── monitor.go   # 监控透传端点 (Step 3.9)
+│   │       ├── monitor.go   # 监控透传端点 (Step 3.9)
+│   │       └── alert.go     # 告警透传端点 (Step 3.10)
 │   ├── database/
 │   │   └── database.go      # GORM 连接、连接池、AutoMigrate
 │   ├── model/
@@ -378,6 +379,14 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | Query() | GET /api/v1/monitor/query，实时指标查询 (透传 VM) |
 | QueryRange() | GET /api/v1/monitor/query_range，历史趋势查询 (支持 format=echarts) |
 
+#### Alert Handler (handler/alert.go) - Step 3.10
+| 方法 | 说明 |
+|------|------|
+| ListAlerts() | GET /api/v1/alerts，告警列表查询 (透传 FlashDuty) |
+| GetAlert() | GET /api/v1/alerts/:id，告警详情 (FlashDuty 不支持，返回 501) |
+| ListIncidents() | GET /api/v1/incidents，故障列表查询 (透传 FlashDuty) |
+| GetIncident() | GET /api/v1/incidents/:id，故障详情 (FlashDuty 不支持，返回 501) |
+
 ## 6. Vue 前端 (web/)
 
 ### 6.1 技术栈
@@ -469,3 +478,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.8 | Phase 3 API层实现 (Step 3.4-3.5): 健康检查端点、认证端点 |
 | 2026-01-14 | v1.9 | Phase 3 API层实现 (Step 3.6-3.7): 用户管理端点、角色管理端点 |
 | 2026-01-14 | v1.10 | Phase 3 API层实现 (Step 3.8-3.9): 资产管理端点、监控透传端点 |
+| 2026-01-15 | v1.11 | Phase 3 API层实现 (Step 3.10): 告警透传端点 |

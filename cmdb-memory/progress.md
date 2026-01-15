@@ -642,3 +642,62 @@ None
 
 ### Next Step
 Phase 3 Step 3.10: Implement Alert Proxy Endpoints
+
+---
+
+## Phase 3 - API Layer Implementation (Step 3.10)
+- Date: 2026-01-15
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 3.10: Implement Alert Proxy Endpoints**
+   - Created internal/api/handler/alert.go
+   - Implemented AlertHandler struct with AlertProxy dependency
+   - **Alert Endpoints**:
+     - ListAlerts(): GET /api/v1/alerts (pagination, time range filter)
+     - GetAlert(): GET /api/v1/alerts/:id (returns 501 - FlashDuty API limitation)
+   - **Incident Endpoints**:
+     - ListIncidents(): GET /api/v1/incidents (pagination, time range, status filter)
+     - GetIncident(): GET /api/v1/incidents/:id (returns 501 - FlashDuty API limitation)
+   - Updated Handlers struct to include AlertHandler
+   - Integrated AlertHandler routes in router.go
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/api/handler/alert.go | Alert proxy endpoints (ListAlerts, GetAlert, ListIncidents, GetIncident) |
+
+### Files Modified
+| File | Description |
+|------|-------------|
+| internal/api/router/router.go | Added AlertHandler to Handlers struct, integrated alert/incident routes |
+
+### API Endpoints Summary (Step 3.10)
+
+| Method | Endpoint | Handler | Description |
+|--------|----------|---------|-------------|
+| GET | /api/v1/alerts | AlertHandler.ListAlerts | List alerts with pagination and time range |
+| GET | /api/v1/alerts/:id | AlertHandler.GetAlert | Get alert by ID (not supported by FlashDuty) |
+| GET | /api/v1/incidents | AlertHandler.ListIncidents | List incidents with pagination and filters |
+| GET | /api/v1/incidents/:id | AlertHandler.GetIncident | Get incident by ID (not supported by FlashDuty) |
+
+### Query Parameters
+
+**ListAlerts / ListIncidents**:
+- start_time: Unix timestamp (seconds), default: 24 hours ago
+- end_time: Unix timestamp (seconds), default: now
+- page: page number, default: 1
+- page_size: items per page (1-100), default: 20
+- orderby: sort field (alerts only), default: created_at
+- status: filter by status (incidents only)
+
+### Issues Encountered
+None
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 3 Step 3.11: Implement Inspection Management Endpoints
