@@ -129,6 +129,15 @@ const routes: RouteRecordRaw[] = [
           title: '告警列表',
         },
       },
+      {
+        name: 'CmdbRoles',
+        path: '/cmdb/roles',
+        component: () => import('#/views/cmdb/system/roles/index.vue'),
+        meta: {
+          icon: 'lucide:shield',
+          title: '角色管理',
+        },
+      },
     ],
   },
 ];
