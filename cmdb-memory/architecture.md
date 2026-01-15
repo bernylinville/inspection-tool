@@ -440,6 +440,29 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | inspect/ | 巡检管理（任务、报告、历史）|
 | system/ | 系统设置（用户、角色、权限）|
 
+### 6.3 Alert Module Directory Structure (Step 4.12)
+
+```
+web/apps/web-antd/src/views/alert/
+├── list.vue                           # 告警列表主页面
+├── composables/
+│   └── use-alert-list.ts              # 告警列表数据获取 composable
+└── components/
+    ├── alert-table.vue                # 告警表格组件（分页、级别/状态标签）
+    ├── alert-search.vue               # 筛选组件（时间范围、状态）
+    └── alert-detail.vue               # 详情弹窗组件
+```
+
+#### Alert Table Columns
+| Column | DataIndex | Render |
+|--------|-----------|--------|
+| 告警名称 | title | Text |
+| 级别 | severity | Tag (critical=red, warning=orange, info=blue) |
+| 状态 | status | Tag (firing=red, resolved=green) |
+| 来源 | source | Text |
+| 触发时间 | created_at | Date format |
+| 操作 | - | View detail button |
+
 ### Frontend API Client (web/apps/web-antd/src/api/)
 
 | Directory/File | Purpose | Status |

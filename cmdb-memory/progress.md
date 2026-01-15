@@ -1221,3 +1221,58 @@ None
 
 ### Next Step
 Phase 4 Step 4.12: Implement Alert List Page
+
+---
+
+## Phase 4 - Frontend Integration (Step 4.12)
+- Date: 2026-01-15
+- Executor: AI (Claude + Codex)
+
+### Completed Steps
+
+1. **Step 4.12: Implement Alert List Page**
+   - Created directory structure: views/alert/composables/, views/alert/components/
+   - Created use-alert-list.ts composable with:
+     - State: alerts, total, page, pageSize, loading, error, filters
+     - Detail state: selectedAlert, detailVisible
+     - Methods: fetchAlerts, changePage, applyFilters, resetFilters, viewDetail, closeDetail
+   - Created alert-table.vue component with:
+     - Columns: title, severity, status, source, created_at, actions
+     - Severity color mapping (critical=red, warning=orange, info=blue)
+     - Status color mapping (firing=red, resolved=green)
+     - Pagination support
+   - Created alert-search.vue component with:
+     - Time range picker (RangePicker)
+     - Status filter (Select: 全部/firing/resolved)
+     - Search and Reset buttons
+   - Created alert-detail.vue modal component with:
+     - Descriptions layout showing all alert fields
+     - Severity and status tags with colors
+   - Updated list.vue to integrate all components
+
+### Files Created (5 new files)
+
+| File | Description |
+|------|-------------|
+| views/alert/list.vue | Main alert list page |
+| views/alert/composables/use-alert-list.ts | Alert list data fetching composable |
+| views/alert/components/alert-table.vue | Alert table with pagination |
+| views/alert/components/alert-search.vue | Search/filter form |
+| views/alert/components/alert-detail.vue | Alert detail modal |
+
+### Type Fixes Applied
+1. **alert-search.vue**: Changed `ref<[Dayjs, Dayjs] | null>` to `ref<[Dayjs, Dayjs] | undefined>` for RangePicker compatibility
+2. **alert-table.vue**: Added type assertion `record as Alert` for emit parameter
+
+### Issues Encountered
+None (type errors were pre-existing in other files, not introduced by Step 4.12)
+
+### Verification Results
+- Directory structure created: ✅
+- All 5 Vue/TypeScript files created: ✅
+- Uses existing API client from api/cmdb/alert.ts: ✅
+- Alert-related files pass typecheck: ✅
+- Pre-existing type errors in other files (dashboard, monitor, inspection store) - not related to Step 4.12
+
+### Next Step
+Phase 4 Step 4.13: Implement Inspection Management Page

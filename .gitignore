@@ -11,3 +11,4 @@ config.yaml
 .venv/
 *-session
 *.bak
+apps/cmdb-server/cmdb-server
