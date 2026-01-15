@@ -1,6 +1,10 @@
 package router
 
 import (
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -74,6 +78,29 @@ func (r *Router) SetupRoutes() {
 		r.setupPublicRoutes(v1)
 		r.setupProtectedRoutes(v1)
 	}
+}
+
+func (r *Router) SetupStaticRoutes(staticPath string) {
+	staticPath = filepath.Clean(staticPath)
+	if _, err := os.Stat(staticPath); os.IsNotExist(err) {
+		r.logger.Warn().Str("path", staticPath).Msg("Static files directory not found, skipping static file serving")
+		return
+	}
+
+	r.engine.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+
+		filePath := filepath.Join(staticPath, c.Request.URL.Path)
+		if _, err := os.Stat(filePath); err == nil {
+			c.File(filePath)
+			return
+		}
+
+		c.File(filepath.Join(staticPath, "index.html"))
+	})
 }
 
 func (r *Router) setupPublicRoutes(rg *gin.RouterGroup) {

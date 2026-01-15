@@ -1540,3 +1540,62 @@ None
 
 ### Next Step
 Phase 4 Step 4.16: Build Frontend Static Resources
+
+---
+
+## Phase 4 - Frontend Integration (Step 4.16)
+- Date: 2026-01-15
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 4.16: Build Frontend Static Resources**
+   - Built frontend production bundle with pnpm build
+   - Generated dist/ directory with index.html and static assets
+
+### Verification Results
+- Frontend build: SUCCESS
+- dist/ directory contains index.html and assets
+
+### Next Step
+Phase 4 Step 4.17: Configure Go Embed for Frontend Resources
+
+---
+
+## Phase 4 - Frontend Integration (Step 4.17)
+- Date: 2026-01-16
+- Executor: AI (Claude + OpenCode)
+
+### Completed Steps
+
+1. **Step 4.17: Configure Go Embed for Frontend Resources**
+   - Note: Go embed cannot work directly as frontend dist is outside cmdb-server module
+   - Implemented runtime static file serving with configurable path instead
+   - Modified apps/cmdb-server/configs/config.yaml:
+     - Added server.static_path configuration pointing to frontend dist
+   - Modified apps/cmdb-server/internal/api/router/router.go:
+     - Added SetupStaticRoutes(staticPath string) method
+     - Implemented NoRoute handler for SPA catch-all routing
+     - Serves index.html for non-API routes (client-side routing support)
+   - Modified apps/cmdb-server/cmd/main.go:
+     - Completed HTTP server startup with router initialization
+     - Added static file serving configuration
+     - Server now starts on configured port (default: 8080)
+
+### Files Modified
+| File | Description |
+|------|-------------|
+| apps/cmdb-server/configs/config.yaml | Added server.static_path config |
+| apps/cmdb-server/internal/api/router/router.go | Added SetupStaticRoutes method with SPA routing |
+| apps/cmdb-server/cmd/main.go | Completed HTTP server startup |
+
+### Issues Encountered
+1. Go embed limitation: Cannot embed files outside module subtree
+   - Resolution: Used runtime static file serving instead of embed.FS
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 5: Testing and Deployment (Step 5.1: Configure Application Config File)

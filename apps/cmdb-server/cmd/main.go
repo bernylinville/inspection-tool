@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
+	"inspection-tool/apps/cmdb-server/internal/api/router"
 	"inspection-tool/apps/cmdb-server/internal/database"
 )
 
@@ -57,7 +58,24 @@ func main() {
 		return
 	}
 
-	// TODO: Start HTTP server
-	fmt.Printf("CMDB Server started at %s\n", time.Now().Format(time.RFC3339))
-	fmt.Println("Server will be implemented in Phase 3")
+	// Start HTTP server
+	serverConfig := &router.Config{
+		Mode:         viper.GetString("server.mode"),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+
+	router := router.New(*serverConfig, log, router.Handlers{})
+	router.SetupRoutes()
+
+	if staticPath := viper.GetString("server.static_path"); staticPath != "" {
+		router.SetupStaticRoutes(staticPath)
+	}
+
+	port := viper.GetString("server.port")
+	addr := fmt.Sprintf(":%s", port)
+	log.Info().Str("addr", addr).Msg("Starting server")
+	if err := router.Engine().Run(addr); err != nil {
+		log.Fatal().Err(err).Msg("Failed to start server")
+	}
 }
