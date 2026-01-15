@@ -1,0 +1,15 @@
+---
+description: AutoFlow FileOps - Delegate file I/O to Codex
+argument-hint: <FileOpsREQ JSON>
+allowed-tools: Read, Glob, Grep, Bash, Task, Skill, WebSearch, WebFetch, AskUserQuestion
+---
+
+Send a FileOpsREQ JSON request to Codex for execution and return a FileOpsRES response.
+
+Read and follow:
+- `.claude/skills/file-op/SKILL.md`
+- `.claude/skills/file-op/references/usage.md`
+
+Input: `$ARGUMENTS` (must be a single FileOpsREQ JSON object)
+
+Output: FileOpsRES JSON only.
