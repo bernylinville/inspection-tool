@@ -103,6 +103,15 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       {
+        name: 'CmdbMonitor',
+        path: '/cmdb/monitor',
+        component: () => import('#/views/cmdb/monitor/index.vue'),
+        meta: {
+          icon: 'lucide:activity',
+          title: '监控查询',
+        },
+      },
+      {
         name: 'CmdbInspection',
         path: '/cmdb/inspection',
         component: () => import('#/views/cmdb/inspection/index.vue'),

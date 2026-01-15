@@ -1154,3 +1154,70 @@ None
 
 ### Next Step
 Phase 4 Step 4.11: Implement Monitor Query Page
+
+---
+
+## Phase 4 - Frontend Integration (Step 4.11)
+- Date: 2026-01-15
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 4.11.1: Create Monitor Query Composable**
+   - Created composables/use-monitor-query.ts
+   - State management: query, startTime, endTime, step, loading, error, chartData
+   - Methods: executeQuery, setTimeRange, setStep, clearError
+   - Uses queryMetricsRangeApi with format='echarts'
+
+2. **Step 4.11.2: Create Query Form Component**
+   - Created components/monitor-query-form.vue
+   - PromQL textarea input
+   - Time range picker with quick range buttons (1h, 6h, 24h, 7d)
+   - Step selector (15s, 30s, 1m, 5m, 15m)
+   - Query button with loading state
+
+3. **Step 4.11.3: Create Monitor Chart Component**
+   - Created components/monitor-chart.vue
+   - Uses @vben/plugins/echarts EchartsUI
+   - Converts EChartsSeries to ECharts line chart format
+   - Supports multiple series with metric labels as names
+   - Time-based xAxis, value yAxis
+
+4. **Step 4.11.4: Create Monitor Main Page**
+   - Created index.vue
+   - Integrates query form and chart components
+   - Error alert with closable functionality
+   - Card-based layout
+
+5. **Step 4.11.5: Update Router Configuration**
+   - Added CmdbMonitor route to cmdb.ts
+   - Path: /cmdb/monitor
+   - Icon: lucide:activity
+   - Title: 监控查询
+
+### Files Created (4 new files)
+
+| File | Description |
+|------|-------------|
+| views/cmdb/monitor/composables/use-monitor-query.ts | Monitor query state management |
+| views/cmdb/monitor/components/monitor-query-form.vue | Query form with time range |
+| views/cmdb/monitor/components/monitor-chart.vue | ECharts line chart component |
+| views/cmdb/monitor/index.vue | Main monitor page |
+
+### Files Modified (1 file)
+
+| File | Description |
+|------|-------------|
+| router/routes/modules/cmdb.ts | Added CmdbMonitor route |
+
+### Issues Encountered
+None
+
+### Verification Results
+- Monitor directory structure created
+- All 4 Vue/TypeScript files created
+- Router configuration updated with monitor route
+- Uses existing API client from api/cmdb/monitor.ts
+
+### Next Step
+Phase 4 Step 4.12: Implement Alert List Page
