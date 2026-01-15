@@ -17,11 +17,12 @@ type Config struct {
 }
 
 type Handlers struct {
-	User    *handler.UserHandler
-	Role    *handler.RoleHandler
-	Asset   *handler.AssetHandler
-	Monitor *handler.MonitorHandler
-	Alert   *handler.AlertHandler
+	User       *handler.UserHandler
+	Role       *handler.RoleHandler
+	Asset      *handler.AssetHandler
+	Monitor    *handler.MonitorHandler
+	Alert      *handler.AlertHandler
+	Inspection *handler.InspectionHandler
 }
 
 type Router struct {
@@ -220,10 +221,17 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 	{
 		jobs := inspection.Group("/jobs")
 		{
-			jobs.GET("", placeholder("list jobs"))
-			jobs.POST("", placeholder("create job"))
-			jobs.GET("/:id", placeholder("get job"))
-			jobs.DELETE("/:id", placeholder("delete job"))
+			if r.handlers.Inspection != nil {
+				jobs.GET("", r.handlers.Inspection.ListJobs)
+				jobs.POST("", r.handlers.Inspection.CreateJob)
+				jobs.GET("/:id", r.handlers.Inspection.GetJob)
+				jobs.DELETE("/:id", r.handlers.Inspection.DeleteJob)
+			} else {
+				jobs.GET("", placeholder("list jobs"))
+				jobs.POST("", placeholder("create job"))
+				jobs.GET("/:id", placeholder("get job"))
+				jobs.DELETE("/:id", placeholder("delete job"))
+			}
 		}
 	}
 }

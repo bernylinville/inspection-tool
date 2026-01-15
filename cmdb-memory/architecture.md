@@ -119,7 +119,7 @@ use (
 
 ---
 
-### 5.4 目录结构 (Phase 3 Step 3.10 已实现)
+### 5.4 目录结构 (Phase 3 Step 3.12 已实现)
 
 ```
 apps/cmdb-server/
@@ -128,10 +128,11 @@ apps/cmdb-server/
 ├── internal/
 │   ├── api/
 │   │   ├── router/
-│   │   │   └── router.go    # Gin 路由器 (Step 3.1, 3.6-3.10 更新)
+│   │   │   └── router.go    # Gin 路由器 (Step 3.1, 3.6-3.11 更新)
 │   │   ├── middleware/
 │   │   │   ├── auth.go      # JWT 认证中间件 (Step 3.2)
-│   │   │   └── casbin.go    # Casbin 授权中间件 (Step 3.3)
+│   │   │   ├── casbin.go    # Casbin 授权中间件 (Step 3.3)
+│   │   │   └── error.go     # 统一错误处理中间件 (Step 3.12)
 │   │   └── handler/
 │   │       ├── health.go    # 健康检查端点 (Step 3.4)
 │   │       ├── auth.go      # 认证端点 (Step 3.5)
@@ -139,7 +140,8 @@ apps/cmdb-server/
 │   │       ├── role.go      # 角色管理端点 (Step 3.7)
 │   │       ├── asset.go     # 资产管理端点 (Step 3.8)
 │   │       ├── monitor.go   # 监控透传端点 (Step 3.9)
-│   │       └── alert.go     # 告警透传端点 (Step 3.10)
+│   │       ├── alert.go     # 告警透传端点 (Step 3.10)
+│   │       └── inspection.go # 巡检管理端点 (Step 3.11)
 │   ├── database/
 │   │   └── database.go      # GORM 连接、连接池、AutoMigrate
 │   ├── model/
@@ -387,6 +389,38 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | ListIncidents() | GET /api/v1/incidents，故障列表查询 (透传 FlashDuty) |
 | GetIncident() | GET /api/v1/incidents/:id，故障详情 (FlashDuty 不支持，返回 501) |
 
+#### Inspection Handler (handler/inspection.go) - Step 3.11
+| 方法 | 说明 |
+|------|------|
+| ListJobs() | GET /api/v1/inspection/jobs，巡检任务列表 (分页、状态/类型筛选) |
+| CreateJob() | POST /api/v1/inspection/jobs，创建并触发巡检任务 |
+| GetJob() | GET /api/v1/inspection/jobs/:id，获取巡检任务详情 |
+| DeleteJob() | DELETE /api/v1/inspection/jobs/:id，删除巡检任务 (禁止删除运行中任务) |
+
+#### Error Middleware (middleware/error.go) - Step 3.12
+| 组件 | 说明 |
+|------|------|
+| ErrorResponse | 统一错误响应结构 (code, message, details) |
+| AppError | 应用错误类型 (code, message, httpStatus, details) |
+| ErrorHandler() | Gin 错误处理中间件 |
+| AbortWithError() | 中断请求并返回错误响应 |
+| AbortWithAppError() | 中断请求并返回 AppError |
+
+#### Error Codes (Step 3.12)
+| 代码 | HTTP状态 | 说明 |
+|------|----------|------|
+| 0 | 200 | 成功 |
+| 1001 | 400 | 无效请求 |
+| 1002 | 400 | 验证失败 |
+| 2001 | 401 | 未授权 |
+| 2002 | 401 | 无效Token |
+| 2003 | 401 | Token过期 |
+| 3001 | 403 | 禁止访问 |
+| 4001 | 404 | 未找到 |
+| 5001 | 500 | 内部错误 |
+| 5002 | 500 | 数据库错误 |
+| 5003 | 502 | 外部API错误 |
+
 ## 6. Vue 前端 (web/)
 
 ### 6.1 技术栈
@@ -479,3 +513,4 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 | 2026-01-14 | v1.9 | Phase 3 API层实现 (Step 3.6-3.7): 用户管理端点、角色管理端点 |
 | 2026-01-14 | v1.10 | Phase 3 API层实现 (Step 3.8-3.9): 资产管理端点、监控透传端点 |
 | 2026-01-15 | v1.11 | Phase 3 API层实现 (Step 3.10): 告警透传端点 |
+| 2026-01-15 | v1.12 | Phase 3 API层实现 (Step 3.11-3.12): 巡检管理端点、统一错误处理中间件 |

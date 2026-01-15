@@ -701,3 +701,93 @@ None
 
 ### Next Step
 Phase 3 Step 3.11: Implement Inspection Management Endpoints
+
+---
+
+## Phase 3 - API Layer Implementation (Step 3.11 - 3.12)
+- Date: 2026-01-15
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Step 3.11: Implement Inspection Management Endpoints**
+   - Created internal/api/handler/inspection.go
+   - Implemented InspectionHandler struct with InspectService dependency
+   - **Inspection Job Endpoints**:
+     - ListJobs(): GET /api/v1/inspection/jobs (pagination, status/type filter)
+     - CreateJob(): POST /api/v1/inspection/jobs (triggers async inspection)
+     - GetJob(): GET /api/v1/inspection/jobs/:id
+     - DeleteJob(): DELETE /api/v1/inspection/jobs/:id (prevents deletion of running jobs)
+   - Updated Handlers struct to include InspectionHandler
+   - Integrated InspectionHandler routes in router.go
+
+2. **Step 3.12: Create Unified Error Handling Middleware**
+   - Created internal/api/middleware/error.go
+   - Defined error code constants:
+     - 0: Success
+     - 1001: Invalid request
+     - 1002: Validation failed
+     - 2001: Unauthorized
+     - 2002: Invalid token
+     - 2003: Token expired
+     - 3001: Forbidden
+     - 4001: Not found
+     - 5001: Internal error
+     - 5002: Database error
+     - 5003: External API error
+   - Implemented ErrorResponse struct for unified response format
+   - Implemented AppError struct for typed errors
+   - Implemented ErrorHandler() middleware for Gin
+   - Implemented helper functions: AbortWithError, AbortWithAppError, NewSuccessResponse
+
+### Files Created
+| File | Description |
+|------|-------------|
+| internal/api/handler/inspection.go | Inspection management endpoints (ListJobs, CreateJob, GetJob, DeleteJob) |
+| internal/api/middleware/error.go | Unified error handling middleware with error codes |
+
+### Files Modified
+| File | Description |
+|------|-------------|
+| internal/api/router/router.go | Added InspectionHandler to Handlers struct, integrated inspection routes |
+
+### API Endpoints Summary (Step 3.11)
+
+| Method | Endpoint | Handler | Description |
+|--------|----------|---------|-------------|
+| GET | /api/v1/inspection/jobs | InspectionHandler.ListJobs | List inspection jobs with pagination |
+| POST | /api/v1/inspection/jobs | InspectionHandler.CreateJob | Create and trigger inspection job |
+| GET | /api/v1/inspection/jobs/:id | InspectionHandler.GetJob | Get inspection job by ID |
+| DELETE | /api/v1/inspection/jobs/:id | InspectionHandler.DeleteJob | Delete inspection job |
+
+### Query Parameters (ListJobs)
+- page: page number, default: 1
+- page_size: items per page (1-100), default: 20
+- status: filter by status (pending, running, success, failed)
+- type: filter by type (host, mysql, redis, nginx, tomcat, elasticsearch)
+
+### Error Codes (Step 3.12)
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| 0 | 200 | Success |
+| 1001 | 400 | Invalid request |
+| 1002 | 400 | Validation failed |
+| 2001 | 401 | Unauthorized |
+| 2002 | 401 | Invalid token |
+| 2003 | 401 | Token expired |
+| 3001 | 403 | Forbidden |
+| 4001 | 404 | Not found |
+| 5001 | 500 | Internal server error |
+| 5002 | 500 | Database error |
+| 5003 | 502 | External API error |
+
+### Issues Encountered
+None
+
+### Verification Results
+- go build ./apps/cmdb-server/... : SUCCESS
+- go vet ./apps/cmdb-server/... : SUCCESS
+
+### Next Step
+Phase 4: Frontend Integration (Step 4.1: Add CMDB Module to web-antd)
