@@ -21,8 +21,30 @@ export namespace AuthApi {
 /**
  * 登录
  */
+/** CMDB 后端登录响应格式 (snake_case) */
+interface CmdbLoginResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number;
+  token_type: string;
+}
+
+/**
+ * 登录
+ * 转换 CMDB 后端响应格式 (snake_case) 为前端期望格式 (camelCase)
+ */
 export async function loginApi(data: AuthApi.LoginParams) {
-  return requestClient.post<AuthApi.LoginResult>('/auth/login', data);
+  const response = await requestClient.post<CmdbLoginResponse>(
+    '/auth/login',
+    data,
+  );
+
+  // Transform snake_case to camelCase
+  return {
+    accessToken: response.access_token,
+    refreshToken: response.refresh_token,
+    expiresAt: response.expires_at,
+  };
 }
 
 /**

@@ -5,11 +5,21 @@ const routes: RouteRecordRaw[] = [
     meta: {
       icon: 'lucide:database',
       order: 10,
+      redirect: '/cmdb/dashboard',
       title: 'CMDB',
     },
     name: 'Cmdb',
     path: '/cmdb',
     children: [
+      {
+        name: 'CmdbDashboard',
+        path: '/cmdb/dashboard',
+        component: () => import('#/views/cmdb/dashboard/index.vue'),
+        meta: {
+          icon: 'lucide:layout-dashboard',
+          title: '仪表盘',
+        },
+      },
       {
         name: 'CmdbProject',
         path: '/cmdb/project',
