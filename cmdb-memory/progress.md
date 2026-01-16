@@ -1575,3 +1575,133 @@ Fix AuthHandler wiring issue, then retry Step 5.5
 - Host sync endpoint functional (no 501 error)
 - BLOCKER: N9E service not running on localhost:18000
 - Status: Endpoint works, external dependency unavailable
+
+---
+
+## Phase 5 Step 5.6 - COMPLETED (2026-01-16)
+- Date: 2026-01-16
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Configuration Update**
+   - Verified N9E endpoint configuration already correct (http://120.26.87.44:17000)
+   - Token already configured (750aaa24-bad6-4f1c-82a7-120f86a6e9f0)
+
+2. **Binary Rebuild**
+   - Rebuilt cmdb-server binary with proper handler wiring
+   - All handlers properly initialized: Auth, User, Role, Asset, Monitor, Alert, Inspection
+
+3. **Server Restart**
+   - Stopped old server process
+   - Started new server with PID 121438
+   - Health check: ✅ HTTP 200
+
+4. **Login Endpoint Test**
+   - Tested POST /api/v1/auth/login
+   - Result: ✅ HTTP 200, valid JWT tokens returned
+   - access_token and refresh_token generated successfully
+
+5. **Host Sync Test**
+   - Tested POST /api/v1/hosts/sync with Bearer token
+   - Result: ✅ HTTP 200, sync successful
+   - Sync results:
+     - total_hosts: 794
+     - new_hosts: 794
+     - updated_hosts: 0
+     - failed_hosts: 0
+     - duration: 1.360198649s
+
+6. **Database Verification**
+   - Verified host count in database: 794 hosts
+   - Sample data verified: ident, hostname, ip, os, cpu_cores, status
+   - All hosts have status 'active'
+
+### Verification Results
+- Server health: ✅ Running on port 8080
+- Authentication: ✅ JWT tokens working
+- Authorization: ✅ Bearer token accepted
+- N9E integration: ✅ Connected to http://120.26.87.44:17000
+- Host sync: ✅ 794 hosts synced in 1.36s
+- Database: ✅ All hosts persisted correctly
+
+### Issues Encountered
+1. Initial 501 error due to old binary - resolved by rebuilding
+2. Memory column name mismatch in verification query - resolved
+
+### Next Step
+Phase 5 Step 5.7: Test Monitor Proxy Functionality (VictoriaMetrics)
+
+---
+
+## Phase 5 Step 5.7 - COMPLETED (2026-01-16)
+- Date: 2026-01-16
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Configuration Fix**
+   - Fixed VictoriaMetrics config key mismatch in main.go
+   - Changed line 97: victoriametrics.url → victoriametrics.base_url
+   - Changed line 104: flashduty.url → flashduty.base_url
+   - VictoriaMetrics endpoint: http://120.26.87.44:8428
+
+2. **Binary Rebuild**
+   - Rebuilt cmdb-server binary with corrected config keys
+   - All handlers properly initialized
+
+3. **Server Restart**
+   - Stopped old server process (PID 141477)
+   - Started new server with PID 145292
+   - Health check: ✅ HTTP 200
+
+4. **Instant Query Test**
+   - Tested GET /api/v1/monitor/query?query=up
+   - Result: ✅ HTTP 200, code 0 (success)
+   - Returned 9 metric results from VictoriaMetrics
+   - Data includes: ident, instance, items, operators, province labels
+
+5. **Range Query Test**
+   - Tested GET /api/v1/monitor/query_range with format=echarts
+   - Query: cpu_usage_active, 1 hour range, 60s step
+   - Result: ✅ HTTP 200, ECharts format data
+   - Returned 60 data points with timestamp (ms) and value
+   - Sample data verified: timestamps in milliseconds, values as floats
+
+### Verification Results
+- Server health: ✅ Running on port 8080
+- VictoriaMetrics integration: ✅ Connected to http://120.26.87.44:8428
+- Instant query: ✅ Returns raw VM response with metrics
+- Range query (raw): ✅ Returns VM range query response
+- Range query (echarts): ✅ Returns ECharts-formatted data
+- Authorization: ✅ Bearer token required and validated
+
+### Issues Encountered
+1. Initial config key mismatch (victoriametrics.url vs base_url) - resolved
+2. FlashDuty config key mismatch (flashduty.url vs base_url) - resolved
+
+### Next Step
+Phase 5 Step 5.8: Test Alert Proxy Functionality (FlashDuty)
+
+---
+
+## Phase 5 Step 5.7 - COMPLETED (2026-01-16)
+- Date: 2026-01-16
+- Executor: AI (Claude)
+
+### Completed Steps
+
+1. **Configuration Fix**
+   - Fixed VictoriaMetrics config key mismatch in main.go
+   - Changed line 97: victoriametrics.url → victoriametrics.base_url
+   - Changed line 104: flashduty.url → flashduty.base_url
+   - VictoriaMetrics endpoint: http://120.26.87.44:8428
+
+2. **Binary Rebuild**
+   - Rebuilt cmdb-server binary with corrected config keys
+   - All handlers properly initialized
+
+3. **Server Restart**
+   - Stopped old server process (PID 141477)
+   - Started new server with PID 145292
+   - Health check: ✅ HTTP 200

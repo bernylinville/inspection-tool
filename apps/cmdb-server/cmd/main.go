@@ -94,14 +94,14 @@ func main() {
 	}, log)
 
 	vmClient := vm.NewClient(&config.VictoriaMetricsConfig{
-		Endpoint: viper.GetString("victoriametrics.url"),
+		Endpoint: viper.GetString("victoriametrics.base_url"),
 	}, &config.RetryConfig{
 		MaxRetries: 3,
 		BaseDelay:  1 * time.Second,
 	}, log)
 
 	alertProxy := proxy.NewAlertProxy(&proxy.FlashDutyConfig{
-		Endpoint: viper.GetString("flashduty.url"),
+		Endpoint: viper.GetString("flashduty.base_url"),
 		APIKey:   viper.GetString("flashduty.app_key"),
 	}, log)
 
