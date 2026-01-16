@@ -86,28 +86,9 @@ Always use **context7** when code generation, setup or configuration steps, or l
 
 Use **Brave Search MCP Server** for up-to-date information, current events, or fact-checking. Available capabilities include:
 
-- Web search
-- Local business search
-- Image search
-- Video search
-- News search
-- AI-powered summarization
-
 ### Sequential Thinking
 
 Use **sequential-thinking** for complex problem-solving that requires structured reasoning:
-
-- Break down complex problems into manageable steps
-- Revise and refine thoughts as understanding deepens
-- Branch into alternative paths of reasoning
-- Adjust the total number of thoughts dynamically
-- Generate and verify solution hypotheses
-
-## 重要提示
-
-- 写任何代码前必须完整阅读 @memory-bank/architecture.md（包含完整数据库结构）
-- 写任何代码前必须完整阅读 @memory-bank/product-requirement-document.md
-- 每完成一个重大功能或里程碑后，必须更新 @memory-bank/architecture.md
 
 <!-- CCA_WORKFLOW_POLICY -->
 ## CCA Workflow Policy

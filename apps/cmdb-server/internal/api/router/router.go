@@ -21,6 +21,7 @@ type Config struct {
 }
 
 type Handlers struct {
+	Auth       *handler.AuthHandler
 	User       *handler.UserHandler
 	Role       *handler.RoleHandler
 	Asset      *handler.AssetHandler
@@ -106,15 +107,24 @@ func (r *Router) SetupStaticRoutes(staticPath string) {
 func (r *Router) setupPublicRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	{
-		auth.POST("/login", placeholder("login"))
-		auth.POST("/refresh", placeholder("refresh"))
+		if r.handlers.Auth != nil {
+			auth.POST("/login", r.handlers.Auth.Login)
+			auth.POST("/refresh", r.handlers.Auth.Refresh)
+		} else {
+			auth.POST("/login", placeholder("login"))
+			auth.POST("/refresh", placeholder("refresh"))
+		}
 	}
 }
 
 func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	{
-		auth.POST("/logout", placeholder("logout"))
+		if r.handlers.Auth != nil {
+			auth.POST("/logout", r.handlers.Auth.Logout)
+		} else {
+			auth.POST("/logout", placeholder("logout"))
+		}
 	}
 
 	users := rg.Group("/users")

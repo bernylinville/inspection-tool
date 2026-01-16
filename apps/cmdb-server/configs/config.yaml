@@ -1,0 +1,53 @@
+# CMDB Server Configuration
+
+server:
+  port: 8080
+  mode: debug  # debug, release, test
+  static_path: "../../../web/apps/web-antd/dist"
+
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: postgres
+  dbname: cmdb
+  sslmode: disable
+  max_idle_conns: 10
+  max_open_conns: 100
+  max_lifetime: 1h
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: "your-secret-key-change-in-production"
+  expire_hours: 24
+
+logging:
+  level: info  # debug, info, warn, error
+  format: json  # json, console
+
+# External Systems
+n9e:
+  base_url: "http://localhost:18000"
+  token: "your-n9e-token-here"
+  timeout: 30s
+
+victoriametrics:
+  base_url: "http://localhost:8428"
+  timeout: 30s
+
+flashduty:
+  base_url: "https://api.flashduty.com"
+  app_key: "your-flashduty-app-key-here"
+  timeout: 30s
+
+# Inspection CLI
+inspection:
+  cli_path: "../inspect-cli/inspect"
+  config_path: "../inspect-cli/config.yaml"
+  report_dir: "./reports"
+  timeout: 30m

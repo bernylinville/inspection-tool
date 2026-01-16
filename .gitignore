@@ -7,7 +7,7 @@ bin/
 # categraf/*
 reports/*
 .sisyphus/
-config.yaml
+# config.yaml
 .venv/
 *-session
 *.bak
