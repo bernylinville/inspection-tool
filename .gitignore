@@ -3,7 +3,7 @@ bin/
 .spec-workflow/
 .DS_Store
 *.out
-.serena/
+.siserena/
 # categraf/*
 reports/*
 .sisyphus/
@@ -12,3 +12,5 @@ reports/*
 *-session
 *.bak
 apps/cmdb-server/cmdb-server
+# cmdb-config.yaml
+cmdb-server

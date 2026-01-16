@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -106,6 +107,49 @@ func AutoMigrate(db *gorm.DB, log zerolog.Logger) error {
 	}
 
 	log.Info().Msg("Database migration completed successfully")
+	return nil
+}
+
+// Seed initializes default data in the database
+func Seed(db *gorm.DB, log zerolog.Logger) error {
+	log.Info().Msg("Starting database seeding...")
+
+	if err := model.InitializeBaseData(db, log); err != nil {
+		return fmt.Errorf("failed to initialize base data: %w", err)
+	}
+
+	var adminRole model.Role
+	if err := db.Where("name = ?", "admin").First(&adminRole).Error; err != nil {
+		return fmt.Errorf("admin role not found: %w", err)
+	}
+
+	var existingUser model.User
+	if err := db.Where("username = ?", "admin").First(&existingUser).Error; err == nil {
+		log.Info().Msg("Admin user already exists, skipping creation")
+		return nil
+	} else if err != gorm.ErrRecordNotFound {
+		return fmt.Errorf("failed to check existing admin user: %w", err)
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash admin password: %w", err)
+	}
+
+	adminUser := &model.User{
+		Username:     "admin",
+		PasswordHash: string(hashedPassword),
+		DisplayName:  "System Administrator",
+		Email:        "admin@cmdb.local",
+		Status:       "active",
+		Roles:        []model.Role{adminRole},
+	}
+
+	if err := db.Create(adminUser).Error; err != nil {
+		return fmt.Errorf("failed to create admin user: %w", err)
+	}
+
+	log.Info().Msg("Database seeding completed successfully")
 	return nil
 }
 

@@ -27,7 +27,7 @@ import (
 
 func main() {
 	// Parse command line flags
-	configPath := flag.String("config", "configs/config.yaml", "path to config file")
+	configPath := flag.String("config", "../cmdb-config.yaml", "path to config file")
 	migrateOnly := flag.Bool("migrate", false, "run database migration only")
 	flag.Parse()
 
@@ -63,6 +63,11 @@ func main() {
 	// Run migrations
 	if err := database.AutoMigrate(db, log); err != nil {
 		log.Fatal().Err(err).Msg("Failed to run database migrations")
+	}
+
+	// Seed database with initial data
+	if err := database.Seed(db, log); err != nil {
+		log.Fatal().Err(err).Msg("Failed to seed database")
 	}
 
 	if *migrateOnly {
@@ -129,7 +134,7 @@ func main() {
 	roleService := role.NewRoleService(roleRepo, permRepo, log)
 
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(authService)
+	authHandler := handler.NewAuthHandler(authService, userRepo)
 	assetHandler := handler.NewAssetHandler(assetService, hostSyncService)
 	monitorHandler := handler.NewMonitorHandler(monitorProxy)
 	alertHandler := handler.NewAlertHandler(alertProxy)

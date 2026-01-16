@@ -171,6 +171,7 @@ func (s *InspectService) executeJob(jobID int64) {
 		Msg("starting inspection job")
 
 	cmd := exec.Command(s.cliPath, args...)
+	cmd.Dir = "/home/kchou/Code/inspection-tool"
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {

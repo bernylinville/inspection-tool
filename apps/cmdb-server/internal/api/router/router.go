@@ -122,10 +122,20 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 	{
 		if r.handlers.Auth != nil {
 			auth.POST("/logout", r.handlers.Auth.Logout)
+			auth.GET("/codes", r.handlers.Auth.GetAccessCodes)
 		} else {
 			auth.POST("/logout", placeholder("logout"))
+			auth.GET("/codes", placeholder("get access codes"))
 		}
 	}
+
+	rg.GET("/user/info", func(c *gin.Context) {
+		if r.handlers.Auth != nil {
+			r.handlers.Auth.GetCurrentUser(c)
+		} else {
+			placeholder("get current user")(c)
+		}
+	})
 
 	users := rg.Group("/users")
 	{

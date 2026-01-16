@@ -315,9 +315,11 @@ ListOptions 用于分页与过滤：Page、PageSize、OrderBy、Order、Filters�
 #### Auth Handler (handler/auth.go)
 | 方法 | 说明 |
 |------|------|
-| Login() | POST /api/v1/auth/login，用户登录 |
+| Login() | POST /api/v1/auth/login，用户登录，返回统一格式：{code: 0, data: {access_token, refresh_token, expires_at, token_type}} |
 | Logout() | POST /api/v1/auth/logout，用户登出 |
 | Refresh() | POST /api/v1/auth/refresh，刷新 Token |
+| GetCurrentUser() | GET /api/v1/user/info，获取当前用户信息（需要 Bearer Token）|
+| GetAccessCodes() | GET /api/v1/auth/codes，获取用户权限代码列表（需要 Bearer Token）|
 
 #### User Handler (handler/user.go) - Step 3.6
 | 方法 | 说明 |

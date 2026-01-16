@@ -170,16 +170,20 @@
 - Open API > 服务日历 [日历事件设置](https://developer.flashcat.cloud/api-132636232.md):
 - Open API > 服务日历 [日历事件删除](https://developer.flashcat.cloud/api-132637293.md):
 - Open API > 服务日历 [日历事件列表](https://developer.flashcat.cloud/api-132637492.md):
-- Open API > 标签增强 > Mapping [查询schema](https://developer.flashcat.cloud/api-142429470.md):
-- Open API > 标签增强 > Mapping [创建schema](https://developer.flashcat.cloud/zh/flashduty/enrichment/mapping-shcema-create.md): 每个账户最多允许创建10个schema
-- Open API > 标签增强 > Mapping [更新schema](https://developer.flashcat.cloud/api-142429234.md):
-- Open API > 标签增强 > Mapping [删除schema](https://developer.flashcat.cloud/api-142429316.md):
-- Open API > 标签增强 > Mapping [查询data](https://developer.flashcat.cloud/api-145674742.md):
-- Open API > 标签增强 > Mapping [更新data](https://developer.flashcat.cloud/flashduty/enrichment/mapping-data-upsert.md): 每个schema最大允许上传一万条数据
-- Open API > 标签增强 > Mapping [删除data](https://developer.flashcat.cloud/api-142430996.md):
-- Open API > 标签增强 > Mapping [清空data](https://developer.flashcat.cloud/api-145673295.md):
-- Open API > 标签增强 > Mapping [csv上传data](https://developer.flashcat.cloud/api-145679479.md):
-- Open API > 标签增强 > Mapping [csv下载data](https://developer.flashcat.cloud/api-145730290.md):
+- Open API > 标签增强 > Mapping-Schema [查询schema](https://developer.flashcat.cloud/api-142429470.md):
+- Open API > 标签增强 > Mapping-Schema [创建schema](https://developer.flashcat.cloud/zh/flashduty/enrichment/mapping-shcema-create.md): 每个账户最多允许创建10个schema
+- Open API > 标签增强 > Mapping-Schema [更新schema](https://developer.flashcat.cloud/api-142429234.md):
+- Open API > 标签增强 > Mapping-Schema [删除schema](https://developer.flashcat.cloud/api-142429316.md):
+- Open API > 标签增强 > Mapping-Schema [查询data](https://developer.flashcat.cloud/api-145674742.md):
+- Open API > 标签增强 > Mapping-Schema [更新data](https://developer.flashcat.cloud/flashduty/enrichment/mapping-data-upsert.md): 每个schema最大允许上传一万条数据
+- Open API > 标签增强 > Mapping-Schema [删除data](https://developer.flashcat.cloud/api-142430996.md):
+- Open API > 标签增强 > Mapping-Schema [清空data](https://developer.flashcat.cloud/api-145673295.md):
+- Open API > 标签增强 > Mapping-Schema [csv上传data](https://developer.flashcat.cloud/api-145679479.md):
+- Open API > 标签增强 > Mapping-Schema [csv下载data](https://developer.flashcat.cloud/api-145730290.md):
+- Open API > 标签增强 > Mapping-Api [查询api](https://developer.flashcat.cloud/api-405710779.md):
+- Open API > 标签增强 > Mapping-Api [创建api](https://developer.flashcat.cloud/api-405722514.md):
+- Open API > 标签增强 > Mapping-Api [更新api](https://developer.flashcat.cloud/api-405726643.md):
+- Open API > 标签增强 > Mapping-Api [删除api](https://developer.flashcat.cloud/api-405729612.md):
 - Open API > 标签增强 [规则详情](https://developer.flashcat.cloud/api-142307781.md):
 - Open API > 标签增强 [规则更新](https://developer.flashcat.cloud/api-142307792.md):
 - Open API > 告警处理 [规则详情](https://developer.flashcat.cloud/api-201896909.md):
@@ -310,6 +314,7 @@
 - /api 接口 > 机器列表 [绑定业务组](https://developer.flashcat.cloud/api-214142983.md): 注：第三方系统使用中
 - /api 接口 > 机器列表 [获取标签列表](https://developer.flashcat.cloud/api-238396127.md):
 - /api 接口 > 机器列表 [绑定标签](https://developer.flashcat.cloud/api-269299127.md): 注：第三方系统使用中
+- /api 接口 > 机器列表 [解绑标签](https://developer.flashcat.cloud/api-405362888.md): 注：第三方系统使用中
 - /api 接口 > 机器列表 [修改备注](https://developer.flashcat.cloud/api-269299915.md):
 - /api 接口 > 机器列表 [删除机器](https://developer.flashcat.cloud/api-269300309.md):
 - /api 接口 > 团队管理 [查询团队成员列表](https://developer.flashcat.cloud/api-153721176.md): ### 接口鉴权
