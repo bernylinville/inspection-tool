@@ -9,8 +9,15 @@ import DashboardOverview from './components/dashboard-overview.vue';
 import RecentAlerts from './components/recent-alerts.vue';
 import { useDashboardData } from './composables/use-dashboard-data';
 
-const { stats, middlewareDistribution, recentAlerts, loading, error, refresh } =
-  useDashboardData();
+const {
+  stats,
+  middlewareDistribution,
+  recentAlerts,
+  loading,
+  error,
+  alertServiceUnavailable,
+  refresh,
+} = useDashboardData();
 </script>
 
 <template>
@@ -53,9 +60,11 @@ const { stats, middlewareDistribution, recentAlerts, loading, error, refresh } =
 
     <!-- Recent Alerts -->
     <div class="mt-4">
-      <AnalysisChartCard title="最近告警">
-        <RecentAlerts :alerts="recentAlerts" :loading="loading" />
-      </AnalysisChartCard>
+      <RecentAlerts
+        :alerts="recentAlerts"
+        :loading="loading"
+        :service-unavailable="alertServiceUnavailable"
+      />
     </div>
   </div>
 </template>

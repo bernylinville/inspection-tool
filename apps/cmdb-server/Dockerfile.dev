@@ -1,0 +1,13 @@
+FROM golang:1.25-alpine AS builder
+WORKDIR /app
+COPY go.work go.work.sum ./
+COPY pkg/ ./pkg/
+COPY apps/cmdb-server/ ./apps/cmdb-server/
+COPY apps/inspect-cli/ ./apps/inspect-cli/
+RUN go build -o /app/cmdb-server ./apps/cmdb-server/cmd/main.go
+
+FROM alpine:3.23
+WORKDIR /app
+COPY --from=builder /app/cmdb-server ./cmdb-server
+EXPOSE 8080
+CMD ["./cmdb-server"]

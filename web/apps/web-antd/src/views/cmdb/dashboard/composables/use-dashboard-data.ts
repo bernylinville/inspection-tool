@@ -50,10 +50,12 @@ export function useDashboardData() {
   const recentAlerts = ref<Alert[]>([]);
   const loading = ref(false);
   const error = ref<Error | null>(null);
+  const alertServiceUnavailable = ref(false);
 
   const fetchStats = async () => {
     loading.value = true;
     error.value = null;
+    alertServiceUnavailable.value = false;
 
     try {
       const [
@@ -65,9 +67,7 @@ export function useDashboardData() {
         nginxRes,
         tomcatRes,
         esRes,
-        alertsRes,
         inspectionsRes,
-        recentAlertsRes,
       ] = await Promise.all([
         listProjectsApi({ page: 1, page_size: 1 }),
         listApplicationsApi({ page: 1, page_size: 1 }),
@@ -77,9 +77,7 @@ export function useDashboardData() {
         listNginxInstancesApi({ page: 1, page_size: 1 }),
         listTomcatInstancesApi({ page: 1, page_size: 1 }),
         listESClustersApi({ page: 1, page_size: 1 }),
-        listAlertsApi({ page: 1, page_size: 1 }),
         listInspectionJobsApi({ page: 1, page_size: 1 }),
-        listAlertsApi({ page: 1, page_size: 5 }),
       ]);
 
       const mysqlCount = mysqlRes.total ?? 0;
@@ -94,7 +92,7 @@ export function useDashboardData() {
         hostCount: hostsRes.total ?? 0,
         middlewareCount:
           mysqlCount + redisCount + nginxCount + tomcatCount + elasticsearchCount,
-        alertCount: alertsRes.total ?? 0,
+        alertCount: 0,
         inspectionCount: inspectionsRes.total ?? 0,
       };
 
@@ -106,7 +104,16 @@ export function useDashboardData() {
         elasticsearch: elasticsearchCount,
       };
 
-      recentAlerts.value = recentAlertsRes.items ?? [];
+      try {
+        const alertsRes = await listAlertsApi({ page: 1, page_size: 1 });
+        stats.value.alertCount = alertsRes.total ?? 0;
+        const recentAlertsRes = await listAlertsApi({ page: 1, page_size: 5 });
+        recentAlerts.value = recentAlertsRes.items ?? [];
+      } catch {
+        alertServiceUnavailable.value = true;
+        stats.value.alertCount = 0;
+        recentAlerts.value = [];
+      }
     } catch (err) {
       error.value =
         err instanceof Error
@@ -129,6 +136,7 @@ export function useDashboardData() {
     recentAlerts,
     loading,
     error,
+    alertServiceUnavailable,
     refresh,
   };
 }

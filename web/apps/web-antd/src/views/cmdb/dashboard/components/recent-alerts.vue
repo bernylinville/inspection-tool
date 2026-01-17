@@ -9,10 +9,12 @@ import { Card } from 'ant-design-vue';
 interface Props {
   alerts: Alert[];
   loading?: boolean;
+  serviceUnavailable?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
+  serviceUnavailable: false,
 });
 
 const router = useRouter();
@@ -62,6 +64,13 @@ const goToAlerts = () => {
           :key="index"
           class="h-6 rounded bg-muted/40 animate-pulse"
         />
+      </div>
+      <div
+        v-else-if="props.serviceUnavailable"
+        class="rounded border border-warning/50 bg-warning/10 p-4"
+      >
+        <div class="text-sm text-warning">告警服务暂不可用</div>
+        <div class="text-xs text-muted-foreground">无法连接到告警数据源</div>
       </div>
       <div v-else-if="!props.alerts.length" class="text-sm text-muted-foreground">
         暂无告警

@@ -27,7 +27,7 @@ import (
 
 func main() {
 	// Parse command line flags
-	configPath := flag.String("config", "../cmdb-config.yaml", "path to config file")
+	configPath := flag.String("config", "configs/config.yaml", "path to config file")
 	migrateOnly := flag.Bool("migrate", false, "run database migration only")
 	flag.Parse()
 

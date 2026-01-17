@@ -565,3 +565,26 @@ web/apps/web-antd/src/views/alert/
 | 2026-01-14 | v1.10 | Phase 3 API层实现 (Step 3.8-3.9): 资产管理端点、监控透传端点 |
 | 2026-01-15 | v1.11 | Phase 3 API层实现 (Step 3.10): 告警透传端点 |
 | 2026-01-15 | v1.12 | Phase 3 API层实现 (Step 3.11-3.12): 巡检管理端点、统一错误处理中间件 |
+## 10. Docker 开发环境
+
+### 10.1 配置文件
+| 文件 | 说明 |
+|------|------|
+| docker-compose-dev.yml | 开发环境编排 |
+| apps/cmdb-server/Dockerfile.dev | Go 1.25 + air 热重载 |
+| apps/cmdb-server/.air.toml | air 配置 |
+| web/Dockerfile.dev | Node 24 多阶段 → nginx:1.28.1-trixie |
+
+### 10.2 服务端口
+| 服务 | 端口 |
+|------|------|
+| PostgreSQL | 5432 |
+| Redis | 6379 |
+| Backend | 8080 |
+| Frontend | 5666 |
+
+### 10.3 Makefile 目标
+- dev-build: 构建镜像
+- dev-up: 启动环境
+- dev-down: 停止环境
+- dev-logs: 查看日志

@@ -22,10 +22,11 @@ func NewAlertHandler(alertProxy *proxy.AlertProxy) *AlertHandler {
 }
 
 type AlertResponse struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-	Total   int64       `json:"total,omitempty"`
+	Code               int         `json:"code"`
+	Message            string      `json:"message"`
+	Data               interface{} `json:"data,omitempty"`
+	Total              int64       `json:"total,omitempty"`
+	ServiceUnavailable bool        `json:"service_unavailable,omitempty"`
 }
 
 const defaultTimeRangeSeconds = 86400
@@ -82,6 +83,16 @@ func (h *AlertHandler) ListAlerts(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, AlertResponse{
 				Code:    40100,
 				Message: "invalid FlashDuty API key",
+			})
+			return
+		}
+		if errors.Is(err, proxy.ErrAlertServiceUnavailable) {
+			c.JSON(http.StatusOK, AlertResponse{
+				Code:               0,
+				Message:            "alert service unavailable",
+				Data:               []interface{}{},
+				Total:              0,
+				ServiceUnavailable: true,
 			})
 			return
 		}
@@ -161,6 +172,16 @@ func (h *AlertHandler) ListIncidents(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, AlertResponse{
 				Code:    40100,
 				Message: "invalid FlashDuty API key",
+			})
+			return
+		}
+		if errors.Is(err, proxy.ErrAlertServiceUnavailable) {
+			c.JSON(http.StatusOK, AlertResponse{
+				Code:               0,
+				Message:            "incident service unavailable",
+				Data:               []interface{}{},
+				Total:              0,
+				ServiceUnavailable: true,
 			})
 			return
 		}

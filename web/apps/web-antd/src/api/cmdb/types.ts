@@ -217,7 +217,7 @@ export interface ApplicationUpdateRequest {
 
 // ============ 主机资产 ============
 
-export type HostStatus = 'online' | 'offline';
+export type HostStatus = 'active' | 'inactive';
 
 export interface Host {
   id: number;

@@ -1,0 +1,18 @@
+FROM node:24-slim AS builder
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN npm install -g pnpm@10.28.0
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages ./packages
+COPY apps ./apps
+COPY internal ./internal
+COPY scripts ./scripts
+COPY .npmrc turbo.json ./
+RUN pnpm install --frozen-lockfile
+RUN pnpm build:antd
+
+FROM nginx:1.28.1-trixie
+COPY --from=builder /app/apps/web-antd/dist /usr/share/nginx/html
+COPY scripts/deploy/nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -12,8 +15,9 @@ import (
 )
 
 var (
-	ErrAlertQueryFailed = errors.New("alert query failed")
-	ErrInvalidAPIKey    = errors.New("invalid API key")
+	ErrAlertQueryFailed        = errors.New("alert query failed")
+	ErrInvalidAPIKey           = errors.New("invalid API key")
+	ErrAlertServiceUnavailable = errors.New("alert service unavailable")
 )
 
 type FlashDutyConfig struct {
@@ -78,6 +82,21 @@ type AlertProxy struct {
 	logger     zerolog.Logger
 }
 
+// isTransportError checks if the error is a transport-level failure
+func isTransportError(err error) bool {
+	if errors.Is(err, io.EOF) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	if strings.Contains(err.Error(), "connection refused") {
+		return true
+	}
+	return false
+}
+
 func NewAlertProxy(cfg *FlashDutyConfig, logger zerolog.Logger) *AlertProxy {
 	timeout := cfg.Timeout
 	if timeout == 0 {
@@ -113,6 +132,9 @@ func (p *AlertProxy) ListAlerts(ctx context.Context, req *AlertListRequest) (*Al
 
 	if err != nil {
 		p.logger.Error().Err(err).Msg("failed to query alerts")
+		if isTransportError(err) {
+			return nil, ErrAlertServiceUnavailable
+		}
 		return nil, ErrAlertQueryFailed
 	}
 
@@ -148,6 +170,9 @@ func (p *AlertProxy) ListIncidents(ctx context.Context, req *IncidentListRequest
 
 	if err != nil {
 		p.logger.Error().Err(err).Msg("failed to query incidents")
+		if isTransportError(err) {
+			return nil, ErrAlertServiceUnavailable
+		}
 		return nil, ErrAlertQueryFailed
 	}
 

@@ -13,4 +13,3 @@ reports/*
 *.bak
 apps/cmdb-server/cmdb-server
 # cmdb-config.yaml
-cmdb-server

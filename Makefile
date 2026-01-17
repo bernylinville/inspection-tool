@@ -15,7 +15,7 @@ GO := go
 GOTEST := $(GO) test
 GOBUILD := $(GO) build
 
-.PHONY: all build build-cli build-all test test-pkg test-cli lint clean coverage help
+.PHONY: all build build-cli build-all test test-pkg test-cli lint clean coverage help dev-up dev-down dev-logs dev-build
 
 all: build
 
@@ -70,3 +70,22 @@ help:
 	@echo "  lint       - 运行代码检查"
 	@echo "  clean      - 清理构建产物"
 	@echo "  coverage   - 生成覆盖率报告"
+	@echo "  dev-up     - 启动开发环境 (Docker)"
+	@echo "  dev-down   - 停止开发环境 (Docker)"
+	@echo "  dev-logs   - 查看开发环境日志"
+	@echo "  dev-build  - 构建开发环境镜像"
+
+dev-up:
+	@echo "==> 启动开发环境..."
+	docker compose -f docker-compose-dev.yml up -d
+
+dev-down:
+	@echo "==> 停止开发环境..."
+	docker compose -f docker-compose-dev.yml down
+
+dev-logs:
+	docker compose -f docker-compose-dev.yml logs -f
+
+dev-build:
+	@echo "==> 构建开发环境镜像..."
+	docker compose -f docker-compose-dev.yml build

@@ -2024,3 +2024,8 @@ Frontend login redirect failed with error "内部服务器错误，请稍后再�
 ### Status
 **RESOLVED** - Login redirect issue fixed. Users can now successfully login and be redirected to dashboard.
 
+## Docker Development Environment Setup (2026-01-17)
+- Status: COMPLETED
+- Created Docker files (Dockerfile.dev, .air.toml, docker-compose-dev.yml)
+- Updated Makefile with dev targets
+- Service ports: PostgreSQL 5432, Redis 6379, Backend 8080, Frontend 5666
