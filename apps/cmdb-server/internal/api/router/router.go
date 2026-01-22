@@ -28,6 +28,7 @@ type Handlers struct {
 	Monitor    *handler.MonitorHandler
 	Alert      *handler.AlertHandler
 	Inspection *handler.InspectionHandler
+	Middleware *handler.MiddlewareHandler
 }
 
 type Router struct {
@@ -246,9 +247,11 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 	{
 		if r.handlers.Alert != nil {
 			alerts.GET("", r.handlers.Alert.ListAlerts)
+			alerts.GET("/statistics", r.handlers.Alert.GetStatistics)
 			alerts.GET("/:id", r.handlers.Alert.GetAlert)
 		} else {
 			alerts.GET("", placeholder("list alerts"))
+			alerts.GET("/statistics", placeholder("alert statistics"))
 			alerts.GET("/:id", placeholder("get alert"))
 		}
 	}
@@ -349,7 +352,14 @@ func (r *Router) setupMiddlewareRoutes(rg *gin.RouterGroup) {
 		}
 	}
 
-	rg.POST("/instances/discover", placeholder("discover instances"))
+	middleware := rg.Group("/middleware")
+	{
+		if r.handlers.Middleware != nil {
+			middleware.POST("/discover", r.handlers.Middleware.DiscoverInstances)
+		} else {
+			middleware.POST("/discover", placeholder("discover middleware instances"))
+		}
+	}
 }
 
 func healthCheck(c *gin.Context) {

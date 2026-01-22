@@ -41,7 +41,7 @@ victoriametrics:
   timeout: 30s
 
 flashduty:
-  base_url: "https://api.flashduty.com"
+  base_url: "https://api.flashcat.cloud"
   app_key: "your-flashduty-app-key-here"
   timeout: 30s
 

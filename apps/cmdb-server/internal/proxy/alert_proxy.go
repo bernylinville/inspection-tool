@@ -38,17 +38,22 @@ type Alert struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	Severity    string `json:"severity"`
+	Severity    string `json:"alert_severity"`
 	Status      string `json:"status"`
 	CreatedAt   int64  `json:"created_at"`
 	UpdatedAt   int64  `json:"updated_at"`
 }
 
+// AlertDataWrapper wraps the data field from FlashDuty API
+type AlertDataWrapper struct {
+	Total int64   `json:"total"`
+	Items []Alert `json:"items"`
+}
+
 type AlertListResponse struct {
-	Code    int     `json:"code"`
-	Message string  `json:"message"`
-	Data    []Alert `json:"data"`
-	Total   int64   `json:"total"`
+	Code    int              `json:"code"`
+	Message string           `json:"message"`
+	Data    AlertDataWrapper `json:"data"`
 }
 
 type IncidentListRequest struct {
@@ -69,11 +74,16 @@ type Incident struct {
 	UpdatedAt   int64  `json:"updated_at"`
 }
 
+// IncidentDataWrapper wraps the data field from FlashDuty API
+type IncidentDataWrapper struct {
+	Total int64      `json:"total"`
+	Items []Incident `json:"items"`
+}
+
 type IncidentListResponse struct {
-	Code    int        `json:"code"`
-	Message string     `json:"message"`
-	Data    []Incident `json:"data"`
-	Total   int64      `json:"total"`
+	Code    int                 `json:"code"`
+	Message string              `json:"message"`
+	Data    IncidentDataWrapper `json:"data"`
 }
 
 type AlertProxy struct {

@@ -2,8 +2,11 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,6 +30,21 @@ type AlertResponse struct {
 	Data               interface{} `json:"data,omitempty"`
 	Total              int64       `json:"total,omitempty"`
 	ServiceUnavailable bool        `json:"service_unavailable,omitempty"`
+}
+
+// PaginatedAlertResponse represents paginated alert response matching frontend expectations
+type PaginatedAlertResponse struct {
+	Items      interface{} `json:"items"`
+	Total      int64       `json:"total"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
+	TotalPages int         `json:"total_pages"`
+}
+
+type WrappedPaginatedResponse struct {
+	Code    int                    `json:"code"`
+	Message string                 `json:"message,omitempty"`
+	Data    PaginatedAlertResponse `json:"data"`
 }
 
 const defaultTimeRangeSeconds = 86400
@@ -87,12 +105,15 @@ func (h *AlertHandler) ListAlerts(c *gin.Context) {
 			return
 		}
 		if errors.Is(err, proxy.ErrAlertServiceUnavailable) {
-			c.JSON(http.StatusOK, AlertResponse{
-				Code:               0,
-				Message:            "alert service unavailable",
-				Data:               []interface{}{},
-				Total:              0,
-				ServiceUnavailable: true,
+			c.JSON(http.StatusOK, WrappedPaginatedResponse{
+				Code: 0,
+				Data: PaginatedAlertResponse{
+					Items:      []interface{}{},
+					Total:      0,
+					Page:       page,
+					PageSize:   pageSize,
+					TotalPages: 0,
+				},
 			})
 			return
 		}
@@ -103,11 +124,18 @@ func (h *AlertHandler) ListAlerts(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, AlertResponse{
-		Code:    0,
-		Message: "success",
-		Data:    resp.Data,
-		Total:   resp.Total,
+	// Calculate total pages
+	totalPages := int(math.Ceil(float64(resp.Data.Total) / float64(pageSize)))
+
+	c.JSON(http.StatusOK, WrappedPaginatedResponse{
+		Code: 0,
+		Data: PaginatedAlertResponse{
+			Items:      resp.Data.Items,
+			Total:      resp.Data.Total,
+			Page:       page,
+			PageSize:   pageSize,
+			TotalPages: totalPages,
+		},
 	})
 }
 
@@ -176,12 +204,15 @@ func (h *AlertHandler) ListIncidents(c *gin.Context) {
 			return
 		}
 		if errors.Is(err, proxy.ErrAlertServiceUnavailable) {
-			c.JSON(http.StatusOK, AlertResponse{
-				Code:               0,
-				Message:            "incident service unavailable",
-				Data:               []interface{}{},
-				Total:              0,
-				ServiceUnavailable: true,
+			c.JSON(http.StatusOK, WrappedPaginatedResponse{
+				Code: 0,
+				Data: PaginatedAlertResponse{
+					Items:      []interface{}{},
+					Total:      0,
+					Page:       page,
+					PageSize:   pageSize,
+					TotalPages: 0,
+				},
 			})
 			return
 		}
@@ -192,11 +223,18 @@ func (h *AlertHandler) ListIncidents(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, AlertResponse{
-		Code:    0,
-		Message: "success",
-		Data:    resp.Data,
-		Total:   resp.Total,
+	// Calculate total pages
+	totalPages := int(math.Ceil(float64(resp.Data.Total) / float64(pageSize)))
+
+	c.JSON(http.StatusOK, WrappedPaginatedResponse{
+		Code: 0,
+		Data: PaginatedAlertResponse{
+			Items:      resp.Data.Items,
+			Total:      resp.Data.Total,
+			Page:       page,
+			PageSize:   pageSize,
+			TotalPages: totalPages,
+		},
 	})
 }
 
@@ -206,5 +244,75 @@ func (h *AlertHandler) GetIncident(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, AlertResponse{
 		Code:    50100,
 		Message: "FlashDuty API does not support single incident query. Use list endpoint with filters.",
+	})
+}
+
+// AlertTrendResult represents the statistics data for alert trends
+type AlertTrendResult struct {
+	Labels   []string `json:"labels"`
+	Critical []int    `json:"critical"`
+	Warning  []int    `json:"warning"`
+}
+
+// GetStatistics returns alert trend statistics for dashboard
+func (h *AlertHandler) GetStatistics(c *gin.Context) {
+	now := time.Now()
+
+	// Initialize 7-day buckets
+	labels := make([]string, 7)
+	critical := make([]int, 7)
+	warning := make([]int, 7)
+
+	for i := 0; i < 7; i++ {
+		date := now.AddDate(0, 0, i-6)
+		labels[i] = fmt.Sprintf("%d/%d", int(date.Month()), date.Day())
+	}
+
+	// Fetch 7 days of alerts from FlashDuty
+	startTime := now.AddDate(0, 0, -6).Truncate(24 * time.Hour).Unix()
+	endTime := now.Unix()
+
+	req := &proxy.AlertListRequest{
+		StartTime: startTime,
+		EndTime:   endTime,
+		PageSize:  1000, // Get all alerts in range
+	}
+
+	resp, err := h.alertProxy.ListAlerts(c.Request.Context(), req)
+	if err != nil {
+		// Return empty data with service_unavailable flag on error
+		c.JSON(http.StatusOK, gin.H{
+			"code":                0,
+			"message":             "success",
+			"data":                gin.H{"labels": labels, "critical": critical, "warning": warning},
+			"service_unavailable": true,
+		})
+		return
+	}
+
+	// Aggregate by day and severity
+	for _, alert := range resp.Data.Items {
+		alertTime := time.Unix(alert.CreatedAt, 0)
+		dayIndex := int(now.Sub(alertTime).Hours() / 24)
+		if dayIndex < 0 || dayIndex > 6 {
+			continue
+		}
+		idx := 6 - dayIndex // Reverse index (oldest first)
+
+		switch strings.ToLower(alert.Severity) {
+		case "critical", "p0", "p1":
+			critical[idx]++
+		case "warning", "p2", "p3", "info":
+			warning[idx]++
+		default:
+			warning[idx]++ // Default to warning
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":                0,
+		"message":             "success",
+		"data":                gin.H{"labels": labels, "critical": critical, "warning": warning},
+		"service_unavailable": false,
 	})
 }

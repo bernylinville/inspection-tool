@@ -27,6 +27,7 @@ services:
     build:
       context: .
       dockerfile: apps/cmdb-server/Dockerfile.dev
+      network: host
     ports:
       - "8080:8080"
     volumes:
@@ -47,8 +48,9 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile.dev
+      network: host
     ports:
-      - "5666:80"
+      - "8088:80"
     depends_on:
       - backend
     networks:

@@ -31,3 +31,15 @@ export async function listIncidentsApi(params?: IncidentListParams): Promise<Pag
 export async function getIncidentApi(id: string) {
   return requestClient.get<Incident>(`/incidents/${id}`);
 }
+
+export interface AlertStatisticsData {
+  labels: string[];
+  critical: number[];
+  warning: number[];
+}
+
+export async function getAlertStatisticsApi() {
+  return requestClient.get<{ code: number; data: AlertStatisticsData; service_unavailable?: boolean }>(
+    '/alerts/statistics',
+  );
+}

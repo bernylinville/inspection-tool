@@ -24,6 +24,7 @@ COPY apps/inspect-cli/ ./apps/inspect-cli/
 RUN go build -o /app/cmdb-server ./apps/cmdb-server/cmd/main.go
 
 FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/cmdb-server ./cmdb-server
 EXPOSE 8080

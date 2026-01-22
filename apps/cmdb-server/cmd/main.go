@@ -117,6 +117,8 @@ func main() {
 
 	hostSyncService := sync.NewHostSyncService(n9eClient, hostRepo, log)
 
+	instanceDiscoveryService := sync.NewInstanceDiscoveryService(vmClient, hostRepo, mysqlRepo, redisRepo, nginxRepo, tomcatRepo, elasticsearchRepo, log)
+
 	assetService := asset.NewAssetService(db, projectRepo, applicationRepo, hostRepo, mysqlRepo, redisRepo, nginxRepo, tomcatRepo, elasticsearchRepo)
 
 	monitorProxy := proxy.NewMonitorProxy(vmClient, log)
@@ -141,6 +143,7 @@ func main() {
 	inspectionHandler := handler.NewInspectionHandler(inspectService)
 	userHandler := handler.NewUserHandler(userService)
 	roleHandler := handler.NewRoleHandler(roleService)
+	middlewareHandler := handler.NewMiddlewareHandler(instanceDiscoveryService)
 
 	// Start HTTP server
 	serverConfig := &router.Config{
@@ -157,6 +160,7 @@ func main() {
 		Monitor:    monitorHandler,
 		Alert:      alertHandler,
 		Inspection: inspectionHandler,
+		Middleware: middlewareHandler,
 	})
 	router.SetupRoutes()
 

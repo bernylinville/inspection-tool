@@ -5,6 +5,8 @@ import { onMounted, ref, watch } from 'vue';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
+import { getAlertStatisticsApi } from '#/api/cmdb';
+
 interface Props {
   loading?: boolean;
 }
@@ -27,17 +29,29 @@ const renderChart = () => {
   renderEcharts(chartOption.value);
 };
 
-onMounted(() => {
-  const labels: string[] = [];
-  const criticalData: number[] = [];
-  const warningData: number[] = [];
+onMounted(async () => {
+  let labels: string[] = [];
+  let criticalData: number[] = [];
+  let warningData: number[] = [];
 
-  for (let index = 6; index >= 0; index -= 1) {
-    const date = new Date();
-    date.setDate(date.getDate() - index);
-    labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
-    criticalData.push(Math.floor(Math.random() * 10) + 2);
-    warningData.push(Math.floor(Math.random() * 15) + 4);
+  try {
+    const res = await getAlertStatisticsApi();
+    if (res.code === 0 && res.data) {
+      labels = res.data.labels;
+      criticalData = res.data.critical;
+      warningData = res.data.warning;
+    } else {
+      throw new Error('Invalid response');
+    }
+  } catch {
+    // Fallback to deterministic mock data if API fails
+    for (let index = 6; index >= 0; index -= 1) {
+      const date = new Date();
+      date.setDate(date.getDate() - index);
+      labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+      criticalData.push(3 + (6 - index) % 4);
+      warningData.push(8 + (6 - index) % 5);
+    }
   }
 
   chartOption.value = {
