@@ -32,12 +32,12 @@ logging:
 
 # External Systems
 n9e:
-  base_url: "http://120.26.87.44:17000"
-  token: "750aaa24-bad6-4f1c-82a7-120f86a6e9f0"
+  base_url: "http://your-n9e-host:17000"
+  token: "your-n9e-token-here"
   timeout: 30s
 
 victoriametrics:
-  base_url: "http://120.26.87.44:8428"
+  base_url: "http://your-vm-host:8428"
   timeout: 30s
 
 flashduty:

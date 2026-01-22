@@ -1,12 +1,29 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25 AS builder
+
+# 设置 Go 代理使用国内镜像，解决 DNS/网络问题
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GO111MODULE=on
+
 WORKDIR /app
+
+# 先复制依赖文件，利用 Docker 缓存
 COPY go.work go.work.sum ./
+COPY pkg/go.mod pkg/go.sum ./pkg/
+COPY apps/cmdb-server/go.mod apps/cmdb-server/go.sum ./apps/cmdb-server/
+COPY apps/inspect-cli/go.mod apps/inspect-cli/go.sum ./apps/inspect-cli/
+
+# 下载依赖（这一层会被缓存）
+RUN go mod download
+
+# 复制源代码
 COPY pkg/ ./pkg/
 COPY apps/cmdb-server/ ./apps/cmdb-server/
 COPY apps/inspect-cli/ ./apps/inspect-cli/
+
+# 构建
 RUN go build -o /app/cmdb-server ./apps/cmdb-server/cmd/main.go
 
-FROM alpine:3.23
+FROM debian:trixie-slim
 WORKDIR /app
 COPY --from=builder /app/cmdb-server ./cmdb-server
 EXPOSE 8080

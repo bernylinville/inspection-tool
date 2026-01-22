@@ -17,3 +17,16 @@ Ask OpenCode to return:
 Constraints:
 - Do NOT paste long logs; summarize and include only what is needed to verify correctness.
 - Prefer short diff summaries; list exact file paths changed.
+
+## Gemini Delegation (Large Code Analysis)
+
+When to delegate to Gemini via gask:
+1) Large codebase analysis (>5 files or >1000 lines total)
+2) Project structure understanding
+3) Architecture analysis and dependency mapping
+4) Cross-file pattern recognition
+
+Ask Gemini to return:
+- `summary`: High-level overview
+- `structure`: Key components and relationships
+- `insights`: Design patterns and recommendations

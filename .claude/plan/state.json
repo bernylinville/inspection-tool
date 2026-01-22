@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "taskName": "Fix CMDB Dashboard Alert API Errors",
+  "currentStep": 1,
+  "totalSteps": 5,
+  "status": "in_progress",
+  "steps": [
+    {"id": 1, "title": "Add ErrAlertServiceUnavailable error type in alert_proxy.go", "status": "pending"},
+    {"id": 2, "title": "Map network errors to new error type", "status": "pending"},
+    {"id": 3, "title": "Update alert.go handler to return HTTP 200 with service_unavailable flag", "status": "pending"},
+    {"id": 4, "title": "Preserve HTTP 500 for genuine internal errors", "status": "pending"},
+    {"id": 5, "title": "Rebuild backend and verify dashboard loads without errors", "status": "pending"}
+  ]
+}

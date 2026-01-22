@@ -13,3 +13,6 @@ reports/*
 *.bak
 apps/cmdb-server/cmdb-server
 # cmdb-config.yaml
+cmdb-dev-config.yaml
+apps/cmdb-server/configs/config.yaml
+apps/cmdb-server/tmp

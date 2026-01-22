@@ -116,6 +116,7 @@ Use **sequential-thinking** for complex problem-solving that requires structured
 - write/edit files or file-changing bash → executor: codex+opencode → MUST use cask (Codex will delegate to OpenCode via oask) (prefer /file-op)
 - web search (WebSearch/WebFetch) → web_searcher: use gask "task"
 - repo search (Grep/Glob or Bash rg/grep/git grep) → repo_searcher: use cask "task"
+- large code analysis (>5 files) → use gask "analyze codebase..."
 - git mutate (add/commit/push/merge/rebase/reset) → git_manager: use cask "task"
 - read-only is OK directly: Read, and git status/log/diff/show (Grep/Glob is delegated)
 
