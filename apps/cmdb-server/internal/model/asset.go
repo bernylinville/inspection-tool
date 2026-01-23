@@ -14,6 +14,8 @@ type Project struct {
 	Description  string `gorm:"type:text"`
 	Owner        string `gorm:"size:100"`
 	Status       string `gorm:"size:20;default:'active'"`
+	HostCount    int    `gorm:"default:0"`
+	N9EGroupID   int64  `gorm:"index"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	Applications []Application `gorm:"foreignKey:ProjectID"`

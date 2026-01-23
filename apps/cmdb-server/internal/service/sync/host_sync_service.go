@@ -2,10 +2,12 @@ package sync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/rs/zerolog"
+	"gorm.io/datatypes"
 
 	"inspection-tool/apps/cmdb-server/internal/model"
 	"inspection-tool/apps/cmdb-server/internal/repository"
@@ -91,6 +93,21 @@ func (s *HostSyncService) syncHost(ctx context.Context, target n9e.TargetData) e
 		return errors.New("host meta is nil")
 	}
 
+	businessGroup := ""
+	if len(target.TagsMaps) > 0 {
+		if items, ok := target.TagsMaps["items"]; ok {
+			businessGroup = items
+		}
+	}
+
+	var tagsJSON datatypes.JSON
+	if len(target.TagsMaps) > 0 {
+		data, err := json.Marshal(target.TagsMaps)
+		if err == nil {
+			tagsJSON = datatypes.JSON(data)
+		}
+	}
+
 	now := time.Now()
 	existing, err := s.hostRepo.FindByIdent(ctx, hostMeta.Ident)
 	if err != nil {
@@ -108,6 +125,8 @@ func (s *HostSyncService) syncHost(ctx context.Context, target n9e.TargetData) e
 			CPUCores:      hostMeta.CPUCores,
 			CPUModel:      hostMeta.CPUModel,
 			MemoryTotal:   hostMeta.MemoryTotal,
+			BusinessGroup: businessGroup,
+			Tags:          tagsJSON,
 			LastSyncAt:    &now,
 		}
 
@@ -125,8 +144,11 @@ func (s *HostSyncService) syncHost(ctx context.Context, target n9e.TargetData) e
 			CPUCores:      hostMeta.CPUCores,
 			CPUModel:      hostMeta.CPUModel,
 			MemoryTotal:   hostMeta.MemoryTotal,
+			BusinessGroup: businessGroup,
+			Tags:          tagsJSON,
 			LastSyncAt:    &now,
 		}
+
 		return s.hostRepo.Create(ctx, host)
 	}
 
@@ -139,6 +161,8 @@ func (s *HostSyncService) syncHost(ctx context.Context, target n9e.TargetData) e
 	existing.CPUCores = hostMeta.CPUCores
 	existing.CPUModel = hostMeta.CPUModel
 	existing.MemoryTotal = hostMeta.MemoryTotal
+	existing.BusinessGroup = businessGroup
+	existing.Tags = tagsJSON
 	existing.LastSyncAt = &now
 
 	return s.hostRepo.Update(ctx, existing)

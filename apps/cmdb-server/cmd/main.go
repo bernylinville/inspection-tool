@@ -117,6 +117,8 @@ func main() {
 
 	hostSyncService := sync.NewHostSyncService(n9eClient, hostRepo, log)
 
+	projectSyncService := sync.NewProjectSyncService(n9eClient, projectRepo, hostRepo, db, log)
+
 	instanceDiscoveryService := sync.NewInstanceDiscoveryService(vmClient, hostRepo, mysqlRepo, redisRepo, nginxRepo, tomcatRepo, elasticsearchRepo, log)
 
 	assetService := asset.NewAssetService(db, projectRepo, applicationRepo, hostRepo, mysqlRepo, redisRepo, nginxRepo, tomcatRepo, elasticsearchRepo)
@@ -137,7 +139,7 @@ func main() {
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService, userRepo)
-	assetHandler := handler.NewAssetHandler(assetService, hostSyncService)
+	assetHandler := handler.NewAssetHandler(assetService, hostSyncService, projectSyncService)
 	monitorHandler := handler.NewMonitorHandler(monitorProxy)
 	alertHandler := handler.NewAlertHandler(alertProxy)
 	inspectionHandler := handler.NewInspectionHandler(inspectService)

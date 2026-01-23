@@ -23,16 +23,18 @@ type DiskMountInfo struct {
 
 // HostMeta contains basic metadata about a host collected from N9E API.
 type HostMeta struct {
-	Ident         string          `json:"ident"`          // 原始标识符
-	Hostname      string          `json:"hostname"`       // 主机名（从 ident 清理得到）
-	IP            string          `json:"ip"`             // IP 地址
-	OS            string          `json:"os"`             // 操作系统类型
-	OSVersion     string          `json:"os_version"`     // 操作系统版本
-	KernelVersion string          `json:"kernel_version"` // 内核版本
-	CPUCores      int             `json:"cpu_cores"`      // CPU 核心数
-	CPUModel      string          `json:"cpu_model"`      // CPU 型号
-	MemoryTotal   int64           `json:"memory_total"`   // 内存总量（bytes）
-	DiskMounts    []DiskMountInfo `json:"disk_mounts"`    // 磁盘挂载点列表
+	Ident         string            `json:"ident"`          // 原始标识符
+	Hostname      string            `json:"hostname"`       // 主机名（从 ident 清理得到）
+	IP            string            `json:"ip"`             // IP 地址
+	OS            string            `json:"os"`             // 操作系统类型
+	OSVersion     string            `json:"os_version"`     // 操作系统版本
+	KernelVersion string            `json:"kernel_version"` // 内核版本
+	CPUCores      int               `json:"cpu_cores"`      // CPU 核心数
+	CPUModel      string            `json:"cpu_model"`      // CPU 型号
+	MemoryTotal   int64             `json:"memory_total"`   // 内存总量（bytes）
+	DiskMounts    []DiskMountInfo   `json:"disk_mounts"`    // 磁盘挂载点列表
+	BusinessGroup string            `json:"business_group"` // From items label
+	Tags          map[string]string `json:"tags"`           // All N9E tags
 }
 
 // CleanIdent extracts the hostname from an ident string.

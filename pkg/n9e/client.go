@@ -216,3 +216,37 @@ func (c *Client) GetHostMetaByIdent(ctx context.Context, ident string) (*model.H
 
 	return target.ToHostMeta()
 }
+
+// GetBusiGroups retrieves all business groups from N9E
+func (c *Client) GetBusiGroups(ctx context.Context) ([]BusiGroup, error) {
+	c.logger.Debug().Msg("fetching business groups from N9E")
+
+	var result BusiGroupsResponse
+
+	resp, err := c.httpClient.R().
+		SetContext(ctx).
+		SetResult(&result).
+		SetQueryParam("limit", "5000").
+		Get("/api/n9e/busi-groups")
+
+	if err != nil {
+		c.logger.Error().Err(err).Msg("failed to fetch business groups")
+		return nil, fmt.Errorf("failed to fetch business groups: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		c.logger.Error().
+			Int("status_code", resp.StatusCode()).
+			Str("body", string(resp.Body())).
+			Msg("N9E API returned non-200 status")
+		return nil, fmt.Errorf("N9E API returned status %d: %s", resp.StatusCode(), string(resp.Body()))
+	}
+
+	if result.Err != "" {
+		c.logger.Error().Str("api_error", result.Err).Msg("N9E API returned error")
+		return nil, fmt.Errorf("N9E API error: %s", result.Err)
+	}
+
+	c.logger.Info().Int("count", len(result.Dat)).Msg("fetched business groups successfully")
+	return result.Dat, nil
+}

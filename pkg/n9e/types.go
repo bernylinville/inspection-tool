@@ -264,5 +264,28 @@ func (t *TargetData) ToHostMeta() (*model.HostMeta, error) {
 		hostMeta.IP = t.RemoteAddr
 	}
 
+	if items, ok := t.TagsMaps["items"]; ok {
+		hostMeta.BusinessGroup = items
+	}
+	hostMeta.Tags = t.TagsMaps
+
 	return hostMeta, nil
+}
+
+// BusiGroupsResponse represents GET /api/n9e/busi-groups response
+type BusiGroupsResponse struct {
+	Dat []BusiGroup `json:"dat"`
+	Err string      `json:"err"`
+}
+
+// BusiGroup represents a N9E business group
+type BusiGroup struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	LabelEnable int    `json:"label_enable"`
+	LabelValue  string `json:"label_value"`
+	CreateAt    int64  `json:"create_at"`
+	CreateBy    string `json:"create_by"`
+	UpdateAt    int64  `json:"update_at"`
+	UpdateBy    string `json:"update_by"`
 }

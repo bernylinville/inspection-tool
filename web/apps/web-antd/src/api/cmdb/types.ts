@@ -160,6 +160,7 @@ export interface Project {
   description?: string;
   owner?: string;
   status: ProjectStatus;
+  host_count?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -266,6 +267,16 @@ export interface SyncHostsResult {
   updated_hosts: number;
   failed_hosts: number;
   duration: string;
+}
+
+export interface SyncProjectsResult {
+  total_groups: number;
+  new_projects: number;
+  updated_projects: number;
+  duration: string;
+  // Backward compat with current backend
+  total_projects?: number;
+  failed_projects?: number;
 }
 
 // ============ 中间件实例 ============

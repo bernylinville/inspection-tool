@@ -14,6 +14,7 @@ import type {
   ProjectCreateRequest,
   ProjectUpdateRequest,
   SyncHostsResult,
+  SyncProjectsResult,
 } from './types';
 
 export async function listProjectsApi(params?: PaginationParams) {
@@ -34,6 +35,10 @@ export async function updateProjectApi(id: number, data: ProjectUpdateRequest) {
 
 export async function deleteProjectApi(id: number) {
   return requestClient.delete(`/projects/${id}`);
+}
+
+export async function syncProjectsApi() {
+  return requestClient.post<SyncProjectsResult>('/projects/sync');
 }
 
 export async function listApplicationsApi(params?: PaginationParams) {

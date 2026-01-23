@@ -38,6 +38,7 @@ type ProjectResponse struct {
 	Description string `json:"description"`
 	Owner       string `json:"owner"`
 	Status      string `json:"status"`
+	HostCount   int    `json:"host_count"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -193,6 +194,20 @@ type SyncHostsData struct {
 	UpdatedHosts int    `json:"updated_hosts"`
 	FailedHosts  int    `json:"failed_hosts"`
 	Duration     string `json:"duration"`
+}
+
+type SyncProjectsResponse struct {
+	Code    int               `json:"code"`
+	Message string            `json:"message"`
+	Data    *SyncProjectsData `json:"data,omitempty"`
+}
+
+type SyncProjectsData struct {
+	TotalProjects   int    `json:"total_projects"`
+	NewProjects     int    `json:"new_projects"`
+	UpdatedProjects int    `json:"updated_projects"`
+	FailedProjects  int    `json:"failed_projects"`
+	Duration        string `json:"duration"`
 }
 
 // Middleware Instance Responses
@@ -372,14 +387,16 @@ type ElasticsearchClusterDetailResponse struct {
 // ==================== Handler ====================
 
 type AssetHandler struct {
-	assetService    *asset.AssetService
-	hostSyncService *sync.HostSyncService
+	assetService       *asset.AssetService
+	hostSyncService    *sync.HostSyncService
+	projectSyncService *sync.ProjectSyncService
 }
 
-func NewAssetHandler(assetService *asset.AssetService, hostSyncService *sync.HostSyncService) *AssetHandler {
+func NewAssetHandler(assetService *asset.AssetService, hostSyncService *sync.HostSyncService, projectSyncService *sync.ProjectSyncService) *AssetHandler {
 	return &AssetHandler{
-		assetService:    assetService,
-		hostSyncService: hostSyncService,
+		assetService:       assetService,
+		hostSyncService:    hostSyncService,
+		projectSyncService: projectSyncService,
 	}
 }
 
@@ -595,6 +612,37 @@ func (h *AssetHandler) DeleteProject(c *gin.Context) {
 	})
 }
 
+func (h *AssetHandler) SyncProjects(c *gin.Context) {
+	if h.projectSyncService == nil {
+		c.JSON(http.StatusServiceUnavailable, SyncProjectsResponse{
+			Code:    50301,
+			Message: "project sync service not available",
+		})
+		return
+	}
+
+	result, err := h.projectSyncService.SyncProjects(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, SyncProjectsResponse{
+			Code:    50001,
+			Message: "failed to sync projects: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SyncProjectsResponse{
+		Code:    0,
+		Message: "projects synced successfully",
+		Data: &SyncProjectsData{
+			TotalProjects:   result.TotalProjects,
+			NewProjects:     result.NewProjects,
+			UpdatedProjects: result.UpdatedProjects,
+			FailedProjects:  result.FailedProjects,
+			Duration:        result.Duration.String(),
+		},
+	})
+}
+
 func convertProjectToResponse(p *model.Project) ProjectResponse {
 	return ProjectResponse{
 		ID:          p.ID,
@@ -603,6 +651,7 @@ func convertProjectToResponse(p *model.Project) ProjectResponse {
 		Description: p.Description,
 		Owner:       p.Owner,
 		Status:      p.Status,
+		HostCount:   p.HostCount,
 		CreatedAt:   p.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   p.UpdatedAt.Format(time.RFC3339),
 	}

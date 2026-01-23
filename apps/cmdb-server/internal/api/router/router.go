@@ -183,12 +183,14 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 			projects.GET("/:id", r.handlers.Asset.GetProject)
 			projects.PUT("/:id", r.handlers.Asset.UpdateProject)
 			projects.DELETE("/:id", r.handlers.Asset.DeleteProject)
+			projects.POST("/sync", r.handlers.Asset.SyncProjects)
 		} else {
 			projects.GET("", placeholder("list projects"))
 			projects.POST("", placeholder("create project"))
 			projects.GET("/:id", placeholder("get project"))
 			projects.PUT("/:id", placeholder("update project"))
 			projects.DELETE("/:id", placeholder("delete project"))
+			projects.POST("/sync", placeholder("sync projects"))
 		}
 	}
 
