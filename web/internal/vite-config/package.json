@@ -55,5 +55,6 @@
     "vite-plugin-dts": "catalog:",
     "vite-plugin-html": "catalog:",
     "vite-plugin-lazy-import": "catalog:"
+   ,"unplugin-vue-components": "catalog:"
   }
 }

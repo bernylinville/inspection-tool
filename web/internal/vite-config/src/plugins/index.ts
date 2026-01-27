@@ -16,6 +16,8 @@ import viteDtsPlugin from 'vite-plugin-dts';
 import { createHtmlPlugin as viteHtmlPlugin } from 'vite-plugin-html';
 import { VitePWA } from 'vite-plugin-pwa';
 import viteVueDevTools from 'vite-plugin-vue-devtools';
+import Components from 'unplugin-vue-components/vite';
+import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers';
 
 import { viteArchiverPlugin } from './archiver';
 import { viteExtraAppConfigPlugin } from './extra-app-config';
@@ -142,6 +144,19 @@ async function loadApplicationPlugins(
         return [await viteVxeTableImportsPlugin()];
       },
     },
+   {
+     condition: true,
+     plugins: () => [
+       Components({
+         resolvers: [
+           AntDesignVueResolver({
+             importStyle: false,
+           }),
+         ],
+         dts: 'src/components.d.ts',
+       }),
+     ],
+   },
     {
       condition: nitroMock,
       plugins: async () => {

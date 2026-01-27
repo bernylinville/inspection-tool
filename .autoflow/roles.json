@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "enabled": true,
-  "executor": "codex+opencode",
+  "executor": "codex",
   "reviewer": "codex",
   "documenter": "gemini",
   "designer": ["claude", "codex"],

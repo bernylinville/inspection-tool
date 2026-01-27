@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 	"gorm.io/datatypes"
 
 	"inspection-tool/apps/cmdb-server/internal/model"
@@ -52,32 +55,65 @@ func (s *HostSyncService) SyncHosts(ctx context.Context) (*SyncResult, error) {
 		TotalHosts: len(targets),
 	}
 
+	const maxConcurrency = int64(10)
+	sem := semaphore.NewWeighted(maxConcurrency)
+	group, groupCtx := errgroup.WithContext(ctx)
+	var mu sync.Mutex
+
 	for _, target := range targets {
-		isNew := false
-		existing, err := s.hostRepo.FindByIdent(ctx, target.Ident)
-		if err != nil {
-			if isRecordNotFound(err) {
-				isNew = true
-			} else {
-				result.FailedHosts++
-				s.logger.Warn().Err(err).Str("ident", target.Ident).Msg("failed to check existing host")
-				continue
+		target := target
+		group.Go(func() error {
+			if err := sem.Acquire(groupCtx, 1); err != nil {
+				return err
 			}
-		} else if existing == nil {
-			isNew = true
-		}
+			defer sem.Release(1)
 
-		if err := s.syncHost(ctx, target); err != nil {
-			result.FailedHosts++
-			s.logger.Warn().Err(err).Str("ident", target.Ident).Msg("failed to sync host")
-			continue
-		}
+			detail := target
+			detailTarget, err := s.n9eClient.GetTarget(groupCtx, target.Ident)
+			if err != nil {
+				s.logger.Warn().Err(err).Str("ident", target.Ident).Msg("failed to fetch target detail, using basic info")
+			} else if detailTarget != nil {
+				detail = *detailTarget
+			}
 
-		if isNew {
-			result.NewHosts++
-		} else {
-			result.UpdatedHosts++
-		}
+			isNew := false
+			existing, err := s.hostRepo.FindByIdent(groupCtx, detail.Ident)
+			if err != nil {
+				if isRecordNotFound(err) {
+					isNew = true
+				} else {
+					mu.Lock()
+					result.FailedHosts++
+					mu.Unlock()
+					s.logger.Warn().Err(err).Str("ident", detail.Ident).Msg("failed to check existing host")
+					return nil
+				}
+			} else if existing == nil {
+				isNew = true
+			}
+
+			if err := s.syncHost(groupCtx, detail); err != nil {
+				mu.Lock()
+				result.FailedHosts++
+				mu.Unlock()
+				s.logger.Warn().Err(err).Str("ident", detail.Ident).Msg("failed to sync host")
+				return nil
+			}
+
+			mu.Lock()
+			if isNew {
+				result.NewHosts++
+			} else {
+				result.UpdatedHosts++
+			}
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 
 	result.Duration = time.Since(startTime)
