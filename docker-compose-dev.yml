@@ -24,10 +24,7 @@ services:
       - inspection-dev
 
   backend:
-    build:
-      context: .
-      dockerfile: apps/cmdb-server/Dockerfile.dev
-      network: host
+    image: ghcr.io/bernylinville/inspection-tool/backend:dev
     ports:
       - "8080:8080"
     volumes:
@@ -45,10 +42,7 @@ services:
       REDIS_PORT: 6379
 
   frontend:
-    build:
-      context: ./web
-      dockerfile: Dockerfile.dev
-      network: host
+    image: ghcr.io/bernylinville/inspection-tool/frontend:dev
     ports:
       - "8088:80"
     depends_on:

@@ -10,12 +10,14 @@ CLI_LDFLAGS := -X $(CLI_PKG).Version=$(VERSION) -X $(CLI_PKG).BuildTime=$(BUILD_
 BINARY_NAME := inspect
 BUILD_DIR := bin
 COVERAGE_DIR := coverage
+DEV_DEPLOY_HOST ?= 10.0.7.225
+DEV_DEPLOY_PATH ?= /home/kchou/Code/inspection-tool
 
 GO := go
 GOTEST := $(GO) test
 GOBUILD := $(GO) build
 
-.PHONY: all build build-cli build-all test test-pkg test-cli lint clean coverage help dev-up dev-down dev-logs dev-build
+.PHONY: all build build-cli build-all test test-pkg test-cli lint clean coverage help dev-up dev-down dev-logs dev-build deploy-dev
 
 all: build
 
@@ -74,6 +76,7 @@ help:
 	@echo "  dev-down   - 停止开发环境 (Docker)"
 	@echo "  dev-logs   - 查看开发环境日志"
 	@echo "  dev-build  - 构建开发环境镜像"
+	@echo "  deploy-dev - SSH 部署开发环境到 $(DEV_DEPLOY_HOST)"
 
 dev-up:
 	@echo "==> 启动开发环境..."
@@ -89,3 +92,7 @@ dev-logs:
 dev-build:
 	@echo "==> 构建开发环境镜像..."
 	docker compose -f docker-compose-dev.yml build
+
+deploy-dev:
+	@echo "==> 部署开发环境到 $(DEV_DEPLOY_HOST)..."
+	ssh $(DEV_DEPLOY_HOST) 'cd $(DEV_DEPLOY_PATH) && bash scripts/deploy-dev.sh'
