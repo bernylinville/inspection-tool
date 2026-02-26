@@ -25,14 +25,22 @@ const severityClass = computed(() => ({
   default: 'bg-blue-100 text-blue-800',
 }));
 
-const formatTime = (value?: string) => {
+const formatTime = (value?: string | number) => {
   if (!value) {
     return '-';
   }
 
-  const date = new Date(value);
+  let date: Date;
+
+  if (typeof value === 'number' || /^\d+$/.test(value)) {
+    const numValue = typeof value === 'number' ? value : parseInt(value, 10);
+    date = new Date(numValue * 1000);
+  } else {
+    date = new Date(value);
+  }
+
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return String(value);
   }
 
   const month = String(date.getMonth() + 1);

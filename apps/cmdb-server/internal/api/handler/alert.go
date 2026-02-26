@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -10,17 +13,20 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 
 	"inspection-tool/apps/cmdb-server/internal/proxy"
 )
 
 type AlertHandler struct {
 	alertProxy *proxy.AlertProxy
+	redis      *redis.Client
 }
 
-func NewAlertHandler(alertProxy *proxy.AlertProxy) *AlertHandler {
+func NewAlertHandler(alertProxy *proxy.AlertProxy, redisClient *redis.Client) *AlertHandler {
 	return &AlertHandler{
 		alertProxy: alertProxy,
+		redis:      redisClient,
 	}
 }
 
@@ -48,6 +54,7 @@ type WrappedPaginatedResponse struct {
 }
 
 const defaultTimeRangeSeconds = 86400
+const cacheTTLSeconds = 30
 
 func (h *AlertHandler) ListAlerts(c *gin.Context) {
 	now := time.Now().Unix()
@@ -87,6 +94,30 @@ func (h *AlertHandler) ListAlerts(c *gin.Context) {
 		pageSize = 20
 	}
 
+	cacheKey := fmt.Sprintf("alerts:%d:%d:%d:%d", start, end, page, pageSize)
+
+	var resp *proxy.AlertListResponse
+
+	if h.redis != nil {
+		cached, err := h.redis.Get(context.Background(), cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cached), &resp); err == nil {
+				totalPages := int(math.Ceil(float64(resp.Data.Total) / float64(pageSize)))
+				c.JSON(http.StatusOK, WrappedPaginatedResponse{
+					Code: 0,
+					Data: PaginatedAlertResponse{
+						Items:      resp.Data.Items,
+						Total:      resp.Data.Total,
+						Page:       page,
+						PageSize:   pageSize,
+						TotalPages: totalPages,
+					},
+				})
+				return
+			}
+		}
+	}
+
 	req := &proxy.AlertListRequest{
 		StartTime: start,
 		EndTime:   end,
@@ -95,7 +126,7 @@ func (h *AlertHandler) ListAlerts(c *gin.Context) {
 		PageSize:  pageSize,
 	}
 
-	resp, err := h.alertProxy.ListAlerts(c.Request.Context(), req)
+	resp, err = h.alertProxy.ListAlerts(c.Request.Context(), req)
 	if err != nil {
 		if errors.Is(err, proxy.ErrInvalidAPIKey) {
 			c.JSON(http.StatusUnauthorized, AlertResponse{
@@ -122,6 +153,13 @@ func (h *AlertHandler) ListAlerts(c *gin.Context) {
 			Message: "failed to query alerts: " + err.Error(),
 		})
 		return
+	}
+
+	if h.redis != nil {
+		if data, err := json.Marshal(resp); err == nil {
+			if cacheErr := h.redis.Set(context.Background(), cacheKey, data, cacheTTLSeconds*time.Second).Err(); cacheErr != nil {
+			}
+		}
 	}
 
 	// Calculate total pages
@@ -268,8 +306,8 @@ func (h *AlertHandler) GetStatistics(c *gin.Context) {
 		labels[i] = fmt.Sprintf("%d/%d", int(date.Month()), date.Day())
 	}
 
-	// Fetch 7 days of alerts from FlashDuty
-	startTime := now.AddDate(0, 0, -6).Truncate(24 * time.Hour).Unix()
+	// Use 30-day window (FlashDuty API max: 31 days) to capture active alerts
+	startTime := now.AddDate(0, 0, -30).Truncate(24 * time.Hour).Unix()
 	endTime := now.Unix()
 
 	req := &proxy.AlertListRequest{
@@ -291,10 +329,13 @@ func (h *AlertHandler) GetStatistics(c *gin.Context) {
 	}
 
 	// Aggregate by day and severity
+	log.Printf("Processing %d alerts for statistics", len(resp.Data.Items))
+	skippedCount := 0
 	for _, alert := range resp.Data.Items {
-		alertTime := time.Unix(alert.CreatedAt, 0)
+		alertTime := time.Unix(alert.UpdatedAt, 0)
 		dayIndex := int(now.Sub(alertTime).Hours() / 24)
 		if dayIndex < 0 || dayIndex > 6 {
+			skippedCount++
 			continue
 		}
 		idx := 6 - dayIndex // Reverse index (oldest first)
@@ -308,6 +349,7 @@ func (h *AlertHandler) GetStatistics(c *gin.Context) {
 			warning[idx]++ // Default to warning
 		}
 	}
+	log.Printf("Statistics: Critical=%v, Warning=%v, Skipped=%d", critical, warning, skippedCount)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":                0,

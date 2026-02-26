@@ -7,7 +7,7 @@ import { cn } from '@vben-core/shared/utils';
 
 import { ScrollArea, ScrollBar } from '../../ui';
 
-interface Props {
+export interface Props {
   class?: ClassType;
   horizontal?: boolean;
   scrollBarClass?: ClassType;

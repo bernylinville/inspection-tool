@@ -35,11 +35,12 @@ const typeLabels: Record<string, string> = {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
+  { title: '项目', dataIndex: 'project_code', key: 'project_code', width: 150 },
   { title: '类型', dataIndex: 'type', key: 'type', width: 150 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
   { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
-  { title: '开始时间', dataIndex: 'started_at', key: 'started_at', width: 180 },
-  { title: '完成时间', dataIndex: 'completed_at', key: 'completed_at', width: 180 },
+  { title: '开始时间', dataIndex: 'start_time', key: 'start_time', width: 180 },
+  { title: '完成时间', dataIndex: 'end_time', key: 'end_time', width: 180 },
   { title: '操作', key: 'actions', width: 150, fixed: 'right' as const },
 ];
 
@@ -74,6 +75,9 @@ function handleTableChange(pagination: any) {
       <template v-if="column.key === 'type'">
         {{ typeLabels[(record as InspectionJob).type] || (record as InspectionJob).type }}
       </template>
+      <template v-else-if="column.key === 'project_code'">
+        {{ (record as InspectionJob).project_code || '-' }}
+      </template>
       <template v-else-if="column.key === 'status'">
         <Tag :color="statusColors[(record as InspectionJob).status]">
           {{ (record as InspectionJob).status }}
@@ -82,11 +86,11 @@ function handleTableChange(pagination: any) {
       <template v-else-if="column.key === 'created_at'">
         {{ formatTime((record as InspectionJob).created_at) }}
       </template>
-      <template v-else-if="column.key === 'started_at'">
-        {{ formatTime((record as InspectionJob).started_at) }}
+      <template v-else-if="column.key === 'start_time'">
+        {{ formatTime((record as InspectionJob).start_time || null) }}
       </template>
-      <template v-else-if="column.key === 'completed_at'">
-        {{ formatTime((record as InspectionJob).completed_at) }}
+      <template v-else-if="column.key === 'end_time'">
+        {{ formatTime((record as InspectionJob).end_time || null) }}
       </template>
       <template v-else-if="column.key === 'actions'">
         <Space>

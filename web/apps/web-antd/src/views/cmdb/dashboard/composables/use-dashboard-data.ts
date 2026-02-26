@@ -1,4 +1,4 @@
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 
 import {
   listAlertsApi,
@@ -51,6 +51,7 @@ export function useDashboardData() {
   const loading = ref(false);
   const error = ref<Error | null>(null);
   const alertServiceUnavailable = ref(false);
+  let intervalId: ReturnType<typeof setInterval> | null = null;
 
   const fetchStats = async () => {
     loading.value = true;
@@ -128,6 +129,16 @@ export function useDashboardData() {
 
   onMounted(() => {
     void fetchStats();
+    intervalId = setInterval(() => {
+      void fetchStats();
+    }, 60000);
+  });
+
+  onUnmounted(() => {
+    if (intervalId !== null) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
   });
 
   return {

@@ -40,7 +40,7 @@ const typeOptions = [
         :options="statusOptions"
         style="width: 150px"
         placeholder="全部状态"
-        @change="(v: string) => emit('update:status', v)"
+        @change="(v) => emit('update:status', (v as string) || '')"
       />
     </FormItem>
     <FormItem label="类型">
@@ -49,7 +49,7 @@ const typeOptions = [
         :options="typeOptions"
         style="width: 180px"
         placeholder="全部类型"
-        @change="(v: string) => emit('update:type', v)"
+        @change="(v) => emit('update:type', (v as string) || '')"
       />
     </FormItem>
     <FormItem>

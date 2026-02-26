@@ -3,6 +3,8 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -14,11 +16,13 @@ import (
 
 type InspectionHandler struct {
 	inspectService *inspection.InspectService
+	projectRepo    repository.ProjectRepository
 }
 
-func NewInspectionHandler(inspectService *inspection.InspectService) *InspectionHandler {
+func NewInspectionHandler(inspectService *inspection.InspectService, projectRepo repository.ProjectRepository) *InspectionHandler {
 	return &InspectionHandler{
 		inspectService: inspectService,
+		projectRepo:    projectRepo,
 	}
 }
 
@@ -41,12 +45,15 @@ type InspectionListResponse struct {
 type CreateJobRequest struct {
 	Type        string `json:"type" binding:"required"`
 	TriggerType string `json:"trigger_type"`
+	ProjectID   int64  `json:"project_id" binding:"required"`
 }
 
 type JobResponse struct {
 	ID              int64       `json:"id"`
 	Type            string      `json:"type"`
 	TriggerType     string      `json:"trigger_type"`
+	ProjectID       int64       `json:"project_id"`
+	ProjectCode     string      `json:"project_code"`
 	Status          string      `json:"status"`
 	CreatedBy       string      `json:"created_by"`
 	CreatedAt       string      `json:"created_at"`
@@ -109,14 +116,16 @@ func (h *InspectionHandler) ListJobs(c *gin.Context) {
 		totalPages++
 	}
 
-	c.JSON(http.StatusOK, InspectionListResponse{
-		Code:       0,
-		Message:    "success",
-		Data:       jobResponses,
-		Total:      total,
-		Page:       page,
-		PageSize:   pageSize,
-		TotalPages: totalPages,
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"items":       jobResponses,
+			"total":       total,
+			"page":        page,
+			"page_size":   pageSize,
+			"total_pages": totalPages,
+		},
 	})
 }
 
@@ -133,9 +142,20 @@ func (h *InspectionHandler) CreateJob(c *gin.Context) {
 	username, _ := c.Get("username")
 	usernameStr, _ := username.(string)
 
+	project, err := h.projectRepo.FindByID(c.Request.Context(), req.ProjectID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, InspectionResponse{
+			Code:    40003,
+			Message: "invalid project id",
+		})
+		return
+	}
+
 	serviceReq := &inspection.CreateJobRequest{
 		Type:        req.Type,
 		TriggerType: req.TriggerType,
+		ProjectID:   project.ID,
+		ProjectCode: project.Code,
 		CreatedBy:   usernameStr,
 	}
 
@@ -162,7 +182,7 @@ func (h *InspectionHandler) CreateJob(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, InspectionResponse{
+	c.JSON(http.StatusOK, InspectionResponse{
 		Code:    0,
 		Message: "job created successfully",
 		Data:    toJobResponse(job),
@@ -243,6 +263,70 @@ func (h *InspectionHandler) DeleteJob(c *gin.Context) {
 	})
 }
 
+func (h *InspectionHandler) DownloadReport(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, InspectionResponse{
+			Code:    40001,
+			Message: "invalid job id",
+		})
+		return
+	}
+
+	job, err := h.inspectService.GetJob(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, inspection.ErrJobNotFound) {
+			c.JSON(http.StatusNotFound, InspectionResponse{
+				Code:    40401,
+				Message: "job not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, InspectionResponse{
+			Code:    50001,
+			Message: "failed to get job: " + err.Error(),
+		})
+		return
+	}
+
+	format := c.Query("format")
+	var filePath string
+	switch format {
+	case "excel":
+		filePath = job.ReportExcelPath
+	case "html":
+		filePath = job.ReportHTMLPath
+	default:
+		c.JSON(http.StatusBadRequest, InspectionResponse{
+			Code:    40004,
+			Message: "invalid format: must be excel or html",
+		})
+		return
+	}
+
+	if filePath == "" {
+		c.JSON(http.StatusNotFound, InspectionResponse{
+			Code:    40402,
+			Message: "report file not found",
+		})
+		return
+	}
+
+	fileInfo, err := os.Stat(filePath)
+	if err != nil || fileInfo.IsDir() {
+		c.JSON(http.StatusNotFound, InspectionResponse{
+			Code:    40402,
+			Message: "report file not found",
+		})
+		return
+	}
+
+	fileName := filepath.Base(filePath)
+	c.Header("Content-Disposition", "attachment; filename=\""+fileName+"\"")
+	c.File(filePath)
+}
+
 func toJobResponse(job *model.InspectionJob) JobResponse {
 	if job == nil {
 		return JobResponse{}
@@ -252,6 +336,8 @@ func toJobResponse(job *model.InspectionJob) JobResponse {
 		ID:              job.ID,
 		Type:            job.Type,
 		TriggerType:     job.TriggerType,
+		ProjectID:       job.ProjectID,
+		ProjectCode:     job.ProjectCode,
 		Status:          job.Status,
 		CreatedBy:       job.CreatedBy,
 		CreatedAt:       job.CreatedAt.Format("2006-01-02 15:04:05"),

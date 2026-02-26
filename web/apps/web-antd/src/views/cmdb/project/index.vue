@@ -3,6 +3,7 @@
 import { ref, onMounted } from 'vue';
 import type { FormInstance } from 'ant-design-vue';
 import { message } from 'ant-design-vue';
+import { ReloadOutlined } from '@ant-design/icons-vue';
 import { useProjectList } from './composables/use-project-list';
 import {
   createProjectApi,
@@ -61,6 +62,14 @@ const resetForm = () => {
   handleReset();
 };
 
+const handleSync = async () => {
+  await syncProjects();
+};
+
+const handleDelete = async (id: number) => {
+  await deleteProject(id);
+};
+
 onMounted(() => {
   fetchProjects();
 });
@@ -75,6 +84,12 @@ onMounted(() => {
           <SyncOutlined />
         </template>
         Sync from N9E
+      </a-button>
+      <a-button type="primary" :loading="syncLoading" @click="handleSync">
+        <template #icon>
+          <ReloadOutlined />
+        </template>
+        从 N9E 同步项目
       </a-button>
     </div>
 

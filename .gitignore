@@ -16,3 +16,6 @@ apps/cmdb-server/cmdb-server
 cmdb-dev-config.yaml
 apps/cmdb-server/configs/config.yaml
 apps/cmdb-server/tmp
+
+# Test environment secrets
+.env.test

@@ -25,3 +25,7 @@ export async function getInspectionJobApi(id: number) {
 export async function deleteInspectionJobApi(id: number) {
   return requestClient.delete(`/inspection/jobs/${id}`);
 }
+
+export function downloadInspectionReportApi(id: number, format: 'excel' | 'html') {
+  return requestClient.get('/inspection/jobs/' + id + '/report', { params: { format }, responseType: 'blob' });
+}

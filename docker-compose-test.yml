@@ -1,0 +1,95 @@
+networks:
+  inspection-test:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:16.11-trixie
+    container_name: cmdb-postgres-test
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+    networks:
+      - inspection-test
+    environment:
+      POSTGRES_DB: cmdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cmdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7.2.12-bookworm
+    container_name: cmdb-redis-test
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-test-data:/data
+    networks:
+      - inspection-test
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis123}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/cmdb-server/Dockerfile.dev
+      network: host
+    container_name: cmdb-backend-test
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./configs/cmdb-test.yaml:/app/configs/config.yaml:ro
+    working_dir: /app
+    command: ["./cmdb-server", "-config", "configs/config.yaml"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inspection-test
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GIN_MODE: release
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+      network: host
+    container_name: cmdb-frontend-test
+    restart: unless-stopped
+    ports:
+      - "8089:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - inspection-test
+
+volumes:
+  postgres-test-data:
+  redis-test-data:

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
@@ -75,6 +77,20 @@ func main() {
 		return
 	}
 
+	// Initialize Redis client
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", viper.GetString("redis.host"), viper.GetInt("redis.port")),
+		Password: viper.GetString("redis.password"),
+		DB:       viper.GetInt("redis.db"),
+	})
+
+	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
+		log.Warn().Err(err).Msg("Failed to connect to Redis, caching will be disabled")
+		redisClient = nil
+	} else {
+		log.Info().Msg("Successfully connected to Redis")
+	}
+
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
@@ -141,8 +157,8 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService, userRepo)
 	assetHandler := handler.NewAssetHandler(assetService, hostSyncService, projectSyncService)
 	monitorHandler := handler.NewMonitorHandler(monitorProxy)
-	alertHandler := handler.NewAlertHandler(alertProxy)
-	inspectionHandler := handler.NewInspectionHandler(inspectService)
+	alertHandler := handler.NewAlertHandler(alertProxy, redisClient)
+	inspectionHandler := handler.NewInspectionHandler(inspectService, projectRepo)
 	userHandler := handler.NewUserHandler(userService)
 	roleHandler := handler.NewRoleHandler(roleService)
 	middlewareHandler := handler.NewMiddlewareHandler(instanceDiscoveryService)

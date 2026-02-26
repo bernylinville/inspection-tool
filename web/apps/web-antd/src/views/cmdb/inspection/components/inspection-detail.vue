@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Modal, Descriptions, DescriptionsItem, Tag, Button } from 'ant-design-vue';
+import { downloadInspectionReportApi } from '#/api/cmdb/inspection';
 import type { InspectionJob } from '#/api/cmdb/types';
 import dayjs from 'dayjs';
 
@@ -10,7 +11,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'download', job: InspectionJob): void;
 }>();
 
 const statusColors: Record<string, string> = {
@@ -33,6 +33,23 @@ function formatTime(time: string | null): string {
   if (!time) return '-';
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss');
 }
+
+async function handleDownload(format: 'excel' | 'html') {
+  if (!props.job) {
+    return;
+  }
+
+  const res = await downloadInspectionReportApi(props.job!.id, format);
+  const blob = new Blob([res as any]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ext = format === 'excel' ? 'xlsx' : 'html';
+  const filename = `inspection_report_${props.job!.id}.${ext}`;
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 </script>
 
 <template>
@@ -48,6 +65,9 @@ function formatTime(time: string | null): string {
       <DescriptionsItem label="类型">
         {{ typeLabels[job.type] || job.type }}
       </DescriptionsItem>
+      <DescriptionsItem label="项目">
+        {{ job.project_code || '-' }}
+      </DescriptionsItem>
       <DescriptionsItem label="状态">
         <Tag :color="statusColors[job.status]">{{ job.status }}</Tag>
       </DescriptionsItem>
@@ -56,24 +76,21 @@ function formatTime(time: string | null): string {
         {{ formatTime(job.created_at) }}
       </DescriptionsItem>
       <DescriptionsItem label="开始时间">
-        {{ formatTime(job.started_at) }}
+        {{ formatTime(job.start_time || null) }}
       </DescriptionsItem>
       <DescriptionsItem label="完成时间">
-        {{ formatTime(job.completed_at) }}
+        {{ formatTime(job.end_time || null) }}
       </DescriptionsItem>
-      <DescriptionsItem v-if="job.report_path" label="报告路径" :span="2">
-        {{ job.report_path }}
-        <Button
-          type="link"
-          size="small"
-          :disabled="job.status !== 'success'"
-          @click="emit('download', job)"
-        >
-          下载
+      <DescriptionsItem v-if="job.status === 'success'" label="下载报告" :span="2">
+        <Button type="primary" size="small" class="mr-2" @click="handleDownload('excel')">
+          下载 Excel
+        </Button>
+        <Button size="small" @click="handleDownload('html')">
+          下载 HTML
         </Button>
       </DescriptionsItem>
-      <DescriptionsItem v-if="job.error" label="错误信息" :span="2">
-        <span style="color: #ff4d4f">{{ job.error }}</span>
+      <DescriptionsItem v-if="job.error_message" label="错误信息" :span="2">
+        <span style="color: #ff4d4f">{{ job.error_message }}</span>
       </DescriptionsItem>
     </Descriptions>
   </Modal>

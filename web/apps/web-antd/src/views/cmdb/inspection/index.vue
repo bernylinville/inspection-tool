@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { Card, Button, Modal, message } from 'ant-design-vue';
 import { PlusOutlined } from '@ant-design/icons-vue';
 import InspectionTable from './components/inspection-table.vue';
@@ -15,7 +15,6 @@ const {
   page,
   pageSize,
   loading,
-  error,
   filters,
   selectedJob,
   detailVisible,
@@ -28,6 +27,7 @@ const {
   deleteJob,
   viewDetail,
   closeDetail,
+  stopPolling,
 } = useInspectionList();
 
 const createModalVisible = ref(false);
@@ -36,6 +36,10 @@ const jobToDelete = ref<InspectionJob | null>(null);
 
 onMounted(() => {
   fetchJobs();
+});
+
+onUnmounted(() => {
+  stopPolling();
 });
 
 function handleView(job: InspectionJob) {
@@ -68,12 +72,6 @@ async function handleCreate(request: CreateInspectionJobRequest) {
   if (success) {
     message.success('巡检任务创建成功');
     createModalVisible.value = false;
-  }
-}
-
-function handleDownload(job: InspectionJob) {
-  if (job.report_path) {
-    message.info(`报告路径: ${job.report_path}`);
   }
 }
 </script>
@@ -114,7 +112,6 @@ function handleDownload(job: InspectionJob) {
       :visible="detailVisible"
       :job="selectedJob"
       @close="closeDetail"
-      @download="handleDownload"
     />
 
     <CreateJobModal

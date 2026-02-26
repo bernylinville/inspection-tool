@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog"
+	"gopkg.in/yaml.v3"
 
 	"inspection-tool/apps/cmdb-server/internal/model"
 	"inspection-tool/apps/cmdb-server/internal/repository"
@@ -26,6 +28,8 @@ var (
 type CreateJobRequest struct {
 	Type        string `json:"type" binding:"required"`
 	TriggerType string `json:"trigger_type"`
+	ProjectID   int64  `json:"project_id"`
+	ProjectCode string `json:"project_code"`
 	CreatedBy   string `json:"created_by"`
 }
 
@@ -81,6 +85,8 @@ func (s *InspectService) CreateJob(ctx context.Context, req *CreateJobRequest) (
 		Type:        req.Type,
 		TriggerType: triggerType,
 		Status:      model.JobStatusPending,
+		ProjectID:   req.ProjectID,
+		ProjectCode: req.ProjectCode,
 		CreatedBy:   req.CreatedBy,
 		CreatedAt:   time.Now(),
 	}
@@ -162,7 +168,43 @@ func (s *InspectService) executeJob(jobID int64) {
 		return
 	}
 
-	args := s.buildCLIArgs(jobID)
+	job, err := s.jobRepo.FindByID(ctx, jobID)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to load job: %v", err)
+		s.logger.Error().Err(err).Int64("job_id", jobID).Msg("failed to load job before execution")
+		if updateErr := s.UpdateStatus(ctx, jobID, model.JobStatusFailed, errMsg); updateErr != nil {
+			s.logger.Error().Err(updateErr).Int64("job_id", jobID).Msg("failed to update job status to failed")
+		}
+		return
+	}
+
+	var configOverride string
+	if job.ProjectCode != "" {
+		configOverride, err = s.generateJobConfig(jobID, job.ProjectCode)
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to generate project config: %v", err)
+			s.logger.Error().
+				Err(err).
+				Int64("job_id", jobID).
+				Str("project_code", job.ProjectCode).
+				Msg("failed to generate temporary config")
+			if updateErr := s.UpdateStatus(ctx, jobID, model.JobStatusFailed, errMsg); updateErr != nil {
+				s.logger.Error().Err(updateErr).Int64("job_id", jobID).Msg("failed to update job status to failed")
+			}
+			return
+		}
+		defer func() {
+			if removeErr := os.Remove(configOverride); removeErr != nil {
+				s.logger.Warn().
+					Err(removeErr).
+					Int64("job_id", jobID).
+					Str("path", configOverride).
+					Msg("failed to remove temporary config file")
+			}
+		}()
+	}
+
+	args := s.buildCLIArgs(jobID, configOverride)
 
 	s.logger.Info().
 		Int64("job_id", jobID).
@@ -196,13 +238,17 @@ func (s *InspectService) executeJob(jobID int64) {
 	s.logger.Info().Int64("job_id", jobID).Msg("inspection job completed successfully")
 }
 
-func (s *InspectService) buildCLIArgs(jobID int64) []string {
+func (s *InspectService) buildCLIArgs(jobID int64, configOverride string) []string {
 	job, _ := s.jobRepo.FindByID(context.Background(), jobID)
 
 	args := []string{"run"}
 
-	if s.configPath != "" {
-		args = append(args, "-c", s.configPath)
+	configPath := s.configPath
+	if configOverride != "" {
+		configPath = configOverride
+	}
+	if configPath != "" {
+		args = append(args, "-c", configPath)
 	}
 
 	if s.outputDir != "" {
@@ -221,6 +267,78 @@ func (s *InspectService) buildCLIArgs(jobID int64) []string {
 	}
 
 	return args
+}
+
+func (s *InspectService) generateJobConfig(jobID int64, projectCode string) (string, error) {
+	if s.configPath == "" {
+		return "", fmt.Errorf("inspection config path is empty")
+	}
+
+	content, err := os.ReadFile(s.configPath)
+	if err != nil {
+		return "", fmt.Errorf("read base config: %w", err)
+	}
+
+	cfg := make(map[string]interface{})
+	if err := yaml.Unmarshal(content, &cfg); err != nil {
+		return "", fmt.Errorf("unmarshal base config: %w", err)
+	}
+
+	businessGroups := []string{projectCode}
+
+	inspectionCfg := ensureMap(cfg, "inspection")
+	hostFilterCfg := ensureMap(inspectionCfg, "host_filter")
+	hostFilterCfg["business_groups"] = businessGroups
+
+	for _, section := range []string{"mysql", "redis", "nginx", "tomcat", "elasticsearch"} {
+		sectionCfg := ensureMap(cfg, section)
+		instanceFilterCfg := ensureMap(sectionCfg, "instance_filter")
+		instanceFilterCfg["business_groups"] = businessGroups
+	}
+
+	updatedContent, err := yaml.Marshal(cfg)
+	if err != nil {
+		return "", fmt.Errorf("marshal updated config: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", fmt.Sprintf("inspection_job_%d_*.yaml", jobID))
+	if err != nil {
+		return "", fmt.Errorf("create temp config file: %w", err)
+	}
+
+	if _, err := tmpFile.Write(updatedContent); err != nil {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("write temp config file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("close temp config file: %w", err)
+	}
+
+	return tmpFile.Name(), nil
+}
+
+func ensureMap(root map[string]interface{}, key string) map[string]interface{} {
+	if root == nil {
+		return map[string]interface{}{}
+	}
+
+	value, ok := root[key]
+	if !ok {
+		next := make(map[string]interface{})
+		root[key] = next
+		return next
+	}
+
+	if valueMap, ok := value.(map[string]interface{}); ok {
+		return valueMap
+	}
+
+	next := make(map[string]interface{})
+	root[key] = next
+	return next
 }
 
 func (s *InspectService) updateJobResults(ctx context.Context, jobID int64) error {

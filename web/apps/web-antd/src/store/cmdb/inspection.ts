@@ -1,4 +1,4 @@
-import type { InspectionJob, InspectionJobCreateRequest } from '#/api/cmdb/types';
+import type { InspectionJob, InspectionJobCreateRequest, InspectionJobListParams } from '#/api/cmdb/types';
 import { ref } from 'vue';
 import { defineStore } from 'pinia';
 import { listInspectionJobsApi, createInspectionJobApi, getInspectionJobApi, deleteInspectionJobApi } from '#/api/cmdb';
@@ -10,7 +10,7 @@ export const useCmdbInspectionStore = defineStore('cmdbInspection', () => {
   const currentJob = ref<InspectionJob | null>(null);
   const createLoading = ref(false);
 
-  async function fetchJobs(params?: { page?: number; page_size?: number; status?: string; type?: string }) {
+  async function fetchJobs(params?: InspectionJobListParams) {
     jobsLoading.value = true;
     try {
       const data = await listInspectionJobsApi(params);

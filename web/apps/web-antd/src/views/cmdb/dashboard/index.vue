@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { Alert } from 'ant-design-vue';
+import { ReloadOutlined } from '@ant-design/icons-vue';
 
 import { AnalysisChartCard } from '@vben/common-ui';
 
@@ -22,6 +23,17 @@ const {
 
 <template>
   <div class="p-4">
+    <!-- Header with Refresh Button -->
+    <div class="mb-4 flex items-center justify-between">
+      <h1 class="text-xl font-semibold">仪表板</h1>
+      <a-button type="primary" :loading="loading" @click="refresh">
+        <template #icon>
+          <ReloadOutlined />
+        </template>
+        刷新数据
+      </a-button>
+    </div>
+
     <!-- Error Banner -->
     <Alert
       v-if="error"

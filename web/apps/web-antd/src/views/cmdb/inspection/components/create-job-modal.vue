@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Modal, Form, FormItem, Select, Button } from 'ant-design-vue';
-import type { CreateInspectionJobRequest } from '#/api/cmdb/types';
+import { computed, onMounted, ref } from 'vue';
+import { Modal, Form, FormItem, Select } from 'ant-design-vue';
+import { listProjectsApi } from '#/api/cmdb/asset';
+import type { CreateInspectionJobRequest, InspectionType, Project } from '#/api/cmdb/types';
 
 const props = defineProps<{
   visible: boolean;
@@ -13,7 +14,16 @@ const emit = defineEmits<{
   (e: 'create', request: CreateInspectionJobRequest): void;
 }>();
 
-const jobType = ref('host');
+const jobType = ref<InspectionType>('host');
+const projectId = ref<number>(0);
+const projects = ref<Project[]>([]);
+
+const projectOptions = computed(() =>
+  projects.value.map((p) => ({
+    value: p.id,
+    label: `${p.name} (${p.code})`,
+  })),
+);
 
 const typeOptions = [
   { value: 'host', label: '主机巡检' },
@@ -25,13 +35,23 @@ const typeOptions = [
 ];
 
 function handleOk() {
-  emit('create', { type: jobType.value });
+  emit('create', { type: jobType.value, project_id: projectId.value });
 }
 
 function handleCancel() {
+  projectId.value = 0;
   jobType.value = 'host';
   emit('close');
 }
+
+onMounted(async () => {
+  try {
+    const res = await listProjectsApi({ page_size: 100 });
+    projects.value = res.items || [];
+  } catch {
+    projects.value = [];
+  }
+});
 </script>
 
 <template>
@@ -43,6 +63,14 @@ function handleCancel() {
     @cancel="handleCancel"
   >
     <Form layout="vertical">
+      <FormItem label="选择项目" required>
+        <Select
+          v-model:value="projectId"
+          :options="projectOptions"
+          show-search
+          style="width: 100%"
+        />
+      </FormItem>
       <FormItem label="巡检类型" required>
         <Select
           v-model:value="jobType"

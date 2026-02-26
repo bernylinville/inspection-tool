@@ -394,7 +394,9 @@ export interface Alert {
   severity: AlertSeverity;
   status: AlertStatus;
   source?: string;
-  created_at: string;
+  created_at: string | number;
+  updated_at?: string | number;
+  alert_severity?: string;
 }
 
 export interface AlertListParams extends PaginationParams {
@@ -430,12 +432,14 @@ export type InspectionType =
   | 'all';
 
 export type InspectionTriggerType = 'manual' | 'api' | 'cron';
-export type InspectionStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type InspectionStatus = 'pending' | 'running' | 'success' | 'completed' | 'failed';
 
 export interface InspectionJob {
   id: number;
   type: InspectionType;
   trigger_type: InspectionTriggerType;
+  project_id?: number;
+  project_code?: string;
   status: InspectionStatus;
   start_time?: string;
   end_time?: string;
@@ -450,7 +454,9 @@ export interface InspectionJob {
 
 export interface InspectionJobCreateRequest {
   type: InspectionType;
+  project_id: number;
 }
+export type CreateInspectionJobRequest = InspectionJobCreateRequest;
 
 export interface InspectionJobListParams extends PaginationParams {
   status?: InspectionStatus;

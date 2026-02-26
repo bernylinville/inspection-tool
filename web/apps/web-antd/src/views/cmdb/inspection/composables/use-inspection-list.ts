@@ -20,6 +20,7 @@ export function useInspectionList() {
 
   // Create state
   const createLoading = ref(false);
+  let pollingTimer: ReturnType<typeof setInterval> | null = null;
 
   async function fetchJobs() {
     loading.value = true;
@@ -65,6 +66,7 @@ export function useInspectionList() {
     try {
       await createInspectionJobApi(request);
       await fetchJobs();
+      startPolling();
       return true;
     } catch (e: any) {
       error.value = e.message || 'Failed to create inspection job';
@@ -100,6 +102,26 @@ export function useInspectionList() {
     detailVisible.value = false;
   }
 
+  function stopPolling() {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollingTimer = setInterval(async () => {
+      await fetchJobs();
+      const hasRunningOrPending = jobs.value.some(
+        (job) => job.status === 'running' || job.status === 'pending',
+      );
+      if (!hasRunningOrPending) {
+        stopPolling();
+      }
+    }, 3000);
+  }
+
   return {
     jobs,
     total,
@@ -119,5 +141,6 @@ export function useInspectionList() {
     deleteJob,
     viewDetail,
     closeDetail,
+    stopPolling,
   };
 }

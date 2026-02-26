@@ -12,6 +12,8 @@ type InspectionJob struct {
 	Type            string `gorm:"size:50;not null"`
 	TriggerType     string `gorm:"size:20;not null"`
 	Status          string `gorm:"size:20;index;default:'pending'"`
+	ProjectID       int64  `gorm:"index" json:"project_id"`
+	ProjectCode     string `gorm:"size:100" json:"project_code"`
 	StartTime       *time.Time
 	EndTime         *time.Time
 	DurationSeconds int

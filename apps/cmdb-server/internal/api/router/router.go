@@ -271,6 +271,12 @@ func (r *Router) setupProtectedRoutes(rg *gin.RouterGroup) {
 
 	inspection := rg.Group("/inspection")
 	{
+		if r.handlers.Inspection != nil {
+			inspection.GET("/jobs/:id/report", r.handlers.Inspection.DownloadReport)
+		} else {
+			inspection.GET("/jobs/:id/report", placeholder("download inspection report"))
+		}
+
 		jobs := inspection.Group("/jobs")
 		{
 			if r.handlers.Inspection != nil {
