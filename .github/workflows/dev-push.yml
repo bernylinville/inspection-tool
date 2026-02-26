@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/cmdb-server/**'
       - 'web/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
