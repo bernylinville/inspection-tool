@@ -107,8 +107,27 @@ func (c *Collector) CollectAll(ctx context.Context) (*CollectionResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect metrics: %w", err)
 	}
+	if c.shouldRetryHostFilterWithTagsOnly(hostMetrics) {
+		c.logger.Warn().
+			Strs("business_groups", c.hostFilter.BusinessGroups).
+			Msg("host filter matched no metrics with business groups and tags; retrying with tags only")
 
-	// Step 3: Identify hosts that have no metrics (potential failures)
+		hostMetrics, err = c.collectMetricsWithTemporaryFilter(ctx, hosts, c.metrics, tagsOnlyHostFilter(c.hostFilter))
+		if err != nil {
+			return nil, fmt.Errorf("failed to collect metrics with tag-only host filter fallback: %w", err)
+		}
+	}
+
+	// Step 3: When a PromQL-level host filter is configured, keep the report
+	// host list aligned with the filtered metric scope. N9E target listing is
+	// independent from VM label filters, so without this step the report can
+	// include every N9E target as a failed host even though VM returned only the
+	// requested business group/tag scope.
+	if c.shouldRestrictHostsToMetricScope() {
+		hosts, hostMetrics = c.restrictHostsToMetricScope(hosts, hostMetrics)
+	}
+
+	// Step 4: Identify hosts that have no metrics (potential failures)
 	var failedHosts []FailedHost
 	for _, host := range hosts {
 		if hm, exists := hostMetrics[host.Hostname]; !exists || len(hm.Metrics) == 0 {
@@ -131,6 +150,122 @@ func (c *Collector) CollectAll(ctx context.Context) (*CollectionResult, error) {
 		FailedHosts: failedHosts,
 		CollectedAt: collectedAt,
 	}, nil
+}
+
+// shouldRestrictHostsToMetricScope reports whether N9E host metadata should be
+// narrowed to hosts that actually appeared in filtered VM query results.
+func (c *Collector) shouldRestrictHostsToMetricScope() bool {
+	if c.hostFilter == nil || c.hostFilter.IsEmpty() {
+		return false
+	}
+
+	for _, metric := range c.metrics {
+		if metric != nil && !metric.IsPending() {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Collector) shouldRetryHostFilterWithTagsOnly(hostMetrics map[string]*model.HostMetrics) bool {
+	return c.shouldRestrictHostsToMetricScope() &&
+		len(c.hostFilter.BusinessGroups) > 0 &&
+		len(c.hostFilter.Tags) > 0 &&
+		!hasAnyCollectedMetric(hostMetrics)
+}
+
+func (c *Collector) collectMetricsWithTemporaryFilter(
+	ctx context.Context,
+	hosts []*model.HostMeta,
+	metrics []*model.MetricDefinition,
+	filter *vm.HostFilter,
+) (map[string]*model.HostMetrics, error) {
+	originalFilter := c.hostFilter
+	c.hostFilter = filter
+	defer func() {
+		c.hostFilter = originalFilter
+	}()
+
+	return c.CollectMetrics(ctx, hosts, metrics)
+}
+
+func tagsOnlyHostFilter(filter *vm.HostFilter) *vm.HostFilter {
+	if filter == nil || len(filter.Tags) == 0 {
+		return nil
+	}
+
+	tags := make(map[string]string, len(filter.Tags))
+	for k, v := range filter.Tags {
+		tags[k] = v
+	}
+	return &vm.HostFilter{Tags: tags}
+}
+
+// restrictHostsToMetricScope removes N9E hosts outside the filtered VM metric
+// result scope. Host filters are injected into PromQL, not the N9E target API,
+// so the VM result set is the authoritative scope for host_filter reports.
+func (c *Collector) restrictHostsToMetricScope(
+	hosts []*model.HostMeta,
+	hostMetrics map[string]*model.HostMetrics,
+) ([]*model.HostMeta, map[string]*model.HostMetrics) {
+	if len(hosts) == 0 || len(hostMetrics) == 0 {
+		return hosts, hostMetrics
+	}
+
+	inScope := make(map[string]struct{}, len(hostMetrics))
+	for hostname, metrics := range hostMetrics {
+		if hasCollectedMetric(metrics) {
+			inScope[hostname] = struct{}{}
+		}
+	}
+
+	filteredHosts := make([]*model.HostMeta, 0, len(inScope))
+	filteredMetrics := make(map[string]*model.HostMetrics, len(inScope))
+	for _, host := range hosts {
+		if host == nil {
+			continue
+		}
+		if _, ok := inScope[host.Hostname]; !ok {
+			continue
+		}
+		filteredHosts = append(filteredHosts, host)
+		if metrics, exists := hostMetrics[host.Hostname]; exists {
+			filteredMetrics[host.Hostname] = metrics
+		}
+	}
+
+	logEvent := c.logger.Info()
+	if len(filteredHosts) == 0 {
+		logEvent = c.logger.Warn()
+	}
+	logEvent.
+		Int("before_hosts", len(hosts)).
+		Int("after_hosts", len(filteredHosts)).
+		Int("metric_scope_hosts", len(inScope)).
+		Msg("applied host filter to N9E host metadata")
+
+	return filteredHosts, filteredMetrics
+}
+
+func hasAnyCollectedMetric(hostMetrics map[string]*model.HostMetrics) bool {
+	for _, metrics := range hostMetrics {
+		if hasCollectedMetric(metrics) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCollectedMetric(metrics *model.HostMetrics) bool {
+	if metrics == nil {
+		return false
+	}
+	for _, value := range metrics.Metrics {
+		if value != nil && !value.IsNA {
+			return true
+		}
+	}
+	return false
 }
 
 // CollectHostMetas retrieves host metadata from the N9E API.

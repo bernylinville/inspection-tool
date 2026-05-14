@@ -1989,6 +1989,67 @@ func TestWriter_AppendRedisInspection_MultipleClusters(t *testing.T) {
 	}
 }
 
+func TestWriter_AppendRedisInspection_LongRedisClusterIDsUseValidSheetNames(t *testing.T) {
+	w := NewWriter(time.UTC)
+	f := excelize.NewFile()
+	defer f.Close()
+
+	f.NewSheet(sheetSummary)
+	f.DeleteSheet("Sheet1")
+
+	tmpDir := t.TempDir()
+	existingPath := filepath.Join(tmpDir, "long_cluster_names.xlsx")
+	if err := f.SaveAs(existingPath); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	result := &model.RedisInspectionResults{
+		InspectionTime: time.Now(),
+		Clusters: []*model.RedisCluster{
+			{
+				ID:        "redis-cnlf3o7q6gv78hjlz.redis.ivolces.com",
+				Name:      "Redis 集群 - redis-cnlf3o7q6gv78hjlz.redis.ivolces.com",
+				Instances: []*model.RedisInspectionResult{},
+			},
+			{
+				ID:        "redis-cnlf3o7q6gv78hjlz.redis.ivolces.net",
+				Name:      "Redis 集群 - redis-cnlf3o7q6gv78hjlz.redis.ivolces.net",
+				Instances: []*model.RedisInspectionResult{},
+			},
+		},
+	}
+
+	err := w.AppendRedisInspection(result, existingPath)
+	if err != nil {
+		t.Fatalf("AppendRedisInspection failed: %v", err)
+	}
+
+	f2, err := excelize.OpenFile(existingPath)
+	if err != nil {
+		t.Fatalf("failed to open result file: %v", err)
+	}
+	defer f2.Close()
+
+	redisSheets := 0
+	seen := make(map[string]struct{})
+	for _, sheet := range f2.GetSheetList() {
+		if len([]rune(sheet)) > maxSheetNameLen {
+			t.Fatalf("sheet name %q exceeds Excel limit", sheet)
+		}
+		if strings.HasPrefix(sheet, "Redis-") {
+			redisSheets++
+			if _, exists := seen[sheet]; exists {
+				t.Fatalf("duplicate Redis sheet name %q", sheet)
+			}
+			seen[sheet] = struct{}{}
+		}
+	}
+
+	if redisSheets != 2 {
+		t.Fatalf("expected 2 Redis cluster sheets, got %d", redisSheets)
+	}
+}
+
 func TestWriter_AppendRedisInspection_SingleCluster_KeepsOriginalSheet(t *testing.T) {
 	w := NewWriter(time.UTC)
 	f := excelize.NewFile()

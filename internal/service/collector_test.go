@@ -648,6 +648,167 @@ func TestCollector_CollectAll_Success(t *testing.T) {
 	}
 }
 
+func TestCollector_CollectAll_HostFilterRestrictsReportHosts(t *testing.T) {
+	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"dat": {
+				"list": [
+					{"ident": "in-scope-host", "host_ip": "192.168.1.100", "os": "linux", "cpu_num": 4},
+					{"ident": "out-of-scope-host", "host_ip": "192.168.1.101", "os": "linux", "cpu_num": 4}
+				],
+				"total": 2
+			},
+			"err": ""
+		}`))
+	})
+	defer n9eServer.Close()
+
+	var capturedQuery string
+	vmServer := setupVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.Query().Get("query")
+		resp := map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result": []map[string]interface{}{
+					{
+						"metric": map[string]string{"ident": "in-scope-host"},
+						"value":  []interface{}{1702483200.0, "50.0"},
+					},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	defer vmServer.Close()
+
+	cfg := createTestConfig()
+	cfg.Inspection.HostFilter = config.HostFilter{
+		BusinessGroups: []string{"production"},
+		Tags:           map[string]string{"items": "重庆传媒数字乡村-电信侧"},
+	}
+
+	collector := NewCollector(
+		cfg,
+		createN9EClient(n9eServer.URL),
+		createVMClient(vmServer.URL),
+		[]*model.MetricDefinition{{Name: "cpu_usage", Query: `cpu_usage_active{cpu="cpu-total"}`}},
+		zerolog.Nop(),
+	)
+
+	result, err := collector.CollectAll(context.Background())
+	if err != nil {
+		t.Fatalf("CollectAll failed: %v", err)
+	}
+
+	if !contains(capturedQuery, "busigroup") {
+		t.Errorf("expected business group filter in query, got: %s", capturedQuery)
+	}
+	if !contains(capturedQuery, `items="重庆传媒数字乡村-电信侧"`) {
+		t.Errorf("expected tag filter in query, got: %s", capturedQuery)
+	}
+
+	if len(result.Hosts) != 1 {
+		t.Fatalf("expected only the in-scope host in report data, got %d", len(result.Hosts))
+	}
+	if result.Hosts[0].Hostname != "in-scope-host" {
+		t.Fatalf("expected in-scope-host, got %s", result.Hosts[0].Hostname)
+	}
+	if _, exists := result.HostMetrics["out-of-scope-host"]; exists {
+		t.Fatal("out-of-scope host metrics should not be kept in filtered report scope")
+	}
+	if len(result.FailedHosts) != 0 {
+		t.Fatalf("expected no failed hosts after scope restriction, got %d", len(result.FailedHosts))
+	}
+}
+
+func TestCollector_CollectAll_HostFilterFallsBackToTagsWhenBusinessGroupMatchesNoMetrics(t *testing.T) {
+	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"dat": {
+				"list": [
+					{"ident": "tagged-host", "host_ip": "192.168.1.100", "os": "linux", "cpu_num": 4},
+					{"ident": "other-host", "host_ip": "192.168.1.101", "os": "linux", "cpu_num": 4}
+				],
+				"total": 2
+			},
+			"err": ""
+		}`))
+	})
+	defer n9eServer.Close()
+
+	var queries []string
+	vmServer := setupVMTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("query")
+		queries = append(queries, query)
+
+		result := []map[string]interface{}{}
+		if !contains(query, "busigroup") && contains(query, `items="重庆传媒数字乡村-电信侧"`) {
+			result = []map[string]interface{}{
+				{
+					"metric": map[string]string{"ident": "tagged-host"},
+					"value":  []interface{}{1702483200.0, "50.0"},
+				},
+			}
+		}
+
+		resp := map[string]interface{}{
+			"status": "success",
+			"data": map[string]interface{}{
+				"resultType": "vector",
+				"result":     result,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	defer vmServer.Close()
+
+	cfg := createTestConfig()
+	cfg.Inspection.HostFilter = config.HostFilter{
+		BusinessGroups: []string{"missing-busigroup-label"},
+		Tags:           map[string]string{"items": "重庆传媒数字乡村-电信侧"},
+	}
+
+	collector := NewCollector(
+		cfg,
+		createN9EClient(n9eServer.URL),
+		createVMClient(vmServer.URL),
+		[]*model.MetricDefinition{{Name: "cpu_usage", Query: `cpu_usage_active{cpu="cpu-total"}`}},
+		zerolog.Nop(),
+	)
+
+	result, err := collector.CollectAll(context.Background())
+	if err != nil {
+		t.Fatalf("CollectAll failed: %v", err)
+	}
+
+	if len(queries) != 2 {
+		t.Fatalf("expected primary query and tag-only fallback query, got %d", len(queries))
+	}
+	if !contains(queries[0], "busigroup") {
+		t.Errorf("expected primary query to include business group matcher, got: %s", queries[0])
+	}
+	if contains(queries[1], "busigroup") {
+		t.Errorf("expected fallback query to drop business group matcher, got: %s", queries[1])
+	}
+	if !contains(queries[1], `items="重庆传媒数字乡村-电信侧"`) {
+		t.Errorf("expected fallback query to keep tag matcher, got: %s", queries[1])
+	}
+
+	if len(result.Hosts) != 1 {
+		t.Fatalf("expected only tagged host in report data, got %d", len(result.Hosts))
+	}
+	if result.Hosts[0].Hostname != "tagged-host" {
+		t.Fatalf("expected tagged-host, got %s", result.Hosts[0].Hostname)
+	}
+}
+
 func TestCollector_CollectAll_NoHosts(t *testing.T) {
 	// Setup N9E server that returns empty list
 	n9eServer := setupN9ETestServer(t, func(w http.ResponseWriter, r *http.Request) {

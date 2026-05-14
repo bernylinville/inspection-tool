@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	maxSheetNameLen = 31
+
 	// Sheet names
 	sheetSummary       = "巡检概览"
 	sheetBaselineCheck = "基线检查"
@@ -64,6 +66,50 @@ func NewWriter(timezone *time.Location) *Writer {
 // Format returns the format identifier for this writer.
 func (w *Writer) Format() string {
 	return "excel"
+}
+
+func uniqueExcelSheetName(base string, used map[string]struct{}) string {
+	base = normalizeExcelSheetName(base)
+	if _, exists := used[base]; !exists {
+		used[base] = struct{}{}
+		return base
+	}
+
+	for i := 2; ; i++ {
+		suffix := fmt.Sprintf("-%d", i)
+		candidate := truncateRunes(base, maxSheetNameLen-len([]rune(suffix))) + suffix
+		if _, exists := used[candidate]; !exists {
+			used[candidate] = struct{}{}
+			return candidate
+		}
+	}
+}
+
+func normalizeExcelSheetName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		switch r {
+		case ':', '\\', '/', '?', '*', '[', ']':
+			return '-'
+		default:
+			return r
+		}
+	}, name)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Sheet"
+	}
+	return truncateRunes(name, maxSheetNameLen)
+}
+
+func truncateRunes(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
 }
 
 // Write generates an Excel report from the inspection result.
@@ -1556,8 +1602,13 @@ func (w *Writer) AppendRedisInspection(result *model.RedisInspectionResults, exi
 	defer f.Close()
 
 	if result.HasMultipleClusters() {
+		usedSheetNames := make(map[string]struct{})
+		for _, sheetName := range f.GetSheetList() {
+			usedSheetNames[sheetName] = struct{}{}
+		}
 		for _, cluster := range result.Clusters {
-			if err := w.createRedisClusterSheet(f, cluster, result.InspectionTime); err != nil {
+			sheetName := uniqueExcelSheetName(fmt.Sprintf("Redis-%s", cluster.ID), usedSheetNames)
+			if err := w.createRedisClusterSheet(f, cluster, result.InspectionTime, sheetName); err != nil {
 				return fmt.Errorf("failed to create Redis cluster sheet for %s: %w", cluster.ID, err)
 			}
 		}
@@ -1576,13 +1627,15 @@ func (w *Writer) AppendRedisInspection(result *model.RedisInspectionResults, exi
 
 // createRedisClusterSheet creates a Redis inspection worksheet for a specific cluster.
 // Sheet name format: "Redis-{网段ID}", e.g., "Redis-192.18.102"
-func (w *Writer) createRedisClusterSheet(f *excelize.File, cluster *model.RedisCluster, inspectionTime time.Time) error {
+func (w *Writer) createRedisClusterSheet(
+	f *excelize.File,
+	cluster *model.RedisCluster,
+	inspectionTime time.Time,
+	sheetName string,
+) error {
 	if cluster == nil {
 		return fmt.Errorf("cluster is nil")
 	}
-
-	// Sheet name: Redis-{网段}
-	sheetName := fmt.Sprintf("Redis-%s", cluster.ID)
 
 	// Create sheet
 	_, err := f.NewSheet(sheetName)
