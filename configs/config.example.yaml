@@ -54,8 +54,10 @@ inspection:
   # 单个主机的数据采集超时，超时后标记为失败但不影响其他主机
   host_timeout: 10s
 
-  # 主机筛选条件 (可选)
-  # 不配置则查询所有主机
+  # 全局巡检范围筛选 (可选)
+  # 不配置则查询所有主机 / 实例。
+  # 配置后，Host 以及未显式配置业务组 / 标签的 MySQL、Redis、Nginx、
+  # Tomcat、Elasticsearch instance_filter 会默认继承该范围。
   host_filter:
     # 业务组筛选 (OR 关系)
     # 匹配任意一个业务组的主机都会被纳入巡检
@@ -186,7 +188,7 @@ mysql:
   cluster_mode: "mgr"
 
   # 实例筛选条件 (可选)
-  # 不配置则查询所有 MySQL 实例
+  # 不配置业务组 / 标签时默认继承 inspection.host_filter；也可用地址规则进一步收窄。
   instance_filter:
     # 地址匹配模式 (支持通配符 *)
     # 示例: "172.18.182.*" 匹配该网段所有实例
@@ -239,7 +241,7 @@ redis:
   cluster_mode: "3m3s"
 
   # 实例筛选条件 (可选)
-  # 不配置则查询所有 Redis 实例
+  # 不配置业务组 / 标签时默认继承 inspection.host_filter；也可用地址规则进一步收窄。
   instance_filter:
     # 地址匹配模式 (支持通配符 *)
     # 示例: "192.18.102.*" 匹配该网段所有实例
@@ -282,7 +284,7 @@ nginx:
   enabled: true
 
   # 实例筛选条件 (可选)
-  # 不配置则查询所有 Nginx 实例
+  # 不配置业务组 / 标签时默认继承 inspection.host_filter；也可用主机名规则进一步收窄。
   instance_filter:
     # 主机名匹配模式 (支持通配符 *)
     # 示例: "GX-NM-*" 匹配所有以 GX-NM- 开头的主机
@@ -326,7 +328,7 @@ tomcat:
   enabled: true
 
   # 实例筛选条件 (可选)
-  # 不配置则查询所有 Tomcat 实例
+  # 不配置业务组 / 标签时默认继承 inspection.host_filter；也可用主机名 / 容器名规则进一步收窄。
   instance_filter:
     # 主机名匹配模式 (支持通配符 *)
     # 示例: "GX-MFUI-*" 匹配所有以 GX-MFUI- 开头的主机

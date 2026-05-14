@@ -111,7 +111,7 @@ func (c *ElasticsearchCollector) DiscoverInstances(ctx context.Context) ([]*mode
 	vmFilter := c.instanceFilter.ToVMHostFilter()
 
 	query := "elasticsearch_jvm_mem_heap_used_percent"
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, query, vmFilter)
 	if err != nil {
 		c.logger.Error().Err(err).Msg("failed to query elasticsearch_jvm_mem_heap_used_percent metric")
 		return nil, fmt.Errorf("failed to query elasticsearch metrics: %w", err)
@@ -181,7 +181,7 @@ func (c *ElasticsearchCollector) enrichInstancesWithRoles(
 	vmFilter *vm.HostFilter,
 ) error {
 	query := `elasticsearch_nodes_roles{role="master"}`
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("failed to query node roles: %w", err)
 	}
@@ -270,7 +270,7 @@ func (c *ElasticsearchCollector) collectMetricConcurrent(
 		Msg("collecting Elasticsearch metric (concurrent)")
 
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}
@@ -336,7 +336,7 @@ func (c *ElasticsearchCollector) collectLabelExtractMetric(
 		Msg("collecting label extract metric")
 
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}

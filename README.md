@@ -179,7 +179,9 @@ inspection:
   concurrency: 20
   # 单主机超时时间
   host_timeout: 10s
-  # 主机筛选（可选）
+  # 全局巡检范围筛选（可选）
+  # 未显式配置业务组 / 标签的 MySQL、Redis、Nginx、Tomcat、Elasticsearch
+  # instance_filter 会默认继承该范围。
   host_filter:
     business_groups:  # OR 关系
       - "生产环境"
@@ -221,6 +223,7 @@ mysql:
   cluster_mode: "mgr"
 
   # 实例筛选（可选）
+  # 业务组 / 标签为空时默认继承 inspection.host_filter；地址规则可进一步收窄。
   instance_filter:
     # 地址匹配模式（支持通配符 *）
     address_patterns:
@@ -260,6 +263,7 @@ redis:
   cluster_mode: "3m3s"
 
   # 实例筛选（可选）
+  # 业务组 / 标签为空时默认继承 inspection.host_filter；地址规则可进一步收窄。
   instance_filter:
     # 地址匹配模式（支持通配符 *）
     address_patterns:

@@ -146,7 +146,7 @@ func (c *NginxCollector) DiscoverInstances(ctx context.Context) ([]*model.NginxI
 
 	// Step 1: Query nginx_info to get all instances
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, "nginx_info", vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "nginx_info", vmFilter)
 	if err != nil {
 		c.logger.Error().Err(err).Msg("failed to query nginx_info metric")
 		return nil, fmt.Errorf("failed to query nginx_info: %w", err)
@@ -253,7 +253,7 @@ func (c *NginxCollector) DiscoverInstances(ctx context.Context) ([]*model.NginxI
 func (c *NginxCollector) getContainerMap(ctx context.Context, vmFilter *vm.HostFilter) map[string]string {
 	containerMap := make(map[string]string)
 
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, "nginx_up", vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "nginx_up", vmFilter)
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("failed to query nginx_up for container info")
 		return containerMap
@@ -441,7 +441,7 @@ func (c *NginxCollector) collectMetricConcurrent(
 
 	// Query VictoriaMetrics
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}
@@ -516,7 +516,7 @@ func (c *NginxCollector) collectLabelExtractMetric(
 		Msg("collecting label extract metric")
 
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}
@@ -661,7 +661,7 @@ func (c *NginxCollector) CollectUpstreamStatus(
 	vmFilter := c.instanceFilter.ToVMHostFilter()
 
 	// Step 1: Query status_code
-	statusResults, err := c.vmClient.QueryResultsWithFilter(ctx, "nginx_upstream_check_status_code", vmFilter)
+	statusResults, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "nginx_upstream_check_status_code", vmFilter)
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("failed to query nginx_upstream_check_status_code")
 		return nil // Non-fatal: some instances may not have upstream
@@ -673,8 +673,8 @@ func (c *NginxCollector) CollectUpstreamStatus(
 	}
 
 	// Step 2: Query rise and fall counts
-	riseResults, _ := c.vmClient.QueryResultsWithFilter(ctx, "nginx_upstream_check_rise", vmFilter)
-	fallResults, _ := c.vmClient.QueryResultsWithFilter(ctx, "nginx_upstream_check_fall", vmFilter)
+	riseResults, _ := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "nginx_upstream_check_rise", vmFilter)
+	fallResults, _ := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "nginx_upstream_check_fall", vmFilter)
 
 	// Build maps for rise/fall by key (hostname:upstream:backend)
 	riseMap := c.buildUpstreamValueMap(riseResults)

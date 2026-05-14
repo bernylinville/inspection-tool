@@ -128,7 +128,7 @@ func (c *RedisCollector) DiscoverInstances(ctx context.Context) ([]*model.RedisI
 
 	// Step 2: Query redis_up metric
 	query := "redis_up"
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, query, vmFilter)
 	if err != nil {
 		c.logger.Error().Err(err).Msg("failed to query redis_up metric")
 		return nil, fmt.Errorf("failed to query redis_up: %w", err)
@@ -268,7 +268,7 @@ func (c *RedisCollector) collectMetricConcurrent(
 
 	// Query VictoriaMetrics
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}
@@ -335,7 +335,7 @@ func (c *RedisCollector) collectLabelExtractMetric(
 		Msg("collecting label extract metric")
 
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}

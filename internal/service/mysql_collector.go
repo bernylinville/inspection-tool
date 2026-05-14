@@ -131,7 +131,7 @@ func (c *MySQLCollector) DiscoverInstances(ctx context.Context) ([]*model.MySQLI
 
 	// Step 2: 查询 mysql_up == 1（仅在线实例）
 	query := "mysql_up == 1"
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, query, vmFilter)
 	if err != nil {
 		c.logger.Error().Err(err).Msg("failed to query mysql_up metric")
 		return nil, fmt.Errorf("failed to query mysql_up: %w", err)
@@ -285,7 +285,7 @@ func (c *MySQLCollector) collectMetricConcurrent(
 
 	// Query VictoriaMetrics
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}
@@ -355,7 +355,7 @@ func (c *MySQLCollector) collectLabelExtractMetric(
 		Msg("collecting label extract metric")
 
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}

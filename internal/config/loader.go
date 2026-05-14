@@ -53,6 +53,8 @@ func Load(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	applyHostFilterScope(&cfg)
+
 	return &cfg, nil
 }
 

@@ -154,7 +154,7 @@ func (c *TomcatCollector) DiscoverInstances(ctx context.Context) ([]*model.Tomca
 
 	// Step 1: Query tomcat_up to get all running instances
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, "tomcat_up == 1", vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "tomcat_up == 1", vmFilter)
 	if err != nil {
 		c.logger.Error().Err(err).Msg("failed to query tomcat_up metric")
 		return nil, fmt.Errorf("failed to query tomcat_up: %w", err)
@@ -163,7 +163,7 @@ func (c *TomcatCollector) DiscoverInstances(ctx context.Context) ([]*model.Tomca
 	c.logger.Debug().Int("raw_results", len(results)).Msg("received tomcat_up query results")
 
 	// Step 2: Query tomcat_info to get instance metadata
-	infoResults, err := c.vmClient.QueryResultsWithFilter(ctx, "tomcat_info", vmFilter)
+	infoResults, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "tomcat_info", vmFilter)
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("failed to query tomcat_info, continuing with limited metadata")
 		infoResults = []vm.QueryResult{}
@@ -255,7 +255,7 @@ func (c *TomcatCollector) DiscoverInstances(ctx context.Context) ([]*model.Tomca
 func (c *TomcatCollector) buildContainerMap(ctx context.Context, vmFilter *vm.HostFilter) map[string]string {
 	containerMap := make(map[string]string)
 
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, "tomcat_up", vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, "tomcat_up", vmFilter)
 	if err != nil {
 		c.logger.Warn().Err(err).Msg("failed to query tomcat_up for container info")
 		return containerMap
@@ -515,7 +515,7 @@ func (c *TomcatCollector) collectMetricConcurrent(
 
 	// Query VictoriaMetrics
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}
@@ -578,7 +578,7 @@ func (c *TomcatCollector) collectLabelExtractMetric(
 
 	// Query VictoriaMetrics
 	vmFilter := c.instanceFilter.ToVMHostFilter()
-	results, err := c.vmClient.QueryResultsWithFilter(ctx, metric.Query, vmFilter)
+	results, err := queryResultsWithHostFilterFallback(ctx, c.vmClient, c.logger, metric.Query, vmFilter)
 	if err != nil {
 		return fmt.Errorf("query failed for %s: %w", metric.Name, err)
 	}
